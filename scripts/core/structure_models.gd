@@ -23,7 +23,7 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 
 static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 	var label := Label3D.new()
-	label.text = "Lv %d" % level
+	label.text = I18n.t("Lv %d") % level
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	label.font_size = 56

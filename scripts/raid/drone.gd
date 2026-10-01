@@ -25,6 +25,9 @@ var dps := 20.0
 var prefers := "any"
 var target := -1
 var orbit := randf() * TAU
+## Seconds between shots, and time until the next one.
+var fire_interval := 0.3
+var fire_cooldown := randf() * 0.3
 var _zap: MeshInstance3D
 var net_timer := 0.0
 
@@ -53,6 +56,7 @@ func configure(stats: Dictionary) -> void:
 	gear_height = 0.6 * body_scale
 	dps = float(stats.get("dps", dps))
 	prefers = stats.get("prefers", prefers)
+	fire_interval = float(stats.get("fire", fire_interval))
 
 
 ## Shows the cyan work beam from the drone to `point` (on) or hides it.

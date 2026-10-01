@@ -11,9 +11,23 @@ const BATTLE_SECONDS := 90.0
 const DEFENSE_HEAD := 4.5
 
 ## Hit points of every structure at level 1.
+## Tuned so a squad of four Couriers drops a small building in about a second and the
+## Command Tower in a few, while a lone drone loses a duel with a laser.
 const HP := {
-	"hq": 900.0, "generator": 300.0, "storage": 420.0, "hangar": 360.0,
-	"laser": 480.0, "net": 440.0, "jammer": 340.0, "birds": 320.0,
+	"hq": 600.0, "generator": 180.0, "storage": 260.0, "hangar": 220.0,
+	"laser": 300.0, "net": 280.0, "jammer": 220.0, "birds": 200.0,
+}
+
+## One line on what each structure is for, shown in its info sheet.
+const INFO := {
+	"hq": "The heart of your base. Its level caps every other building and unlocks new ones.",
+	"generator": "Makes coins over time. Tap the coin above it to collect.",
+	"storage": "Raises how many coins you can hold. Attackers loot it.",
+	"hangar": "Houses your attack drones. Higher levels fit a bigger army and stronger drones.",
+	"laser": "Turret that locks onto the nearest drone and burns it.",
+	"net": "Fires nets that slow drones to a crawl.",
+	"jammer": "Scrambles drones inside its field so they drift and slow down.",
+	"birds": "Gulls circle the nest and slam into passing drones.",
 }
 
 const DEFENSES := {
@@ -49,13 +63,13 @@ const LIMITS := {
 ## housing: how much hangar space one drone of this type takes in the army.
 const DRONES := {
 	"courier": {"name": "Courier", "role": "All-rounder. Goes for whatever is closest.",
-		"health": 140.0, "speed": 9.0, "dps": 26.0, "housing": 2, "prefers": "any", "scale": 2.0,
+		"health": 140.0, "speed": 9.0, "dps": 42.0, "fire": 0.3, "housing": 2, "prefers": "any", "scale": 2.0,
 		"color": Color(0.93, 0.94, 0.95), "hangar": 1, "unlock": 0},
 	"scout": {"name": "Scout", "role": "Fast and fragile. Heads straight for generators, silos and the Command Tower.",
-		"health": 80.0, "speed": 12.5, "dps": 16.0, "housing": 1, "prefers": "loot", "scale": 1.7,
+		"health": 80.0, "speed": 12.5, "dps": 26.0, "fire": 0.2, "housing": 1, "prefers": "loot", "scale": 1.7,
 		"color": Color(1.0, 0.55, 0.2), "hangar": 2, "unlock": 400},
 	"heavy": {"name": "Heavy Lifter", "role": "Slow and tough. Takes out defenses first, so the others survive.",
-		"health": 380.0, "speed": 6.5, "dps": 45.0, "housing": 4, "prefers": "defense", "scale": 2.5,
+		"health": 380.0, "speed": 6.5, "dps": 72.0, "fire": 0.55, "housing": 4, "prefers": "defense", "scale": 2.5,
 		"color": Color(0.3, 0.33, 0.37), "hangar": 3, "unlock": 900},
 }
 const DRONE_ORDER := ["courier", "scout", "heavy"]
@@ -81,9 +95,11 @@ static func make_defense(type: String) -> Defense:
 
 static func display_name(type: String) -> String:
 	if DEFENSES.has(type):
-		return DEFENSES[type]["name"]
+		return I18n.t(DEFENSES[type]["name"])
 	if BUILDINGS.has(type):
-		return BUILDINGS[type]["name"]
+		return I18n.t(BUILDINGS[type]["name"])
+	if DRONES.has(type):
+		return I18n.t(DRONES[type]["name"])
 	return type
 
 

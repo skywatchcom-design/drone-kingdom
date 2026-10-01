@@ -18,11 +18,7 @@ var _bottom: HBoxContainer
 
 
 func _ready() -> void:
-	var root := Control.new()
-	root.anchor_right = 1.0
-	root.anchor_bottom = 1.0
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	var root := make_root(self)
 
 	var top := VBoxContainer.new()
 	top.anchor_right = 1.0
@@ -45,9 +41,9 @@ func _ready() -> void:
 	_bottom.offset_bottom = -36.0
 	_bottom.add_theme_constant_override("separation", 12)
 	root.add_child(_bottom)
-	make_button(_bottom, "Hangar", 28, 88).pressed.connect(func() -> void: hangar_pressed.emit())
-	make_button(_bottom, "Test", 28, 88).pressed.connect(func() -> void: test_pressed.emit())
-	_attack = make_button(_bottom, "ATTACK", 30, 88)
+	make_button(_bottom, I18n.t("Hangar"), 28, 88).pressed.connect(func() -> void: hangar_pressed.emit())
+	make_button(_bottom, I18n.t("Test"), 28, 88).pressed.connect(func() -> void: test_pressed.emit())
+	_attack = make_button(_bottom, "", 30, 88)
 	_attack.size_flags_stretch_ratio = 1.6
 	_attack.add_theme_stylebox_override("normal", flat(Color(0.85, 0.3, 0.2)))
 	_attack.add_theme_stylebox_override("hover", flat(Color(0.95, 0.38, 0.26)))
@@ -71,7 +67,7 @@ func _ready() -> void:
 	outer.add_child(head)
 	_panel_title = make_label(head, "", 34)
 	_panel_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var close := make_button(head, "Close", 24, 60)
+	var close := make_button(head, I18n.t("Close"), 24, 60)
 	close.size_flags_horizontal = Control.SIZE_SHRINK_END
 	close.custom_minimum_size.x = 140
 	close.pressed.connect(hide_panel)
@@ -97,9 +93,9 @@ func _process(delta: float) -> void:
 
 
 func set_header(hq_level: int, coins: int, cap: int, target_name: String) -> void:
-	_title.text = "Your Base  ·  Command Tower Lv %d" % hq_level
-	_coins.text = "Coins %d / %d" % [coins, cap]
-	_attack.text = "ATTACK\n%s" % target_name
+	_title.text = I18n.t("Your Base  ·  Command Tower Lv %d") % hq_level
+	_coins.text = I18n.t("Coins %d / %d") % [coins, cap]
+	_attack.text = I18n.t("ATTACK\n%s") % target_name
 
 
 ## Bottom sheet with an info line and a grid of buttons. Each action is {text, enabled, call}.
@@ -130,6 +126,16 @@ func show_content(title: String, content: Control) -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel_body.add_child(content)
 	_panel.visible = true
+	_fit_panel()
+
+
+## Shrinks the sheet to its content (up to most of the screen). Waits for layout first,
+## because wrapped text only knows its height once it has a width.
+func _fit_panel() -> void:
+	for i in 2:
+		await get_tree().process_frame
+	var wanted := _panel_body.get_combined_minimum_size().y + 130.0
+	_panel.offset_top = -144.0 - clampf(wanted, 260.0, 1000.0)
 
 
 func hide_panel() -> void:
@@ -149,6 +155,17 @@ func blocks(pos: Vector2) -> bool:
 
 
 # ---------------------------------------------------------------- shared UI helpers
+
+## Full-screen root control that ignores clicks, laid out right-to-left in Hebrew.
+static func make_root(layer: CanvasLayer) -> Control:
+	var root := Control.new()
+	root.anchor_right = 1.0
+	root.anchor_bottom = 1.0
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.layout_direction = Control.LAYOUT_DIRECTION_RTL if I18n.rtl() else Control.LAYOUT_DIRECTION_LTR
+	layer.add_child(root)
+	return root
+
 
 static func make_label(parent: Control, text: String, size: int, color: Color = Color.WHITE) -> Label:
 	var l := Label.new()

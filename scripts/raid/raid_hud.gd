@@ -26,13 +26,10 @@ var _result_info: Label
 
 
 func _ready() -> void:
-	var root := Control.new()
-	root.anchor_right = 1.0
-	root.anchor_bottom = 1.0
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	var root := HomeHud.make_root(self)
 
 	_bars_layer = Control.new()
+	_bars_layer.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	_bars_layer.anchor_right = 1.0
 	_bars_layer.anchor_bottom = 1.0
 	_bars_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -78,7 +75,7 @@ func _ready() -> void:
 	_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_cards.add_theme_constant_override("separation", 10)
 	bottom.add_child(_cards)
-	_end = HomeHud.make_button(bottom, "End", 26, 120)
+	_end = HomeHud.make_button(bottom, I18n.t("End"), 26, 120)
 	_end.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_end.custom_minimum_size.x = 120
 	_end.pressed.connect(func() -> void: end_pressed.emit())
@@ -106,8 +103,8 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 16)
 	box.add_child(buttons)
-	HomeHud.make_button(buttons, "Retry", 30, 88).pressed.connect(func() -> void: retry_pressed.emit())
-	HomeHud.make_button(buttons, "Home", 30, 88).pressed.connect(func() -> void: home_pressed.emit())
+	HomeHud.make_button(buttons, I18n.t("Retry"), 30, 88).pressed.connect(func() -> void: retry_pressed.emit())
+	HomeHud.make_button(buttons, I18n.t("Home"), 30, 88).pressed.connect(func() -> void: home_pressed.emit())
 	_result.visible = false
 
 
@@ -129,11 +126,11 @@ func set_timer(seconds: float) -> void:
 
 
 func set_progress(percent: int, stars: int) -> void:
-	_progress.text = "%d%%  ·  Stars %d/3" % [percent, stars]
+	_progress.text = I18n.t("%d%%  ·  Stars %d/3") % [percent, stars]
 
 
 func set_loot(amount: int) -> void:
-	_loot.text = "Loot %d" % amount
+	_loot.text = I18n.t("Loot %d") % amount
 
 
 ## One card per drone type with how many are left to deploy. `names` maps type -> label.
@@ -181,12 +178,12 @@ func update_bars(entries: Array) -> void:
 
 
 func show_result(stars: int, percent: int, coins: int, total: int, practice: bool) -> void:
-	_result_title.text = "Battle over"
-	_result_stars.text = "Stars %d / 3   ·   %d%%" % [stars, percent]
+	_result_title.text = I18n.t("Battle over")
+	_result_stars.text = I18n.t("Stars %d / 3   ·   %d%%") % [stars, percent]
 	if practice:
-		_result_info.text = "Practice run on your own base.\nNo coins at stake."
+		_result_info.text = I18n.t("Practice run on your own base.\nNo coins at stake.")
 	else:
-		_result_info.text = "Loot banked: %d\nTotal coins: %d" % [coins, total]
+		_result_info.text = I18n.t("Loot banked: %d\nTotal coins: %d") % [coins, total]
 	_result.visible = true
 	_cards.visible = false
 	_end.visible = false

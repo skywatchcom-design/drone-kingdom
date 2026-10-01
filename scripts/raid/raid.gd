@@ -10,12 +10,17 @@ enum Phase { BATTLE, RESULT }
 const HOME_SCENE := "res://scenes/home/home.tscn"
 const VIEW_SIZE := 54.0
 const TRAVEL_ALT := 20.0
-const HOVER_ABOVE := 5.0
-const WORK_RADIUS := 2.4
+const HOVER_ABOVE := 6.5
+const WORK_RADIUS := 4.5
 const DEPLOY_CLEARANCE := 6.5
 const MAP_LIMIT := 46.0
 const TAP_SLOP := 24.0
 const PAN_LIMIT := 30.0
+const BOLT_COLORS := {
+	"courier": Color(0.4, 0.95, 1.0),
+	"scout": Color(1.0, 0.75, 0.25),
+	"heavy": Color(1.0, 0.4, 0.3),
+}
 
 var phase: Phase = Phase.BATTLE
 var base: Dictionary
@@ -87,14 +92,14 @@ func _start() -> void:
 		var n := int(GameState.army.get(type, 0))
 		if n > 0 and GameState.drones.has(type):
 			army[type] = n
-			drone_names[type] = Catalog.DRONES[type]["name"]
+			drone_names[type] = Catalog.display_name(type)
 	selected = _first_available()
 	hud.set_title(base["name"])
 	hud.set_army(army, drone_names, selected)
 	hud.set_timer(time_left)
 	hud.set_loot(0)
 	_update_progress()
-	hud.set_status("Tap outside the base to release drones")
+	hud.set_status(I18n.t("Tap outside the base to release drones"))
 	if autoplay:
 		_autoplay_deploy()
 
@@ -139,7 +144,7 @@ func _try_deploy(screen_pos: Vector2) -> void:
 	if phase != Phase.BATTLE:
 		return
 	if selected == "" or int(army.get(selected, 0)) <= 0:
-		hud.set_status("No drones left to release")
+		hud.set_status(I18n.t("No drones left to release"))
 		return
 	var hit = Plane(Vector3.UP, TRAVEL_ALT).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
 	if hit == null:
@@ -149,7 +154,7 @@ func _try_deploy(screen_pos: Vector2) -> void:
 		return
 	for t in targets:
 		if PathUtils.flat_distance(t["top"], p) < DEPLOY_CLEARANCE:
-			hud.set_status("Too close to a building. Release drones outside the base.")
+			hud.set_status(I18n.t("Too close to a building. Release drones outside the base."))
 			return
 	_deploy(selected, p)
 
@@ -210,7 +215,6 @@ func _drone_ai(d: Drone, delta: float) -> void:
 	if d.target < 0 or targets[d.target]["destroyed"]:
 		d.target = RaidRules.pick_target(d.prefers, d.position, targets)
 	if d.target < 0:
-		d.set_zap(false)
 		d.steer(Vector3.ZERO, delta)
 		return
 	var t := targets[d.target]
@@ -228,11 +232,84 @@ func _drone_ai(d: Drone, delta: float) -> void:
 	d.steer(desired, delta)
 	var working := flat < 1.6 and absf(d.position.y - hover.y) < 1.5
 	if working:
-		d.orbit += delta * 0.5
-		d.set_zap(true, top + Vector3(0, 1.0, 0))
-		_damage_target(d.target, d.dps * delta)
-	else:
-		d.set_zap(false)
+		d.orbit += delta * 0.9
+		d.fire_cooldown -= delta
+		if d.fire_cooldown <= 0.0:
+			d.fire_cooldown = d.fire_interval
+			_fire(d, d.target)
+
+
+## One shot: a glowing bolt flies to a random spot on the target; damage lands on impact
+## with sparks, a flash and a little shake of the building. The drone kicks back.
+func _fire(d: Drone, index: int) -> void:
+	var t := targets[index]
+	var top: Vector3 = t["top"]
+	var hit := top + Vector3(randf_range(-1.2, 1.2), randf_range(0.6, 2.4), randf_range(-1.2, 1.2))
+	var from := d.global_position + Vector3(0, -0.3 * d.body_scale, 0)
+	var color: Color = BOLT_COLORS.get(d.kind, Color(0.4, 0.95, 1.0))
+	var bolt := MeshKit.add(level, MeshKit.sphere(0.6 if d.kind == "heavy" else 0.42, 8), MeshKit.glow(color), from)
+	bolt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if from.distance_to(hit) > 0.1:
+		bolt.look_at(hit, Vector3.UP if absf((hit - from).normalized().y) < 0.99 else Vector3.FORWARD)
+	bolt.scale = Vector3(1, 1, 3.5)
+	var damage := d.dps * d.fire_interval
+	d.velocity += (from - hit).normalized() * 1.2
+	_tracer(from, hit, color)
+	var tween := create_tween()
+	tween.tween_property(bolt, "global_position", hit, 0.18)
+	tween.tween_callback(func() -> void:
+		bolt.queue_free()
+		_impact(hit, color)
+		_shake(index)
+		_damage_target(index, damage))
+
+
+## A short-lived streak of light along the shot, so every shot reads even on a small screen.
+func _tracer(from: Vector3, to: Vector3, color: Color) -> void:
+	var dir := to - from
+	if dir.length() < 0.1:
+		return
+	var streak := MeshKit.add(level, MeshKit.cyl(0.14, 0.14, 1.0, 6), MeshKit.glow(color, 0.8))
+	streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var b := Basis(Quaternion(Vector3.UP, dir.normalized())) * Basis.from_scale(Vector3(1, dir.length(), 1))
+	streak.global_transform = Transform3D(b, from + dir * 0.5)
+	var tween := create_tween()
+	tween.tween_property(streak.material_override, "albedo_color:a", 0.0, 0.22)
+	tween.tween_callback(streak.queue_free)
+
+
+func _impact(pos: Vector3, color: Color) -> void:
+	var flash := MeshKit.add(level, MeshKit.sphere(1.1, 12), MeshKit.glow(Color(1, 1, 1), 0.9), pos)
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "scale", Vector3.ONE * 2.6, 0.18)
+	tween.tween_property(flash.material_override, "albedo_color:a", 0.0, 0.18)
+	tween.chain().tween_callback(flash.queue_free)
+	for i in 9:
+		var spark := MeshKit.add(level, MeshKit.sphere(0.26, 6), MeshKit.glow(color.lerp(Color(1, 0.8, 0.3), randf())), pos)
+		spark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var dir := Vector3(randf_range(-1, 1), randf_range(0.2, 1.2), randf_range(-1, 1)).normalized()
+		var st := create_tween()
+		st.set_parallel(true)
+		st.tween_property(spark, "position", pos + dir * randf_range(2.0, 3.5), 0.35)
+		st.tween_property(spark, "scale", Vector3.ONE * 0.05, 0.35)
+		st.chain().tween_callback(spark.queue_free)
+
+
+## Buildings jolt when hit. Defenses are rooted at street level, so they only get sparks.
+func _shake(index: int) -> void:
+	var t := targets[index]
+	if t["destroyed"] or t["defense"] != null:
+		return
+	var node: Node3D = t["node"]
+	if node.has_meta("shaking"):
+		return
+	node.set_meta("shaking", true)
+	var tween := create_tween()
+	tween.tween_property(node, "scale", Vector3(1.12, 0.9, 1.12), 0.05)
+	tween.tween_property(node, "scale", Vector3.ONE, 0.08)
+	tween.tween_callback(func() -> void: node.remove_meta("shaking"))
 
 
 func _damage_target(index: int, amount: float) -> void:

@@ -23,6 +23,7 @@ var best_stars := {}
 
 
 func _ready() -> void:
+	I18n.setup_font()
 	if not load_game():
 		new_player()
 
@@ -113,42 +114,39 @@ func build_block_reason(type: String) -> String:
 		var needed := hq_level() + 1
 		while needed <= Catalog.MAX_LEVEL and Catalog.max_count(type, needed) == 0:
 			needed += 1
-		return "Needs Command Tower Lv %d" % needed
+		return I18n.t("Needs Command Tower Lv %d") % needed
 	if count_of(type) >= allowed:
-		return "Limit reached (%d)" % allowed
-	if coins < Catalog.build_cost(type):
-		return "Not enough coins"
-	return ""
+		return I18n.t("Limit reached (%d)") % allowed
+	return _coins_reason(Catalog.build_cost(type))
+
+
+func _coins_reason(cost: int) -> String:
+	return "" if coins >= cost else I18n.t("Need %d more coins") % (cost - coins)
 
 
 func upgrade_block_reason(cell: Array) -> String:
 	var s := structure_at(cell)
 	if s.is_empty():
-		return "Nothing here"
+		return I18n.t("Nothing here")
 	var level := int(s["level"])
 	if level >= Catalog.MAX_LEVEL:
-		return "Max level"
+		return I18n.t("Max level")
 	if s["type"] != "hq" and level >= hq_level():
-		return "Upgrade the Command Tower first"
-	if coins < Catalog.upgrade_cost(s["type"], level):
-		return "Not enough coins"
-	return ""
+		return I18n.t("Upgrade the Command Tower first")
+	return _coins_reason(Catalog.upgrade_cost(s["type"], level))
 
 
 func drone_block_reason(type: String) -> String:
 	if hangar_level() < int(Catalog.DRONES[type]["hangar"]):
-		return "Needs Hangar Lv %d" % int(Catalog.DRONES[type]["hangar"])
+		return I18n.t("Needs Hangar Lv %d") % int(Catalog.DRONES[type]["hangar"])
 	if drones.has(type):
 		var level := int(drones[type])
 		if level >= Catalog.MAX_LEVEL:
-			return "Max level"
+			return I18n.t("Max level")
 		if level >= hangar_level():
-			return "Upgrade the Hangar first"
-		if coins < Catalog.drone_upgrade_cost(type, level):
-			return "Not enough coins"
-	elif coins < int(Catalog.DRONES[type]["unlock"]):
-		return "Not enough coins"
-	return ""
+			return I18n.t("Upgrade the Hangar first")
+		return _coins_reason(Catalog.drone_upgrade_cost(type, level))
+	return _coins_reason(int(Catalog.DRONES[type]["unlock"]))
 
 
 ## The player's own base in the same format as enemy bases, for the defense test.
@@ -158,7 +156,7 @@ func player_base() -> Dictionary:
 		if structure_at([c, City.GRID - 1]).is_empty():
 			pad = [c, City.GRID - 1]
 			break
-	return {"name": "Your Base (practice)", "seed": city_seed, "pad": pad, "structures": structures}
+	return {"name": I18n.t("Your Base (practice)"), "seed": city_seed, "pad": pad, "structures": structures}
 
 
 # ---------------------------------------------------------------- actions

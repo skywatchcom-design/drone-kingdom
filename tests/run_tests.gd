@@ -11,6 +11,7 @@ const FILES := [
 
 
 func _init() -> void:
+	I18n.lang = "en"
 	var passed := 0
 	var failed := 0
 	for file in FILES:
