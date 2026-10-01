@@ -9,7 +9,7 @@ var _t := 0.0
 
 
 func _build_mast() -> void:
-	MeshKit.add(self, MeshKit.cyl(1.2, 0.9, 0.5, 12), MeshKit.mat(Color(0.45, 0.33, 0.2), 0.95), Vector3(0, roof_y + 0.25, 0))
+	_mast = MeshKit.add(self, MeshKit.cyl(1.2, 0.9, 0.5, 12), MeshKit.mat(Color(0.45, 0.33, 0.2), 0.95), Vector3(0, roof_y + 0.25, 0))
 
 
 func _build() -> void:
@@ -25,7 +25,7 @@ func _build() -> void:
 		_cooldowns.append(0.0)
 
 
-func tick(delta: float, drone: Drone) -> void:
+func tick(delta: float, drones: Array) -> void:
 	_t += delta
 	var orbit := radius - 2.0
 	var count := _birds.size()
@@ -33,20 +33,23 @@ func tick(delta: float, drone: Drone) -> void:
 		var a := _t * float(stats.get("speed", 1.3)) + TAU * i / count
 		var wobble := sin(_t * 2.0 + i) * 1.5
 		var bird := _birds[i]
-		bird.position = Vector3(cos(a) * (orbit + wobble), alt + sin(_t * 1.7 + i) * 0.8, sin(a) * (orbit + wobble))
+		bird.position = Vector3(cos(a) * (orbit + wobble), head_y + 1.0 + sin(_t * 1.7 + i) * 1.2, sin(a) * (orbit + wobble))
 		bird.rotation.y = -a
 		var flap := sin(_t * 14.0 + i) * 0.5
 		_wings[i][0].rotation.z = flap
 		_wings[i][1].rotation.z = -flap
 		_cooldowns[i] -= delta
-		if drone == null or drone.dead or _cooldowns[i] > 0.0:
+		if _cooldowns[i] > 0.0:
 			continue
-		if bird.global_position.distance_to(drone.global_position) < 1.8:
-			drone.damage(float(stats.get("damage", 15.0)))
-			var push := drone.global_position - bird.global_position
+		for d: Drone in drones:
+			if d.dead or bird.global_position.distance_to(d.global_position) > 2.0:
+				continue
+			d.damage(float(stats.get("damage", 15.0)))
+			var push := d.global_position - bird.global_position
 			push.y = 0.0
-			drone.velocity += push.normalized() * 6.0
+			d.velocity += push.normalized() * 6.0
 			_cooldowns[i] = 1.0
+			break
 
 
 func _ring_color() -> Color:

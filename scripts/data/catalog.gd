@@ -5,8 +5,19 @@ extends RefCounted
 
 const MAX_LEVEL := 5
 
+## Seconds in an attack once the first drone is deployed.
+const BATTLE_SECONDS := 90.0
+## Height of a defense's head above its roof.
+const DEFENSE_HEAD := 4.5
+
+## Hit points of every structure at level 1.
+const HP := {
+	"hq": 900.0, "generator": 300.0, "storage": 420.0, "hangar": 360.0,
+	"laser": 480.0, "net": 440.0, "jammer": 340.0, "birds": 320.0,
+}
+
 const DEFENSES := {
-	"laser": {"name": "Laser Tower", "cost": 200, "radius": 11.0, "dps": 45.0, "sweep": 1.1},
+	"laser": {"name": "Laser Tower", "cost": 200, "radius": 11.0, "dps": 35.0},
 	"net": {"name": "Net Launcher", "cost": 250, "radius": 12.0, "speed": 16.0, "cooldown": 3.5},
 	"jammer": {"name": "Jammer", "cost": 300, "radius": 8.0},
 	"birds": {"name": "Gull Nest", "cost": 350, "radius": 8.0, "count": 6, "speed": 1.3, "damage": 15.0},
@@ -34,12 +45,17 @@ const LIMITS := {
 	"birds": [0, 0, 1, 1, 2],
 }
 
+## prefers: which structures a drone goes for first ("any", "loot" or "defense").
+## housing: how much hangar space one drone of this type takes in the army.
 const DRONES := {
-	"courier": {"name": "Courier", "health": 100.0, "speed": 10.0, "carry": 1.0, "scale": 2.0,
+	"courier": {"name": "Courier", "role": "All-rounder. Goes for whatever is closest.",
+		"health": 140.0, "speed": 9.0, "dps": 26.0, "housing": 2, "prefers": "any", "scale": 2.0,
 		"color": Color(0.93, 0.94, 0.95), "hangar": 1, "unlock": 0},
-	"scout": {"name": "Scout", "health": 70.0, "speed": 13.0, "carry": 0.8, "scale": 1.7,
+	"scout": {"name": "Scout", "role": "Fast and fragile. Heads straight for generators, silos and the Command Tower.",
+		"health": 80.0, "speed": 12.5, "dps": 16.0, "housing": 1, "prefers": "loot", "scale": 1.7,
 		"color": Color(1.0, 0.55, 0.2), "hangar": 2, "unlock": 400},
-	"heavy": {"name": "Heavy Lifter", "health": 170.0, "speed": 7.5, "carry": 1.5, "scale": 2.5,
+	"heavy": {"name": "Heavy Lifter", "role": "Slow and tough. Takes out defenses first, so the others survive.",
+		"health": 380.0, "speed": 6.5, "dps": 45.0, "housing": 4, "prefers": "defense", "scale": 2.5,
 		"color": Color(0.3, 0.33, 0.37), "hangar": 3, "unlock": 900},
 }
 const DRONE_ORDER := ["courier", "scout", "heavy"]
@@ -129,13 +145,23 @@ static func loot_value(type: String, level: int) -> int:
 	return 0
 
 
+static func structure_hp(type: String, level: int) -> float:
+	return float(HP[type]) * (1.0 + 0.35 * (level - 1))
+
+
 static func drone_stats(type: String, level: int) -> Dictionary:
 	var s: Dictionary = DRONES[type].duplicate()
 	var step := float(level - 1)
 	s["level"] = level
 	s["health"] = float(s["health"]) * (1.0 + 0.2 * step)
-	s["speed"] = float(s["speed"]) * (1.0 + 0.05 * step)
+	s["dps"] = float(s["dps"]) * (1.0 + 0.2 * step)
+	s["speed"] = float(s["speed"]) * (1.0 + 0.04 * step)
 	return s
+
+
+## Total housing space for the attack army, from the hangar's level.
+static func army_capacity(hangar_level: int) -> int:
+	return 0 if hangar_level <= 0 else 8 + 4 * (hangar_level - 1)
 
 
 static func drone_upgrade_cost(type: String, level: int) -> int:

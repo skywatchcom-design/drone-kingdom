@@ -1,18 +1,21 @@
 extends Node
-## The player's save: coins, the structures on their rooftop base, and their drone fleet.
-## Every change goes through a method here so the rules live in one place.
+## The player's save: coins, the structures on their rooftop base, their drone fleet and
+## the army they take into the next attack. Every change goes through a method here so
+## the rules live in one place.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 
 ## Turned off by unit tests so they never touch the real save file.
 var persist := true
 
 var coins := 0
+## Each: {type, cell: [c, r], level}; generators also carry collected_at (unix seconds).
 var structures: Array = []
+## Unlocked drone types and their levels.
 var drones := {}
-var selected_drone := "courier"
-var last_collect_unix := 0.0
+## How many of each drone type go into the next attack.
+var army := {}
 var enemy_index := 0
 var raid_target := "enemy"
 var city_seed := 7
@@ -25,16 +28,17 @@ func _ready() -> void:
 
 
 func new_player() -> void:
+	var now := Time.get_unix_time_from_system()
 	coins = 400
 	structures = [
 		{"type": "hq", "cell": [3, 3], "level": 1},
-		{"type": "generator", "cell": [2, 3], "level": 1},
+		# Starts 20 minutes in, so there is a coin to collect right away.
+		{"type": "generator", "cell": [2, 3], "level": 1, "collected_at": now - 20.0 * 60.0},
 		{"type": "hangar", "cell": [4, 3], "level": 1},
 		{"type": "laser", "cell": [3, 2], "level": 1},
 	]
 	drones = {"courier": 1}
-	selected_drone = "courier"
-	last_collect_unix = Time.get_unix_time_from_system()
+	army = {"courier": 4}
 	enemy_index = 0
 	raid_target = "enemy"
 	best_stars = {}
@@ -80,13 +84,26 @@ func coin_cap() -> int:
 	return Catalog.coin_cap(hq_level(), storage_levels)
 
 
-func pending_income() -> int:
-	var minutes := minf((Time.get_unix_time_from_system() - last_collect_unix) / 60.0, Catalog.GENERATOR_FILL_MINUTES)
-	var rate := 0.0
-	for s in structures:
-		if s["type"] == "generator":
-			rate += Catalog.generator_rate(int(s["level"]))
-	return int(rate * maxf(minutes, 0.0))
+## Coins waiting in one generator.
+func generator_pending(s: Dictionary) -> int:
+	var minutes := (Time.get_unix_time_from_system() - float(s.get("collected_at", 0.0))) / 60.0
+	minutes = clampf(minutes, 0.0, Catalog.GENERATOR_FILL_MINUTES)
+	return int(Catalog.generator_rate(int(s["level"])) * minutes)
+
+
+func army_capacity() -> int:
+	return Catalog.army_capacity(hangar_level())
+
+
+func army_used() -> int:
+	var used := 0
+	for type in army:
+		used += int(army[type]) * int(Catalog.DRONES[type]["housing"])
+	return used
+
+
+func drone_stats_for(type: String) -> Dictionary:
+	return Catalog.drone_stats(type, int(drones.get(type, 1)))
 
 
 ## Empty string when the player may build `type`; otherwise the reason they can't.
@@ -153,17 +170,28 @@ func add_coins(amount: int) -> int:
 	return coins - before
 
 
-func collect() -> int:
-	var amount := pending_income()
-	last_collect_unix = Time.get_unix_time_from_system()
-	return add_coins(amount)
+## Moves a generator's coins into the bank. If the bank is nearly full, whatever doesn't
+## fit stays in the generator, as in Clash.
+func collect_generator(cell: Array) -> int:
+	var s := structure_at(cell)
+	if s.is_empty() or s["type"] != "generator":
+		return 0
+	var pending := generator_pending(s)
+	var taken := mini(pending, coin_cap() - coins)
+	var rate := Catalog.generator_rate(int(s["level"]))
+	var left_minutes := float(pending - taken) / rate
+	s["collected_at"] = Time.get_unix_time_from_system() - left_minutes * 60.0
+	return add_coins(taken)
 
 
 func build(type: String, cell: Array) -> bool:
 	if build_block_reason(type) != "" or not structure_at(cell).is_empty():
 		return false
 	coins -= Catalog.build_cost(type)
-	structures.append({"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1})
+	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1}
+	if type == "generator":
+		s["collected_at"] = Time.get_unix_time_from_system()
+	structures.append(s)
 	save_game()
 	return true
 
@@ -183,6 +211,8 @@ func remove(cell: Array) -> bool:
 	if s.is_empty() or s["type"] == "hq":
 		return false
 	structures.erase(s)
+	if s["type"] == "hangar":
+		army = {}
 	save_game()
 	return true
 
@@ -200,24 +230,26 @@ func upgrade_drone(type: String) -> bool:
 	return true
 
 
-func select_drone(type: String) -> void:
-	if drones.has(type):
-		selected_drone = type
-		save_game()
+## Sets how many drones of `type` join the next attack, if they fit in the hangar.
+func set_army_count(type: String, count: int) -> bool:
+	if not drones.has(type) or count < 0:
+		return false
+	var used := army_used() - int(army.get(type, 0)) * int(Catalog.DRONES[type]["housing"])
+	if used + count * int(Catalog.DRONES[type]["housing"]) > army_capacity():
+		return false
+	army[type] = count
+	save_game()
+	return true
 
 
-func current_drone_stats() -> Dictionary:
-	return Catalog.drone_stats(selected_drone, int(drones.get(selected_drone, 1)))
-
-
-func record_raid(stars: int, banked: int) -> int:
+func record_raid(stars: int, loot: int) -> int:
 	if raid_target != "enemy":
 		return 0
 	var key := str(enemy_index)
 	best_stars[key] = maxi(int(best_stars.get(key, 0)), stars)
 	if stars > 0:
 		enemy_index += 1
-	return add_coins(banked)
+	return add_coins(loot)
 
 
 # ---------------------------------------------------------------- save
@@ -231,8 +263,7 @@ func save_game() -> void:
 		return
 	file.store_string(JSON.stringify({
 		"version": SAVE_VERSION, "coins": coins, "structures": structures, "drones": drones,
-		"selected_drone": selected_drone, "last_collect_unix": last_collect_unix,
-		"enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
+		"army": army, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 	}))
 
 
@@ -247,11 +278,14 @@ func load_game() -> bool:
 	for s in structures:
 		s["level"] = int(s["level"])
 		s["cell"] = [int(s["cell"][0]), int(s["cell"][1])]
+		if s.has("collected_at"):
+			s["collected_at"] = float(s["collected_at"])
 	drones = {}
 	for k in data["drones"]:
 		drones[k] = int(data["drones"][k])
-	selected_drone = data.get("selected_drone", "courier")
-	last_collect_unix = float(data.get("last_collect_unix", Time.get_unix_time_from_system()))
+	army = {}
+	for k in data.get("army", {}):
+		army[k] = int(data["army"][k])
 	enemy_index = int(data.get("enemy_index", 0))
 	city_seed = int(data.get("city_seed", 7))
 	best_stars = data.get("best_stars", {})

@@ -1,446 +1,381 @@
 extends Node3D
-## One attack: plan a route over the target's rooftops, launch, and take manual control
-## (in slow motion) whenever the drone enters a defense's range. Loot sits in the
-## target's generators, silos and Command Tower (the gold vault).
-## Run with `-- --autoplay` to draw a route and fly it automatically (used for screenshots).
+## A Clash-style attack. Pick a drone card, tap outside the base to release it, and the
+## drones take it from there: each flies to the structure its role prefers and works it
+## down with its beam while the defenses fight back. Stars for 50%, the Command Tower,
+## and 100%. Loot comes out of every generator, silo and Command Tower you knock out.
+## Run with `-- --autoplay` to deploy the whole army automatically (used for screenshots).
 
-enum Phase { PLAN, TAKEOFF, FLY, LANDING, RESULT }
+enum Phase { BATTLE, RESULT }
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
-const ALT := City.ALT
-const CRUISE_SPEED := 9.0
-const PLAN_SIZE := 78.0
-const FLY_SIZE := 42.0
-const POINT_SPACING := 1.5
-const LOOT_REACH := 2.6
-const STICK_PIXELS := 90.0
-const CALM_TO_RESUME := 0.8
+const VIEW_SIZE := 54.0
+const TRAVEL_ALT := 20.0
+const HOVER_ABOVE := 5.0
+const WORK_RADIUS := 2.4
+const DEPLOY_CLEARANCE := 6.5
+const MAP_LIMIT := 46.0
+const TAP_SLOP := 24.0
+const PAN_LIMIT := 30.0
 
-var phase: Phase = Phase.PLAN
+var phase: Phase = Phase.BATTLE
 var base: Dictionary
 var level: Node3D
 var city: City
-var drone: Drone
-var drone_stats: Dictionary
 var cam: Camera3D
 var hud: RaidHud
-var defenses: Array[Defense] = []
-var loot: Array[Dictionary] = []
-var path := PackedVector3Array()
-var path_index := 0
-var returning := false
-var manual := false
-var calm := 0.0
-var manual_since_ms := 0
-var drawing := false
-var touching := false
-var stick_origin := Vector2.ZERO
-var stick := Vector2.ZERO
-var carried := 0
-var pad_top := Vector3.ZERO
-var pad_above := Vector3.ZERO
-var path_im: ImmediateMesh
-var cam_focus := Vector3(0, 10, 0)
-var crash_timer := -1.0
-var last_health := 100.0
+## One entry per structure: {type, level, cell, top, hp, max_hp, node, defense, is_defense, loot, destroyed}.
+var targets: Array[Dictionary] = []
+var drones: Array[Drone] = []
+var army := {}
+var drone_names := {}
+var selected := ""
+var started := false
+var time_left := Catalog.BATTLE_SECONDS
+var loot_gained := 0
+var end_timer := -1.0
+var focus := Vector3(0, 10, 0)
+var press_pos := Vector2.ZERO
 var autoplay := false
 
 
 func _ready() -> void:
+	Engine.time_scale = 1.0
 	autoplay = OS.get_cmdline_user_args().has("--autoplay")
-	cam = WorldSetup.create(self, PLAN_SIZE)
+	cam = WorldSetup.create(self, VIEW_SIZE)
 	hud = RaidHud.new()
 	add_child(hud)
-	hud.launch_pressed.connect(_on_launch)
-	hud.clear_pressed.connect(_on_clear)
-	hud.retry_pressed.connect(_start)
+	hud.unit_selected.connect(_on_unit_selected)
+	hud.end_pressed.connect(_finish)
+	hud.retry_pressed.connect(func() -> void: get_tree().reload_current_scene())
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(HOME_SCENE))
 	_start()
 
 
-func _target_base() -> Dictionary:
-	if GameState.raid_target == "self":
-		return GameState.player_base()
-	return Bases.enemy(GameState.enemy_index, GameState.hq_level())
-
-
 func _start() -> void:
-	base = _target_base()
-	if level != null:
-		level.queue_free()
+	base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	level = Node3D.new()
 	add_child(level)
-	defenses.clear()
-	loot.clear()
-
-	var reserved: Array = [base["pad"]]
+	var reserved: Array = []
 	for s in base["structures"]:
 		reserved.append(s["cell"])
 	city = City.new()
 	level.add_child(city)
 	city.build(int(base["seed"]), reserved)
 
-	pad_top = city.roof_top(base["pad"])
-	pad_above = Vector3(pad_top.x, ALT, pad_top.z)
-	_add_pad(pad_top)
 	for s in base["structures"]:
 		var type: String = s["type"]
 		var lvl := int(s["level"])
+		var top := city.roof_top(s["cell"])
+		var node: Node3D
+		var defense: Defense = null
 		if Catalog.is_defense(type):
-			var defense := Catalog.make_defense(type)
+			defense = Catalog.make_defense(type)
 			level.add_child(defense)
 			defense.position = City.cell_pos(s["cell"])
-			defense.setup(Catalog.defense_stats(type, lvl), city.roof_y(s["cell"]), ALT)
-			defenses.append(defense)
+			defense.setup(Catalog.defense_stats(type, lvl), city.roof_y(s["cell"]))
+			node = defense
 		else:
-			StructureModels.build(level, type, lvl, city.roof_top(s["cell"]))
-			var value := Catalog.loot_value(type, lvl)
-			if value > 0:
-				_add_loot(s["cell"], value, type == "hq")
+			node = StructureModels.build(level, type, lvl, top)
+		var hp := Catalog.structure_hp(type, lvl)
+		targets.append({
+			"type": type, "level": lvl, "cell": s["cell"], "top": top, "hp": hp, "max_hp": hp,
+			"node": node, "defense": defense, "is_defense": defense != null,
+			"loot": Catalog.loot_value(type, lvl), "destroyed": false,
+		})
 
-	drone_stats = GameState.current_drone_stats()
-	drone = Drone.new()
-	drone.configure(drone_stats)
-	drone.invulnerable = autoplay
-	level.add_child(drone)
-	drone.position = pad_top + Vector3(0, drone.gear_height, 0)
-	drone.crashed.connect(_on_crash)
-
-	path_im = ImmediateMesh.new()
-	var path_mesh := MeshInstance3D.new()
-	path_mesh.mesh = path_im
-	var path_mat := MeshKit.glow(Color(1.0, 0.85, 0.2), 0.9)
-	path_mat.no_depth_test = true
-	path_mat.render_priority = 10
-	path_mesh.material_override = path_mat
-	path_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	level.add_child(path_mesh)
-
-	path = PackedVector3Array()
-	path_index = 0
-	returning = false
-	manual = false
-	drawing = false
-	touching = false
-	carried = 0
-	crash_timer = -1.0
-	last_health = drone.max_health
-	Engine.time_scale = 1.0
-	phase = Phase.PLAN
-	hud.hide_result()
-	hud.set_title("%s  ·  %s Lv %d" % [base["name"], drone_stats["name"], int(drone_stats["level"])])
-	hud.set_health(100.0)
+	for type in Catalog.DRONE_ORDER:
+		var n := int(GameState.army.get(type, 0))
+		if n > 0 and GameState.drones.has(type):
+			army[type] = n
+			drone_names[type] = Catalog.DRONES[type]["name"]
+	selected = _first_available()
+	hud.set_title(base["name"])
+	hud.set_army(army, drone_names, selected)
+	hud.set_timer(time_left)
 	hud.set_loot(0)
-	hud.set_manual(false, false)
-	hud.set_status("Draw a route from your drone to the gold Command Tower")
-	hud.set_plan_buttons(true, false)
+	_update_progress()
+	hud.set_status("Tap outside the base to release drones")
 	if autoplay:
-		_auto_route()
-		_on_launch()
+		_autoplay_deploy()
 
 
-func _add_pad(top: Vector3) -> void:
-	var white := MeshKit.mat(Color(0.95, 0.95, 0.95), 0.6)
-	MeshKit.add(level, MeshKit.cyl(2.4, 2.4, 0.15, 32), MeshKit.mat(Color(0.95, 0.72, 0.18), 0.6), top + Vector3(0, 0.08, 0))
-	MeshKit.add(level, MeshKit.box(Vector3(0.3, 0.05, 1.6)), white, top + Vector3(-0.45, 0.18, 0))
-	MeshKit.add(level, MeshKit.box(Vector3(0.3, 0.05, 1.6)), white, top + Vector3(0.45, 0.18, 0))
-	MeshKit.add(level, MeshKit.box(Vector3(0.9, 0.05, 0.3)), white, top + Vector3(0, 0.18, 0))
+# ---------------------------------------------------------------- deploying
+
+func _on_unit_selected(type: String) -> void:
+	selected = type
+	hud.update_army(army, drone_names, selected)
 
 
-## A loot marker on a building: a crate (or the gold vault on the Command Tower) and a light beam.
-func _add_loot(cell: Array, value: int, vault: bool) -> void:
-	var top := city.roof_top(cell)
-	var node := Node3D.new()
-	level.add_child(node)
-	node.position = top
-	var beacon_h := ALT - top.y
-	if vault:
-		MeshKit.add(node, MeshKit.box(Vector3(1.4, 1.0, 1.4)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.25, 0.8), Vector3(2.0, 0.5, 2.0))
-		var beam := MeshKit.add(node, MeshKit.cyl(0.18, 0.18, beacon_h, 8), MeshKit.glow(Color(1.0, 0.85, 0.3), 0.35), Vector3(0, beacon_h / 2.0, 0))
-		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	else:
-		MeshKit.add(node, MeshKit.box(Vector3(1.0, 0.8, 1.0)), MeshKit.mat(Color(0.62, 0.45, 0.28), 0.9), Vector3(2.2, 0.4, 2.2))
-		var beam := MeshKit.add(node, MeshKit.cyl(0.1, 0.1, beacon_h, 6), MeshKit.glow(Color(0.5, 1.0, 0.6), 0.25), Vector3(0, beacon_h / 2.0, 0))
-		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	loot.append({"node": node, "value": value, "vault": vault, "taken": false})
+func _first_available() -> String:
+	for type in army:
+		if int(army[type]) > 0:
+			return type
+	return ""
 
-
-# ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		if touch.pressed:
-			if hud.blocks(touch.position):
-				return
-			if phase == Phase.PLAN:
-				drawing = true
-				path = PackedVector3Array([pad_above])
-				_try_add_point(touch.position)
-			elif phase == Phase.FLY:
-				touching = true
-				stick_origin = touch.position
-				stick = Vector2.ZERO
-		else:
-			if drawing:
-				drawing = false
-				hud.set_plan_buttons(true, path.size() > 3)
-			touching = false
-			stick = Vector2.ZERO
-	elif event is InputEventScreenDrag:
-		var drag := event as InputEventScreenDrag
-		if drawing:
-			_try_add_point(drag.position)
-		elif touching:
-			stick = ((drag.position - stick_origin) / STICK_PIXELS).limit_length(1.0)
+	if event is InputEventScreenDrag:
+		_pan((event as InputEventScreenDrag).relative)
+		return
+	if event is InputEventMouseButton and event.pressed:
+		var wheel := event as InputEventMouseButton
+		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
+			cam.size = maxf(36.0, cam.size - 4.0)
+		elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			cam.size = minf(90.0, cam.size + 4.0)
+		return
+	if not (event is InputEventScreenTouch):
+		return
+	var touch := event as InputEventScreenTouch
+	if touch.pressed:
+		press_pos = touch.position
+		return
+	if hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
+		return
+	_try_deploy(touch.position)
 
 
-func _try_add_point(screen_pos: Vector2) -> void:
-	var hit = Plane(Vector3.UP, ALT).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
+func _try_deploy(screen_pos: Vector2) -> void:
+	if phase != Phase.BATTLE:
+		return
+	if selected == "" or int(army.get(selected, 0)) <= 0:
+		hud.set_status("No drones left to release")
+		return
+	var hit = Plane(Vector3.UP, TRAVEL_ALT).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
 	if hit == null:
 		return
 	var p: Vector3 = hit
-	if PathUtils.flat_distance(p, path[path.size() - 1]) >= POINT_SPACING:
-		path.append(p)
-		_redraw_path()
-
-
-func _on_clear() -> void:
-	path = PackedVector3Array()
-	_redraw_path()
-	hud.set_plan_buttons(true, false)
-
-
-func _on_launch() -> void:
-	if phase != Phase.PLAN or path.size() < 2:
+	if absf(p.x) > MAP_LIMIT or absf(p.z) > MAP_LIMIT:
 		return
-	path = PathUtils.resample(path, POINT_SPACING)
-	phase = Phase.TAKEOFF
-	hud.set_plan_buttons(false, false)
-	hud.set_status("Taking off")
+	for t in targets:
+		if PathUtils.flat_distance(t["top"], p) < DEPLOY_CLEARANCE:
+			hud.set_status("Too close to a building. Release drones outside the base.")
+			return
+	_deploy(selected, p)
 
 
-func _auto_route() -> void:
-	var points := PackedVector3Array([pad_above])
-	var vault := Vector3.ZERO
-	for item in loot:
-		var p: Vector3 = (item["node"] as Node3D).position
-		if item["vault"]:
-			vault = p
-		elif points.size() < 2:
-			points.append(Vector3(p.x, ALT, p.z))
-	points.append(Vector3(vault.x, ALT, vault.z))
-	path = PathUtils.resample(points, POINT_SPACING)
+func _deploy(type: String, p: Vector3) -> void:
+	army[type] = int(army[type]) - 1
+	var stats := GameState.drone_stats_for(type)
+	var d := Drone.new()
+	d.configure(stats)
+	d.kind = type
+	d.invulnerable = false
+	level.add_child(d)
+	d.position = p
+	drones.append(d)
+	started = true
+	if int(army[type]) <= 0:
+		selected = _first_available()
+	hud.update_army(army, drone_names, selected)
+	hud.set_status("")
 
 
-# ---------------------------------------------------------------- frame loop
+func _autoplay_deploy() -> void:
+	var spots := [Vector3(30, TRAVEL_ALT, 34), Vector3(36, TRAVEL_ALT, 24), Vector3(34, TRAVEL_ALT, 30)]
+	var i := 0
+	for type in army.keys():
+		while int(army[type]) > 0:
+			_deploy(type, spots[i % spots.size()] + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)))
+			i += 1
+
+
+# ---------------------------------------------------------------- battle loop
 
 func _process(delta: float) -> void:
-	match phase:
-		Phase.TAKEOFF:
-			_takeoff(delta)
-		Phase.FLY:
-			_fly(delta)
-		Phase.LANDING:
-			_landing(delta)
-	var flying := phase in [Phase.TAKEOFF, Phase.FLY, Phase.LANDING]
-	drone.jammed = false
-	for defense in defenses:
-		defense.tick(delta, drone if flying else null)
-	if crash_timer >= 0.0:
-		crash_timer -= delta
-		if crash_timer < 0.0:
-			_finish(false)
-	_update_hud()
-	_update_camera(delta)
-
-
-func _takeoff(delta: float) -> void:
-	var to := Vector3(drone.position.x, ALT, drone.position.z) - drone.position
-	drone.steer((to * 2.0).limit_length(7.0) + Vector3(0, 0.6, 0), delta)
-	if drone.position.y >= ALT - 0.3:
-		phase = Phase.FLY
-		path_index = 1
-		hud.set_status("Autopilot")
-
-
-func _fly(delta: float) -> void:
-	var target := pad_above
-	if not returning:
-		while path_index < path.size() and PathUtils.flat_distance(path[path_index], drone.position) < 2.0:
-			path_index += 1
-		if path_index >= path.size():
-			returning = true
-		else:
-			target = path[path_index]
-
-	var danger := _in_danger()
-	if danger and not manual:
-		_enter_manual()
-	elif manual:
-		if danger:
-			calm = 0.0
-		else:
-			calm += delta / maxf(Engine.time_scale, 0.01)
-			if calm > CALM_TO_RESUME:
-				_exit_manual()
-	if manual:
-		Engine.time_scale = 0.3 if Time.get_ticks_msec() - manual_since_ms < 700 else 0.7
-
-	var desired: Vector3
-	if manual and not autoplay:
-		desired = _stick_to_world() * drone.max_speed
-		if drone.jammed:
-			desired = -desired
+	var alive: Array = []
+	for d in drones:
+		d.jammed = false
+		if not d.dead:
+			alive.append(d)
+	for t in targets:
+		if t["destroyed"] or t["defense"] == null:
+			continue
+		(t["defense"] as Defense).tick(delta, alive if phase == Phase.BATTLE else [])
+	if phase == Phase.BATTLE:
+		if started:
+			time_left -= delta
+			hud.set_timer(time_left)
+		for d: Drone in alive:
+			_drone_ai(d, delta)
+		_check_end(delta)
 	else:
-		desired = (target - drone.position).normalized() * minf(CRUISE_SPEED, drone.max_speed)
-		if drone.jammed:
-			desired = desired.rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.004) * 0.9)
-	desired.y = clampf((ALT - drone.position.y) * 2.0, -4.0, 4.0)
-	drone.steer(desired, delta)
-	_check_loot()
-	_redraw_path()
-	if returning and PathUtils.flat_distance(pad_above, drone.position) < 1.2:
-		_exit_manual()
-		phase = Phase.LANDING
-		hud.set_status("Landing")
+		for d: Drone in alive:
+			d.steer(Vector3.ZERO, delta)
+			d.set_zap(false)
+	_update_bars()
 
 
-func _landing(delta: float) -> void:
-	var target := pad_top + Vector3(0, drone.gear_height, 0)
-	var to := target - drone.position
-	drone.steer(Vector3(to.x * 3.0, clampf(to.y * 1.5, -6.0, -0.6), to.z * 3.0), delta)
-	if drone.position.y <= target.y + 0.05:
-		drone.position = target
-		drone.velocity = Vector3.ZERO
-		_finish(true)
-
-
-func _in_danger() -> bool:
-	for defense in defenses:
-		if defense.in_range(drone.position, 2.0):
-			return true
-	return false
-
-
-func _enter_manual() -> void:
-	manual = true
-	calm = 0.0
-	manual_since_ms = Time.get_ticks_msec()
-
-
-func _exit_manual() -> void:
-	Engine.time_scale = 1.0
-	if not manual:
+func _drone_ai(d: Drone, delta: float) -> void:
+	if d.target < 0 or targets[d.target]["destroyed"]:
+		d.target = RaidRules.pick_target(d.prefers, d.position, targets)
+	if d.target < 0:
+		d.set_zap(false)
+		d.steer(Vector3.ZERO, delta)
 		return
-	manual = false
-	calm = 0.0
-	touching = false
-	stick = Vector2.ZERO
-	if not returning and path_index < path.size():
-		path_index = mini(PathUtils.nearest_index(path, drone.position, path_index) + 1, path.size())
+	var t := targets[d.target]
+	var top: Vector3 = t["top"]
+	var hover := top + Vector3(cos(d.orbit) * WORK_RADIUS, HOVER_ABOVE, sin(d.orbit) * WORK_RADIUS)
+	var flat := PathUtils.flat_distance(hover, d.position)
+	var goal := hover
+	if flat > 6.0:
+		goal.y = TRAVEL_ALT
+	var to := goal - d.position
+	var speed := d.max_speed * (0.55 if d.jammed else 1.0)
+	var desired := to.normalized() * speed * clampf(to.length() / 3.0, 0.0, 1.0)
+	if d.jammed:
+		desired = desired.rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.005 + d.orbit) * 1.2)
+	d.steer(desired, delta)
+	var working := flat < 1.6 and absf(d.position.y - hover.y) < 1.5
+	if working:
+		d.orbit += delta * 0.5
+		d.set_zap(true, top + Vector3(0, 1.0, 0))
+		_damage_target(d.target, d.dps * delta)
+	else:
+		d.set_zap(false)
 
 
-func _stick_to_world() -> Vector3:
+func _damage_target(index: int, amount: float) -> void:
+	var t := targets[index]
+	if t["destroyed"]:
+		return
+	t["hp"] = maxf(0.0, float(t["hp"]) - amount)
+	if t["hp"] <= 0.0:
+		_destroy(index)
+
+
+func _destroy(index: int) -> void:
+	var t := targets[index]
+	t["destroyed"] = true
+	var top: Vector3 = t["top"]
+	if t["defense"] != null:
+		(t["defense"] as Defense).disable()
+	else:
+		(t["node"] as Node3D).visible = false
+	_rubble(top)
+	var loot := int(t["loot"])
+	if loot > 0:
+		loot_gained += loot
+		hud.set_loot(loot_gained)
+		_float_text(top + Vector3(0, 3, 0), "+%d" % loot, Color(1.0, 0.85, 0.3))
+	_update_progress()
+
+
+func _check_end(delta: float) -> void:
+	var standing := false
+	for t in targets:
+		if not t["destroyed"]:
+			standing = true
+			break
+	var flying := false
+	for d in drones:
+		if not d.dead:
+			flying = true
+			break
+	var reserves := _first_available() != ""
+	var over := not standing or (started and time_left <= 0.0) or (started and not flying and not reserves)
+	if over and end_timer < 0.0:
+		end_timer = 1.5
+	if end_timer >= 0.0:
+		end_timer -= delta
+		if end_timer < 0.0:
+			_finish()
+
+
+func _finish() -> void:
+	if phase == Phase.RESULT:
+		return
+	phase = Phase.RESULT
+	var ratio := _destroyed_ratio()
+	var hq_down := false
+	for t in targets:
+		if t["type"] == "hq" and t["destroyed"]:
+			hq_down = true
+	var stars := RaidRules.battle_stars(ratio, hq_down)
+	var gained := 0
+	if not autoplay:
+		gained = GameState.record_raid(stars, loot_gained)
+	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.coins, GameState.raid_target == "self")
+
+
+func _destroyed_ratio() -> float:
+	if targets.is_empty():
+		return 0.0
+	var n := 0
+	for t in targets:
+		if t["destroyed"]:
+			n += 1
+	return float(n) / targets.size()
+
+
+func _update_progress() -> void:
+	var ratio := _destroyed_ratio()
+	var hq_down := false
+	for t in targets:
+		if t["type"] == "hq" and t["destroyed"]:
+			hq_down = true
+	hud.set_progress(int(round(ratio * 100.0)), RaidRules.battle_stars(ratio, hq_down))
+
+
+# ---------------------------------------------------------------- effects
+
+func _update_bars() -> void:
+	var entries := []
+	for i in targets.size():
+		var t := targets[i]
+		if t["destroyed"] or float(t["hp"]) >= float(t["max_hp"]):
+			continue
+		entries.append({"key": "t%d" % i, "friendly": false, "ratio": float(t["hp"]) / float(t["max_hp"]),
+			"pos": cam.unproject_position((t["top"] as Vector3) + Vector3(0, 5.5, 0))})
+	for i in drones.size():
+		var d := drones[i]
+		if d.dead or d.health >= d.max_health:
+			continue
+		entries.append({"key": "d%d" % i, "friendly": true, "ratio": d.health / d.max_health,
+			"pos": cam.unproject_position(d.global_position + Vector3(0, 2.2, 0))})
+	hud.update_bars(entries)
+
+
+func _rubble(top: Vector3) -> void:
+	var dark := MeshKit.mat(Color(0.25, 0.24, 0.23), 0.95)
+	for i in 6:
+		var chunk := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.6, 1.4), randf_range(0.3, 0.8), randf_range(0.6, 1.4))), dark,
+			top + Vector3(randf_range(-2.0, 2.0), 0.3, randf_range(-2.0, 2.0)))
+		chunk.rotation = Vector3(randf() * 0.5, randf() * TAU, randf() * 0.5)
+	var smoke := MeshKit.add(level, MeshKit.sphere(1.0, 12), MeshKit.glow(Color(0.35, 0.35, 0.36), 0.6), top + Vector3(0, 1.5, 0))
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(smoke, "scale", Vector3.ONE * 4.0, 1.2)
+	tween.tween_property(smoke, "position:y", smoke.position.y + 3.0, 1.2)
+	tween.tween_property(smoke.material_override, "albedo_color:a", 0.0, 1.2)
+	tween.chain().tween_callback(smoke.queue_free)
+
+
+func _float_text(pos: Vector3, text: String, color: Color) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 72
+	label.pixel_size = 0.025
+	label.outline_size = 18
+	label.modulate = color
+	label.position = pos
+	level.add_child(label)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", pos.y + 4.0, 1.4)
+	tween.tween_property(label, "modulate:a", 0.0, 1.4).set_delay(0.6)
+	tween.chain().tween_callback(label.queue_free)
+
+
+func _pan(relative: Vector2) -> void:
 	var b := cam.global_transform.basis
 	var right := Vector3(b.x.x, 0.0, b.x.z).normalized()
 	var forward := Vector3(-b.z.x, 0.0, -b.z.z).normalized()
-	return right * stick.x + forward * -stick.y
-
-
-func _check_loot() -> void:
-	for item in loot:
-		if item["taken"]:
-			continue
-		var node: Node3D = item["node"]
-		if PathUtils.flat_distance(node.position, drone.position) > LOOT_REACH + 1.0:
-			continue
-		item["taken"] = true
-		carried += int(round(int(item["value"]) * float(drone_stats["carry"])))
-		drone.set_carrying(true)
-		hud.set_loot(carried)
-		var tween := create_tween()
-		tween.tween_property(node, "position", drone.position, 0.35)
-		tween.tween_callback(node.hide)
-
-
-func _on_crash() -> void:
-	_exit_manual()
-	phase = Phase.RESULT
-	crash_timer = 1.6
-	hud.set_status("Drone down!")
-
-
-func _finish(success: bool) -> void:
-	crash_timer = -1.0
-	phase = Phase.RESULT
-	Engine.time_scale = 1.0
-	var vault_taken := false
-	var all_crates := true
-	for item in loot:
-		if item["vault"]:
-			vault_taken = item["taken"]
-		elif not item["taken"]:
-			all_crates = false
-	var banked := carried if success else 0
-	var stars := RaidRules.stars(banked, vault_taken, all_crates, success)
-	var gained := 0
-	if not autoplay:
-		gained = GameState.record_raid(stars, banked)
-	var practice := GameState.raid_target == "self"
-	hud.set_manual(false, false)
-	hud.set_status("Raid complete" if success else "Drone down")
-	hud.show_result(success, stars, gained, GameState.coins, practice)
-	if success:
-		drone.set_carrying(false)
-
-
-# ---------------------------------------------------------------- presentation
-
-func _update_hud() -> void:
-	hud.set_health(100.0 * drone.health / drone.max_health)
-	if drone.health < last_health - 0.5:
-		hud.flash_hit()
-		last_health = drone.health
-	if phase != Phase.FLY:
-		return
-	hud.set_manual(manual, drone.jammed)
-	if drone.net_timer > 0.0:
-		hud.set_status("Caught in a net!")
-	elif manual and drone.jammed:
-		hud.set_status("JAMMED: controls reversed")
-	elif manual:
-		hud.set_status("MANUAL: drag to steer")
-	else:
-		hud.set_status("Returning home" if returning else "Autopilot")
-
-
-func _update_camera(delta: float) -> void:
-	var target_focus := Vector3(0, 10, 0)
-	var target_size := PLAN_SIZE
-	if phase != Phase.PLAN:
-		target_focus = drone.position
-		target_size = FLY_SIZE
-	cam_focus = cam_focus.lerp(target_focus, 1.0 - exp(-delta * 3.0))
-	cam.size = lerpf(cam.size, target_size, 1.0 - exp(-delta * 2.0))
-	WorldSetup.place_camera(cam, cam_focus)
-
-
-func _redraw_path() -> void:
-	path_im.clear_surfaces()
-	var points := path
-	if phase == Phase.FLY:
-		points = PackedVector3Array([drone.position]) + path.slice(path_index) if not returning else PackedVector3Array()
-	if points.size() < 2:
-		return
-	path_im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	for i in points.size():
-		var tangent := points[mini(i + 1, points.size() - 1)] - points[maxi(i - 1, 0)]
-		tangent.y = 0.0
-		if tangent.length() < 0.001:
-			tangent = Vector3.FORWARD
-		tangent = tangent.normalized()
-		var side := Vector3(-tangent.z, 0.0, tangent.x) * 0.5
-		path_im.surface_add_vertex(points[i] + side)
-		path_im.surface_add_vertex(points[i] - side)
-	path_im.surface_end()
+	var units_per_px := cam.size / get_viewport().get_visible_rect().size.x
+	focus -= (right * relative.x - forward * relative.y * 1.4) * units_per_px
+	focus.x = clampf(focus.x, -PAN_LIMIT, PAN_LIMIT)
+	focus.z = clampf(focus.z, -PAN_LIMIT, PAN_LIMIT)
+	WorldSetup.place_camera(cam, focus)

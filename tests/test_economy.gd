@@ -99,6 +99,27 @@ func test_scout_needs_hangar_level_two() -> bool:
 	return first == "Needs Hangar Lv 2" and unlocked
 
 
+func test_army_respects_hangar_space() -> bool:
+	var gs := _fresh_state()
+	var cap: int = gs.army_capacity()
+	var fits: bool = gs.set_army_count("courier", cap / 2)
+	var too_many: bool = gs.set_army_count("courier", cap / 2 + 1)
+	var locked: bool = gs.set_army_count("scout", 1)
+	gs.free()
+	return fits and not too_many and not locked
+
+
+func test_generator_collect_keeps_overflow() -> bool:
+	var gs := _fresh_state()
+	var gen: Dictionary = gs.structure_at([2, 3])
+	gen["collected_at"] = Time.get_unix_time_from_system() - 100.0 * 60.0
+	gs.coins = gs.coin_cap() - 50
+	var got: int = gs.collect_generator([2, 3])
+	var left: int = gs.generator_pending(gen)
+	gs.free()
+	return got == 50 and left > 400
+
+
 func test_coins_are_capped() -> bool:
 	var gs := _fresh_state()
 	gs.add_coins(1_000_000)

@@ -3,13 +3,41 @@ extends RefCounted
 ## Pure game rules, kept free of nodes so they can be unit tested headless.
 
 
-## 0 stars: crashed or brought nothing home. 1: some loot. 2: the vault. 3: vault and every crate.
-static func stars(banked_loot: int, vault_taken: bool, all_crates_taken: bool, survived: bool) -> int:
-	if not survived or banked_loot <= 0:
-		return 0
-	if not vault_taken:
-		return 1
-	return 3 if all_crates_taken else 2
+## Clash-style stars: one for half the base, one for the Command Tower, one for everything.
+static func battle_stars(destroyed_ratio: float, hq_destroyed: bool) -> int:
+	var stars := 0
+	if destroyed_ratio >= 0.5:
+		stars += 1
+	if hq_destroyed:
+		stars += 1
+	if destroyed_ratio >= 0.999:
+		stars += 1
+	return stars
+
+
+## Index of the structure a drone should attack: the nearest one it prefers, otherwise the
+## nearest standing one, or -1 if nothing is left. Each target is a Dictionary with
+## top (Vector3), is_defense (bool), loot (int) and destroyed (bool).
+static func pick_target(prefers: String, from: Vector3, targets: Array) -> int:
+	var best := -1
+	var best_d := INF
+	var fallback := -1
+	var fallback_d := INF
+	for i in targets.size():
+		var t: Dictionary = targets[i]
+		if t["destroyed"]:
+			continue
+		var d := PathUtils.flat_distance(from, t["top"])
+		var preferred: bool = prefers == "any" \
+			or (prefers == "defense" and t["is_defense"]) \
+			or (prefers == "loot" and int(t["loot"]) > 0)
+		if preferred and d < best_d:
+			best_d = d
+			best = i
+		if d < fallback_d:
+			fallback_d = d
+			fallback = i
+	return best if best >= 0 else fallback
 
 
 ## Body tilt for a multirotor: nose dips with speed and forward acceleration,

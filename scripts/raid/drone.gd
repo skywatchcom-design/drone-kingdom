@@ -18,6 +18,14 @@ var jammed := false
 var dead := false
 ## Demo/autoplay only: hits still show effects but never kill the drone.
 var invulnerable := false
+
+# Battle AI state, driven by the raid.
+var kind := "courier"
+var dps := 20.0
+var prefers := "any"
+var target := -1
+var orbit := randf() * TAU
+var _zap: MeshInstance3D
 var net_timer := 0.0
 
 var _yaw := 0.0
@@ -43,6 +51,24 @@ func configure(stats: Dictionary) -> void:
 	body_scale = float(stats["scale"])
 	shell_color = stats["color"]
 	gear_height = 0.6 * body_scale
+	dps = float(stats.get("dps", dps))
+	prefers = stats.get("prefers", prefers)
+
+
+## Shows the cyan work beam from the drone to `point` (on) or hides it.
+func set_zap(on: bool, point: Vector3 = Vector3.ZERO) -> void:
+	if _zap == null:
+		return
+	_zap.visible = on and not dead
+	if not _zap.visible:
+		return
+	var from := global_position + Vector3(0, -0.4 * body_scale, 0)
+	var dir := point - from
+	if dir.length() < 0.01:
+		_zap.visible = false
+		return
+	var b := Basis(Quaternion(Vector3.UP, dir.normalized())) * Basis.from_scale(Vector3(1, dir.length(), 1))
+	_zap.global_transform = Transform3D(b, from + dir * 0.5)
 
 
 func _ready() -> void:
@@ -50,6 +76,10 @@ func _ready() -> void:
 	_body.scale = Vector3.ONE * body_scale
 	add_child(_body)
 	_build_model()
+	_zap = MeshKit.add(self, MeshKit.cyl(0.07, 0.07, 1.0, 6), MeshKit.glow(Color(0.35, 0.95, 1.0), 0.85))
+	_zap.top_level = true
+	_zap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_zap.visible = false
 
 
 func steer(target_velocity: Vector3, delta: float) -> void:
@@ -70,6 +100,7 @@ func damage(amount: float) -> void:
 	health = maxf(1.0 if invulnerable else 0.0, health - amount)
 	if health <= 0.0:
 		dead = true
+		set_zap(false)
 		crashed.emit()
 
 
