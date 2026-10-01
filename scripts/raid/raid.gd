@@ -1,27 +1,27 @@
 extends Node3D
-## One raid: plan a route over the rooftops, launch, and take manual control
-## (in slow motion) whenever the drone enters a defense's range.
+## One attack: plan a route over the target's rooftops, launch, and take manual control
+## (in slow motion) whenever the drone enters a defense's range. Loot sits in the
+## target's generators, silos and Command Tower (the gold vault).
 ## Run with `-- --autoplay` to draw a route and fly it automatically (used for screenshots).
 
 enum Phase { PLAN, TAKEOFF, FLY, LANDING, RESULT }
 
+const HOME_SCENE := "res://scenes/home/home.tscn"
 const ALT := City.ALT
 const CRUISE_SPEED := 9.0
 const PLAN_SIZE := 78.0
 const FLY_SIZE := 42.0
-const CAM_DIR := Vector3(1.0, 1.15, 1.0)
-const CAM_DISTANCE := 150.0
 const POINT_SPACING := 1.5
 const LOOT_REACH := 2.6
 const STICK_PIXELS := 90.0
 const CALM_TO_RESUME := 0.8
 
 var phase: Phase = Phase.PLAN
-var base_index := 0
 var base: Dictionary
 var level: Node3D
 var city: City
 var drone: Drone
+var drone_stats: Dictionary
 var cam: Camera3D
 var hud: RaidHud
 var defenses: Array[Defense] = []
@@ -37,8 +37,8 @@ var touching := false
 var stick_origin := Vector2.ZERO
 var stick := Vector2.ZERO
 var carried := 0
-var home_top := Vector3.ZERO
-var home_above := Vector3.ZERO
+var pad_top := Vector3.ZERO
+var pad_above := Vector3.ZERO
 var path_im: ImmediateMesh
 var cam_focus := Vector3(0, 10, 0)
 var crash_timer := -1.0
@@ -48,63 +48,24 @@ var autoplay := false
 
 func _ready() -> void:
 	autoplay = OS.get_cmdline_user_args().has("--autoplay")
-	_setup_world()
+	cam = WorldSetup.create(self, PLAN_SIZE)
 	hud = RaidHud.new()
 	add_child(hud)
 	hud.launch_pressed.connect(_on_launch)
 	hud.clear_pressed.connect(_on_clear)
-	hud.retry_pressed.connect(func() -> void: _load_base(base_index))
-	hud.next_pressed.connect(func() -> void: _load_base((base_index + 1) % Bases.LIST.size()))
-	_load_base(GameState.base_index % Bases.LIST.size())
+	hud.retry_pressed.connect(_start)
+	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(HOME_SCENE))
+	_start()
 
 
-func _setup_world() -> void:
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.45, 0.62, 0.82)
-	sky_mat.sky_horizon_color = Color(0.78, 0.84, 0.9)
-	sky_mat.ground_horizon_color = Color(0.72, 0.74, 0.76)
-	sky_mat.ground_bottom_color = Color(0.32, 0.34, 0.37)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	# Haze that only starts behind the focus point, so distant blocks fade into the sky.
-	env.fog_enabled = true
-	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.74, 0.81, 0.88)
-	env.fog_depth_begin = CAM_DISTANCE + 20.0
-	env.fog_depth_end = CAM_DISTANCE + 110.0
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	add_child(world_env)
-
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
-	sun.light_energy = 1.4
-	sun.light_color = Color(1.0, 0.95, 0.87)
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 320.0
-	add_child(sun)
-
-	cam = Camera3D.new()
-	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.keep_aspect = Camera3D.KEEP_WIDTH
-	cam.size = PLAN_SIZE
-	cam.near = 0.1
-	cam.far = 600.0
-	add_child(cam)
-	cam.make_current()
-	_place_camera()
+func _target_base() -> Dictionary:
+	if GameState.raid_target == "self":
+		return GameState.player_base()
+	return Bases.enemy(GameState.enemy_index, GameState.hq_level())
 
 
-func _load_base(index: int) -> void:
-	base_index = index
-	GameState.base_index = index
-	base = Bases.LIST[index]
+func _start() -> void:
+	base = _target_base()
 	if level != null:
 		level.queue_free()
 	level = Node3D.new()
@@ -112,32 +73,37 @@ func _load_base(index: int) -> void:
 	defenses.clear()
 	loot.clear()
 
-	var reserved: Array = [base["home"], base["target"]]
-	for d in base["defenses"]:
-		reserved.append(d["cell"])
-	for cell in base["loot"]:
-		reserved.append(cell)
+	var reserved: Array = [base["pad"]]
+	for s in base["structures"]:
+		reserved.append(s["cell"])
 	city = City.new()
 	level.add_child(city)
 	city.build(int(base["seed"]), reserved)
 
-	home_top = city.roof_top(base["home"])
-	home_above = Vector3(home_top.x, ALT, home_top.z)
-	_add_pad(home_top)
-	for d in base["defenses"]:
-		var defense := Catalog.make_defense(d["type"])
-		level.add_child(defense)
-		defense.position = City.cell_pos(d["cell"])
-		defense.setup(Catalog.DEFENSES[d["type"]], city.roof_y(d["cell"]), ALT)
-		defenses.append(defense)
-	for cell in base["loot"]:
-		_add_loot(cell, 50, false)
-	_add_loot(base["target"], 200, true)
+	pad_top = city.roof_top(base["pad"])
+	pad_above = Vector3(pad_top.x, ALT, pad_top.z)
+	_add_pad(pad_top)
+	for s in base["structures"]:
+		var type: String = s["type"]
+		var lvl := int(s["level"])
+		if Catalog.is_defense(type):
+			var defense := Catalog.make_defense(type)
+			level.add_child(defense)
+			defense.position = City.cell_pos(s["cell"])
+			defense.setup(Catalog.defense_stats(type, lvl), city.roof_y(s["cell"]), ALT)
+			defenses.append(defense)
+		else:
+			StructureModels.build(level, type, lvl, city.roof_top(s["cell"]))
+			var value := Catalog.loot_value(type, lvl)
+			if value > 0:
+				_add_loot(s["cell"], value, type == "hq")
 
+	drone_stats = GameState.current_drone_stats()
 	drone = Drone.new()
+	drone.configure(drone_stats)
 	drone.invulnerable = autoplay
 	level.add_child(drone)
-	drone.position = home_top + Vector3(0, Drone.GEAR_HEIGHT, 0)
+	drone.position = pad_top + Vector3(0, drone.gear_height, 0)
 	drone.crashed.connect(_on_crash)
 
 	path_im = ImmediateMesh.new()
@@ -158,15 +124,15 @@ func _load_base(index: int) -> void:
 	touching = false
 	carried = 0
 	crash_timer = -1.0
-	last_health = 100.0
+	last_health = drone.max_health
 	Engine.time_scale = 1.0
 	phase = Phase.PLAN
 	hud.hide_result()
-	hud.set_title(base["name"])
+	hud.set_title("%s  ·  %s Lv %d" % [base["name"], drone_stats["name"], int(drone_stats["level"])])
 	hud.set_health(100.0)
 	hud.set_loot(0)
 	hud.set_manual(false, false)
-	hud.set_status("Draw a route from your drone to the gold vault")
+	hud.set_status("Draw a route from your drone to the gold Command Tower")
 	hud.set_plan_buttons(true, false)
 	if autoplay:
 		_auto_route()
@@ -181,6 +147,7 @@ func _add_pad(top: Vector3) -> void:
 	MeshKit.add(level, MeshKit.box(Vector3(0.9, 0.05, 0.3)), white, top + Vector3(0, 0.18, 0))
 
 
+## A loot marker on a building: a crate (or the gold vault on the Command Tower) and a light beam.
 func _add_loot(cell: Array, value: int, vault: bool) -> void:
 	var top := city.roof_top(cell)
 	var node := Node3D.new()
@@ -188,11 +155,11 @@ func _add_loot(cell: Array, value: int, vault: bool) -> void:
 	node.position = top
 	var beacon_h := ALT - top.y
 	if vault:
-		MeshKit.add(node, MeshKit.box(Vector3(2.2, 1.6, 2.2)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.25, 0.8), Vector3(0, 0.8, 0))
+		MeshKit.add(node, MeshKit.box(Vector3(1.4, 1.0, 1.4)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.25, 0.8), Vector3(2.0, 0.5, 2.0))
 		var beam := MeshKit.add(node, MeshKit.cyl(0.18, 0.18, beacon_h, 8), MeshKit.glow(Color(1.0, 0.85, 0.3), 0.35), Vector3(0, beacon_h / 2.0, 0))
 		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	else:
-		MeshKit.add(node, MeshKit.box(Vector3(1.2, 0.9, 1.2)), MeshKit.mat(Color(0.62, 0.45, 0.28), 0.9), Vector3(0, 0.45, 0))
+		MeshKit.add(node, MeshKit.box(Vector3(1.0, 0.8, 1.0)), MeshKit.mat(Color(0.62, 0.45, 0.28), 0.9), Vector3(2.2, 0.4, 2.2))
 		var beam := MeshKit.add(node, MeshKit.cyl(0.1, 0.1, beacon_h, 6), MeshKit.glow(Color(0.5, 1.0, 0.6), 0.25), Vector3(0, beacon_h / 2.0, 0))
 		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	loot.append({"node": node, "value": value, "vault": vault, "taken": false})
@@ -208,7 +175,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 			if phase == Phase.PLAN:
 				drawing = true
-				path = PackedVector3Array([home_above])
+				path = PackedVector3Array([pad_above])
 				_try_add_point(touch.position)
 			elif phase == Phase.FLY:
 				touching = true
@@ -254,10 +221,16 @@ func _on_launch() -> void:
 
 
 func _auto_route() -> void:
-	var first_crate := city.roof_top(base["loot"][0])
-	var target := city.roof_top(base["target"])
-	path = PackedVector3Array([home_above, Vector3(first_crate.x, ALT, first_crate.z), Vector3(target.x, ALT, target.z)])
-	path = PathUtils.resample(path, POINT_SPACING)
+	var points := PackedVector3Array([pad_above])
+	var vault := Vector3.ZERO
+	for item in loot:
+		var p: Vector3 = (item["node"] as Node3D).position
+		if item["vault"]:
+			vault = p
+		elif points.size() < 2:
+			points.append(Vector3(p.x, ALT, p.z))
+	points.append(Vector3(vault.x, ALT, vault.z))
+	path = PathUtils.resample(points, POINT_SPACING)
 
 
 # ---------------------------------------------------------------- frame loop
@@ -292,13 +265,12 @@ func _takeoff(delta: float) -> void:
 
 
 func _fly(delta: float) -> void:
-	var target := home_above
+	var target := pad_above
 	if not returning:
 		while path_index < path.size() and PathUtils.flat_distance(path[path_index], drone.position) < 2.0:
 			path_index += 1
 		if path_index >= path.size():
 			returning = true
-			hud.set_status("Returning home")
 		else:
 			target = path[path_index]
 
@@ -317,25 +289,25 @@ func _fly(delta: float) -> void:
 
 	var desired: Vector3
 	if manual and not autoplay:
-		desired = _stick_to_world() * Drone.MAX_SPEED
+		desired = _stick_to_world() * drone.max_speed
 		if drone.jammed:
 			desired = -desired
 	else:
-		desired = (target - drone.position).normalized() * CRUISE_SPEED
+		desired = (target - drone.position).normalized() * minf(CRUISE_SPEED, drone.max_speed)
 		if drone.jammed:
 			desired = desired.rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.004) * 0.9)
 	desired.y = clampf((ALT - drone.position.y) * 2.0, -4.0, 4.0)
 	drone.steer(desired, delta)
 	_check_loot()
 	_redraw_path()
-	if returning and PathUtils.flat_distance(home_above, drone.position) < 1.2:
+	if returning and PathUtils.flat_distance(pad_above, drone.position) < 1.2:
 		_exit_manual()
 		phase = Phase.LANDING
 		hud.set_status("Landing")
 
 
 func _landing(delta: float) -> void:
-	var target := home_top + Vector3(0, Drone.GEAR_HEIGHT, 0)
+	var target := pad_top + Vector3(0, drone.gear_height, 0)
 	var to := target - drone.position
 	drone.steer(Vector3(to.x * 3.0, clampf(to.y * 1.5, -6.0, -0.6), to.z * 3.0), delta)
 	if drone.position.y <= target.y + 0.05:
@@ -381,10 +353,10 @@ func _check_loot() -> void:
 		if item["taken"]:
 			continue
 		var node: Node3D = item["node"]
-		if PathUtils.flat_distance(node.position, drone.position) > LOOT_REACH:
+		if PathUtils.flat_distance(node.position, drone.position) > LOOT_REACH + 1.0:
 			continue
 		item["taken"] = true
-		carried += int(item["value"])
+		carried += int(round(int(item["value"]) * float(drone_stats["carry"])))
 		drone.set_carrying(true)
 		hud.set_loot(carried)
 		var tween := create_tween()
@@ -412,11 +384,13 @@ func _finish(success: bool) -> void:
 			all_crates = false
 	var banked := carried if success else 0
 	var stars := RaidRules.stars(banked, vault_taken, all_crates, success)
+	var gained := 0
 	if not autoplay:
-		GameState.record_raid(base_index, stars, banked)
+		gained = GameState.record_raid(stars, banked)
+	var practice := GameState.raid_target == "self"
 	hud.set_manual(false, false)
 	hud.set_status("Raid complete" if success else "Drone down")
-	hud.show_result(success, stars, banked, GameState.coins)
+	hud.show_result(success, stars, gained, GameState.coins, practice)
 	if success:
 		drone.set_carrying(false)
 
@@ -424,7 +398,7 @@ func _finish(success: bool) -> void:
 # ---------------------------------------------------------------- presentation
 
 func _update_hud() -> void:
-	hud.set_health(drone.health)
+	hud.set_health(100.0 * drone.health / drone.max_health)
 	if drone.health < last_health - 0.5:
 		hud.flash_hit()
 		last_health = drone.health
@@ -449,12 +423,7 @@ func _update_camera(delta: float) -> void:
 		target_size = FLY_SIZE
 	cam_focus = cam_focus.lerp(target_focus, 1.0 - exp(-delta * 3.0))
 	cam.size = lerpf(cam.size, target_size, 1.0 - exp(-delta * 2.0))
-	_place_camera()
-
-
-func _place_camera() -> void:
-	cam.position = cam_focus + CAM_DIR.normalized() * CAM_DISTANCE
-	cam.look_at(cam_focus, Vector3.UP)
+	WorldSetup.place_camera(cam, cam_focus)
 
 
 func _redraw_path() -> void:

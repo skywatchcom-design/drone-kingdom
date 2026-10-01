@@ -19,6 +19,8 @@ func setup(p_stats: Dictionary, p_roof_y: float, p_alt: float) -> void:
 	_build()
 	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.25), MeshKit.glow(_ring_color(), 0.55), Vector3(0, alt, 0))
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if stats.has("level"):
+		StructureModels.level_label(self, int(stats["level"]), roof_y + 3.0).position.x = 2.0
 
 
 func show_range(on: bool) -> void:

@@ -5,7 +5,7 @@ extends CanvasLayer
 signal launch_pressed
 signal clear_pressed
 signal retry_pressed
-signal next_pressed
+signal home_pressed
 
 var _title: Label
 var _health: ProgressBar
@@ -95,7 +95,7 @@ func _ready() -> void:
 	buttons.add_theme_constant_override("separation", 16)
 	box.add_child(buttons)
 	_button(buttons, "Retry").pressed.connect(func() -> void: retry_pressed.emit())
-	_button(buttons, "Next base").pressed.connect(func() -> void: next_pressed.emit())
+	_button(buttons, "Home").pressed.connect(func() -> void: home_pressed.emit())
 	_result.visible = false
 
 
@@ -153,10 +153,13 @@ func flash_hit() -> void:
 	_hit_tint.color.a = 0.35
 
 
-func show_result(success: bool, stars: int, banked: int, total: int) -> void:
+func show_result(success: bool, stars: int, banked: int, total: int, practice: bool) -> void:
 	_result_title.text = "Raid complete" if success else "Drone down"
 	_result_stars.text = "Stars: %d / 3" % stars
-	_result_loot.text = "Loot banked: %d\nTotal coins: %d" % [banked, total]
+	if practice:
+		_result_loot.text = "Practice run on your own base.\nNo coins at stake."
+	else:
+		_result_loot.text = "Coins banked: %d\nTotal coins: %d" % [banked, total]
 	_result.visible = true
 	set_plan_buttons(false, false)
 

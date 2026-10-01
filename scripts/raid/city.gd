@@ -16,7 +16,7 @@ const WALL_COLORS := [
 var heights := {}
 var _rng := RandomNumberGenerator.new()
 var _glass := MeshKit.mat(Color(0.2, 0.26, 0.32), 0.15, 0.3)
-var _roof := MeshKit.mat(Color(0.6, 0.58, 0.55), 0.92)
+var _roof := MeshKit.mat(Color(0.83, 0.64, 0.45), 0.92)
 var _white_metal := MeshKit.mat(Color(0.93, 0.93, 0.9), 0.4, 0.3)
 var _panel := MeshKit.mat(Color(0.1, 0.16, 0.28), 0.2, 0.4)
 var _ac := MeshKit.mat(Color(0.84, 0.84, 0.82), 0.6)
@@ -70,7 +70,7 @@ func _add_skyline() -> void:
 				continue
 			var h := _rng.randf_range(4.0, 13.0)
 			var base := cell_pos([c, r])
-			var wall := MeshKit.mat(WALL_COLORS[_rng.randi() % WALL_COLORS.size()].darkened(0.08), 0.9)
+			var wall := MeshKit.mat(WALL_COLORS[_rng.randi() % WALL_COLORS.size()].darkened(0.35).lerp(Color(0.45, 0.5, 0.58), 0.35), 0.9)
 			MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT, h, FOOTPRINT)), wall, base + Vector3(0, h / 2.0, 0))
 			MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT + 0.06, 0.9, FOOTPRINT + 0.06)), _glass, base + Vector3(0, h - 1.4, 0))
 

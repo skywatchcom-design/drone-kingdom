@@ -5,11 +5,13 @@ extends Node3D
 
 signal crashed
 
-const MAX_SPEED := 10.0
 const ACCEL := 14.0
-const BODY_SCALE := 2.0
-const GEAR_HEIGHT := 0.6 * BODY_SCALE
 
+var max_speed := 10.0
+var max_health := 100.0
+var body_scale := 2.0
+var shell_color := Color(0.93, 0.94, 0.95)
+var gear_height := 1.2
 var velocity := Vector3.ZERO
 var health := 100.0
 var jammed := false
@@ -33,9 +35,19 @@ var _cargo: MeshInstance3D
 var _net: MeshInstance3D
 
 
+## Apply a drone type's stats (from Catalog.drone_stats). Call before adding to the tree.
+func configure(stats: Dictionary) -> void:
+	max_speed = float(stats["speed"])
+	max_health = float(stats["health"])
+	health = max_health
+	body_scale = float(stats["scale"])
+	shell_color = stats["color"]
+	gear_height = 0.6 * body_scale
+
+
 func _ready() -> void:
 	_body = Node3D.new()
-	_body.scale = Vector3.ONE * BODY_SCALE
+	_body.scale = Vector3.ONE * body_scale
 	add_child(_body)
 	_build_model()
 
@@ -43,7 +55,7 @@ func _ready() -> void:
 func steer(target_velocity: Vector3, delta: float) -> void:
 	if dead:
 		return
-	var limit := MAX_SPEED * (0.3 if net_timer > 0.0 else 1.0)
+	var limit := max_speed * (0.3 if net_timer > 0.0 else 1.0)
 	target_velocity = target_velocity.limit_length(limit)
 	var previous := velocity
 	velocity = velocity.move_toward(target_velocity, ACCEL * delta)
@@ -113,7 +125,7 @@ func _spin(delta: float) -> void:
 
 
 func _build_model() -> void:
-	var white := MeshKit.mat(Color(0.93, 0.94, 0.95), 0.35)
+	var white := MeshKit.mat(shell_color, 0.35)
 	var carbon := MeshKit.mat(Color(0.13, 0.14, 0.16), 0.45, 0.3)
 	var metal := MeshKit.mat(Color(0.6, 0.63, 0.66), 0.3, 0.85)
 	var blade_mat := MeshKit.mat(Color(0.08, 0.09, 0.1), 0.5)
