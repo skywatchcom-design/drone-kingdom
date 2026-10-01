@@ -6,6 +6,8 @@ extends CanvasLayer
 signal attack_pressed
 signal hangar_pressed
 signal test_pressed
+signal language_pressed
+signal dev_coins_pressed
 
 var _title: Label
 var _coins: Label
@@ -15,6 +17,8 @@ var _panel_title: Label
 var _panel_body: VBoxContainer
 var _toast: Label
 var _bottom: HBoxContainer
+var _tools: HBoxContainer
+var _dev: Button
 
 
 func _ready() -> void:
@@ -30,6 +34,19 @@ func _ready() -> void:
 	_title = make_label(top, "", 30)
 	_coins = make_label(top, "", 36)
 	_coins.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	_tools = HBoxContainer.new()
+	_tools.add_theme_constant_override("separation", 10)
+	top.add_child(_tools)
+	# The language button always names the *other* language, in that language.
+	var lang := make_button(_tools, "English" if I18n.rtl() else "עברית", 22, 56)
+	lang.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	lang.custom_minimum_size.x = 150
+	lang.pressed.connect(func() -> void: language_pressed.emit())
+	_dev = make_button(_tools, "", 22, 56)
+	_dev.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_dev.custom_minimum_size.x = 230
+	_dev.pressed.connect(func() -> void: dev_coins_pressed.emit())
+	_dev.visible = false
 
 	_bottom = HBoxContainer.new()
 	_bottom.anchor_top = 1.0
@@ -92,9 +109,16 @@ func _process(delta: float) -> void:
 	_toast.modulate.a = move_toward(_toast.modulate.a, 0.0, delta * 0.6)
 
 
-func set_header(hq_level: int, coins: int, cap: int, target_name: String) -> void:
+## Shows the developer-only infinite coins switch (debug builds only).
+func set_dev(available: bool, infinite: bool) -> void:
+	_dev.visible = available
+	_dev.text = I18n.t("DEV: infinite coins ON") if infinite else I18n.t("DEV: infinite coins OFF")
+	_dev.add_theme_color_override("font_color", Color(0.45, 0.95, 0.55) if infinite else Color(0.8, 0.84, 0.9))
+
+
+func set_header(hq_level: int, coins: int, cap: int, target_name: String, infinite: bool = false) -> void:
 	_title.text = I18n.t("Your Base  ·  Command Tower Lv %d") % hq_level
-	_coins.text = I18n.t("Coins %d / %d") % [coins, cap]
+	_coins.text = I18n.t("Coins: unlimited (dev)") if infinite else I18n.t("Coins %d / %d") % [coins, cap]
 	_attack.text = I18n.t("ATTACK\n%s") % target_name
 
 
@@ -148,7 +172,7 @@ func toast(text: String) -> void:
 
 
 func blocks(pos: Vector2) -> bool:
-	for c: Control in [_panel, _bottom]:
+	for c: Control in [_panel, _bottom, _tools]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false

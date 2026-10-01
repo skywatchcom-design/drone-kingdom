@@ -21,11 +21,55 @@ var raid_target := "enemy"
 var city_seed := 7
 var best_stars := {}
 
+const SETTINGS_PATH := "user://settings.json"
+## Development only: building and upgrading cost nothing. Forced off in release exports,
+## where OS.is_debug_build() is false, so players can never get it.
+var infinite_coins := false
+
 
 func _ready() -> void:
 	I18n.setup_font()
+	load_settings()
 	if not load_game():
 		new_player()
+
+
+func dev_tools_available() -> bool:
+	return OS.is_debug_build()
+
+
+func set_infinite_coins(on: bool) -> void:
+	infinite_coins = on and dev_tools_available()
+	save_settings()
+
+
+func set_language(lang: String) -> void:
+	I18n.lang = lang
+	save_settings()
+
+
+func load_settings() -> void:
+	if not persist or not FileAccess.file_exists(SETTINGS_PATH):
+		infinite_coins = dev_tools_available()
+		return
+	var data = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
+	if data is Dictionary:
+		I18n.lang = data.get("lang", I18n.lang)
+		infinite_coins = bool(data.get("infinite_coins", true)) and dev_tools_available()
+
+
+func save_settings() -> void:
+	if not persist:
+		return
+	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	if file != null:
+		file.store_string(JSON.stringify({"lang": I18n.lang, "infinite_coins": infinite_coins}))
+
+
+## Pays for something. With infinite coins on, nothing is taken.
+func _spend(cost: int) -> void:
+	if not infinite_coins:
+		coins -= cost
 
 
 func new_player() -> void:
@@ -121,7 +165,7 @@ func build_block_reason(type: String) -> String:
 
 
 func _coins_reason(cost: int) -> String:
-	return "" if coins >= cost else I18n.t("Need %d more coins") % (cost - coins)
+	return "" if infinite_coins or coins >= cost else I18n.t("Need %d more coins") % (cost - coins)
 
 
 func upgrade_block_reason(cell: Array) -> String:
@@ -185,7 +229,7 @@ func collect_generator(cell: Array) -> int:
 func build(type: String, cell: Array) -> bool:
 	if build_block_reason(type) != "" or not structure_at(cell).is_empty():
 		return false
-	coins -= Catalog.build_cost(type)
+	_spend(Catalog.build_cost(type))
 	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1}
 	if type == "generator":
 		s["collected_at"] = Time.get_unix_time_from_system()
@@ -198,7 +242,7 @@ func upgrade(cell: Array) -> bool:
 	if upgrade_block_reason(cell) != "":
 		return false
 	var s := structure_at(cell)
-	coins -= Catalog.upgrade_cost(s["type"], int(s["level"]))
+	_spend(Catalog.upgrade_cost(s["type"], int(s["level"])))
 	s["level"] = int(s["level"]) + 1
 	save_game()
 	return true
@@ -219,10 +263,10 @@ func upgrade_drone(type: String) -> bool:
 	if drone_block_reason(type) != "":
 		return false
 	if drones.has(type):
-		coins -= Catalog.drone_upgrade_cost(type, int(drones[type]))
+		_spend(Catalog.drone_upgrade_cost(type, int(drones[type])))
 		drones[type] = int(drones[type]) + 1
 	else:
-		coins -= int(Catalog.DRONES[type]["unlock"])
+		_spend(int(Catalog.DRONES[type]["unlock"]))
 		drones[type] = 1
 	save_game()
 	return true

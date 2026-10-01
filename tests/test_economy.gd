@@ -120,6 +120,17 @@ func test_generator_collect_keeps_overflow() -> bool:
 	return got == 50 and left > 400
 
 
+func test_infinite_coins_make_everything_free() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 0
+	gs.infinite_coins = true
+	var upgraded: bool = gs.upgrade([3, 3])
+	var built: bool = gs.build("net", [0, 0])
+	var unchanged: bool = gs.coins == 0
+	gs.free()
+	return upgraded and built and unchanged
+
+
 func test_coins_are_capped() -> bool:
 	var gs := _fresh_state()
 	gs.add_coins(1_000_000)

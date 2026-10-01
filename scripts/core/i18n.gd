@@ -88,6 +88,9 @@ const HE := {
 	"Unlock  ·  %d": "פתיחה  ·  %d",
 	"%s Lv %d": "%s רמה %d",
 	"Your Base (practice)": "הבסיס שלך (אימון)",
+	"DEV: infinite coins ON": "פיתוח: מטבעות אינסופיים פועל",
+	"DEV: infinite coins OFF": "פיתוח: מטבעות אינסופיים כבוי",
+	"Coins: unlimited (dev)": "מטבעות: ללא הגבלה (פיתוח)",
 
 	# Battle
 	"Tap outside the base to release drones": "לחצו מחוץ לבסיס כדי לשחרר רחפנים",

@@ -34,6 +34,9 @@ func _ready() -> void:
 	hud.attack_pressed.connect(func() -> void: _go_raid("enemy"))
 	hud.test_pressed.connect(func() -> void: _go_raid("self"))
 	hud.hangar_pressed.connect(_open_hangar)
+	hud.language_pressed.connect(_toggle_language)
+	hud.dev_coins_pressed.connect(_toggle_infinite)
+	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
 	_rebuild()
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
@@ -96,7 +99,7 @@ func _process(delta: float) -> void:
 
 func _refresh_header() -> void:
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
-	hud.set_header(GameState.hq_level(), GameState.coins, GameState.coin_cap(), target["name"])
+	hud.set_header(GameState.hq_level(), GameState.coins, GameState.coin_cap(), target["name"], GameState.infinite_coins)
 	for bubble in coins:
 		if bubble.scale.x > 0.99:
 			bubble.set_amount(GameState.generator_pending(GameState.structure_at(bubble.cell)))
@@ -438,6 +441,19 @@ func _do_drone(type: String) -> void:
 		hud.toast(I18n.t("%s Lv %d") % [Catalog.display_name(type), int(GameState.drones[type])])
 		_refresh_header()
 		_open_hangar()
+
+
+## Switches every text in the game between Hebrew and English; the scene reloads to redraw.
+func _toggle_language() -> void:
+	GameState.set_language("en" if I18n.rtl() else "he")
+	get_tree().reload_current_scene()
+
+
+func _toggle_infinite() -> void:
+	GameState.set_infinite_coins(not GameState.infinite_coins)
+	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
+	_refresh_header()
+	hud.hide_panel()
 
 
 func _set_army(type: String, count: int) -> void:
