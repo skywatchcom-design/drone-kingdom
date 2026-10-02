@@ -28,6 +28,7 @@ var focus := Vector3(0, 10, 0)
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
+	Audio.hum(0.0)
 	cam = WorldSetup.create(self, VIEW_SIZE)
 	hud = HomeHud.new()
 	add_child(hud)
@@ -36,6 +37,9 @@ func _ready() -> void:
 	hud.hangar_pressed.connect(_open_hangar)
 	hud.language_pressed.connect(_toggle_language)
 	hud.dev_coins_pressed.connect(_toggle_infinite)
+	hud.sound_pressed.connect(func() -> void:
+		GameState.set_sound(not GameState.sound_on)
+		Audio.set_enabled(GameState.sound_on))
 	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
 	_rebuild()
 	var args := OS.get_cmdline_user_args()
@@ -147,6 +151,8 @@ func _try_collect(screen_pos: Vector2) -> bool:
 		if got > 0:
 			hud.toast(I18n.t("+%d coins") % got)
 			bubble.pop()
+			Audio.play("coin")
+			Audio.buzz(20)
 		else:
 			hud.toast(I18n.t("Coin silos are full. Build or upgrade a Coin Silo."))
 		_refresh_header()
@@ -462,6 +468,7 @@ func _gold(button: Button, enabled: bool) -> void:
 
 func _do_build(type: String, cell: Array) -> void:
 	if GameState.build(type, cell):
+		Audio.play("build")
 		hud.toast(I18n.t("%s built") % Catalog.display_name(type))
 		_rebuild()
 		_open_cell(cell)
@@ -469,6 +476,7 @@ func _do_build(type: String, cell: Array) -> void:
 
 func _do_upgrade(cell: Array) -> void:
 	if GameState.upgrade(cell):
+		Audio.play("build")
 		hud.toast(I18n.t("Upgraded"))
 		_rebuild()
 		_open_cell(cell)
@@ -482,6 +490,7 @@ func _do_remove(cell: Array) -> void:
 
 func _do_drone(type: String) -> void:
 	if GameState.upgrade_drone(type):
+		Audio.play("build")
 		hud.toast(I18n.t("%s Lv %d") % [Catalog.display_name(type), int(GameState.drones[type])])
 		_refresh_header()
 		_open_hangar()

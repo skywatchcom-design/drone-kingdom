@@ -91,6 +91,8 @@ const HE := {
 	"DEV: infinite coins ON": "פיתוח: מטבעות אינסופיים פועל",
 	"DEV: infinite coins OFF": "פיתוח: מטבעות אינסופיים כבוי",
 	"Coins: unlimited (dev)": "מטבעות: ללא הגבלה (פיתוח)",
+	"Sound on": "סאונד פועל",
+	"Sound off": "סאונד כבוי",
 
 	# Battle
 	"Tap outside the base to release drones": "לחצו מחוץ לבסיס כדי לשחרר רחפנים",

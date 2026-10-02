@@ -125,6 +125,7 @@ func damage(amount: float) -> void:
 
 
 func hit_net() -> void:
+	Audio.play("net", -4.0)
 	net_timer = 2.0
 	damage(8.0)
 

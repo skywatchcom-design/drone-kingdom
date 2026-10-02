@@ -8,6 +8,7 @@ signal hangar_pressed
 signal test_pressed
 signal language_pressed
 signal dev_coins_pressed
+signal sound_pressed
 
 var _title: Label
 var _coins: Label
@@ -42,6 +43,12 @@ func _ready() -> void:
 	lang.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	lang.custom_minimum_size.x = 150
 	lang.pressed.connect(func() -> void: language_pressed.emit())
+	var sound := make_button(_tools, I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"), 22, 56)
+	sound.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	sound.custom_minimum_size.x = 130
+	sound.pressed.connect(func() -> void:
+		sound_pressed.emit()
+		sound.text = I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"))
 	_dev = make_button(_tools, "", 22, 56)
 	_dev.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_dev.custom_minimum_size.x = 230
@@ -209,6 +216,7 @@ static func make_button(parent: Control, text: String, font_size: int, height: f
 	b.custom_minimum_size = Vector2(0, height)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_font_size_override("font_size", font_size)
+	b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 	parent.add_child(b)
 	return b
 

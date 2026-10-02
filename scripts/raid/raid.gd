@@ -170,6 +170,9 @@ func _deploy(type: String, p: Vector3) -> void:
 	level.add_child(d)
 	d.position = p
 	drones.append(d)
+	d.crashed.connect(func() -> void: Audio.play("drone_down", -4.0))
+	Audio.play("deploy", -3.0)
+	Audio.buzz(15)
 	started = true
 	if int(army[type]) <= 0:
 		selected = _first_available()
@@ -202,6 +205,7 @@ func _process(delta: float) -> void:
 		if started:
 			time_left -= delta
 			hud.set_timer(time_left)
+		Audio.hum(minf(1.0, alive.size() / 5.0))
 		for d: Drone in alive:
 			_drone_ai(d, delta)
 		_check_end(delta)
@@ -275,6 +279,7 @@ func _fire(d: Drone, index: int) -> void:
 	bolt.scale = Vector3(1, 1, 3.5)
 	var damage := _shot_damage(d)
 	d.on_fire()
+	Audio.play("shot_" + d.kind, -6.0, 0.08)
 	d.velocity += (from - hit).normalized() * 1.2
 	_tracer(from, hit, color)
 	var tween := create_tween()
@@ -301,6 +306,7 @@ func _drop_weight(d: Drone, index: int) -> void:
 	MeshKit.add(weight, MeshKit.box(Vector3(0.38, 0.06, 0.38)), MeshKit.coat(Color(0.95, 0.72, 0.02)), Vector3(0, 0.1, 0))
 	var damage := _shot_damage(d)
 	d.on_fire()
+	Audio.play("release", -6.0)
 	d.velocity.y += 2.5
 	var fall := sqrt(2.0 * maxf(start.y - land.y, 0.5) / 22.0)
 	var tween := create_tween()
@@ -309,6 +315,8 @@ func _drop_weight(d: Drone, index: int) -> void:
 	tween.tween_property(weight, "rotation:x", 1.2, fall)
 	tween.chain().tween_callback(func() -> void:
 		weight.queue_free()
+		Audio.play("thud")
+		Audio.buzz(35)
 		_impact(land, Color(1.0, 0.8, 0.2))
 		_impact(land + Vector3(0, 0.5, 0), Color(1.0, 1.0, 1.0))
 		_dust_ring(Vector3(land.x, top.y + 0.1, land.z), 6.0, 0.9)
@@ -343,6 +351,7 @@ func _tracer(from: Vector3, to: Vector3, color: Color) -> void:
 
 
 func _impact(pos: Vector3, color: Color) -> void:
+	Audio.play("impact", -14.0, 0.12)
 	var flash := MeshKit.add(level, MeshKit.sphere(1.1, 12), MeshKit.glow(Color(1, 1, 1), 0.9), pos)
 	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var tween := create_tween()
@@ -388,6 +397,8 @@ func _damage_target(index: int, amount: float) -> void:
 func _destroy(index: int) -> void:
 	var t := targets[index]
 	t["destroyed"] = true
+	Audio.play("collapse")
+	Audio.buzz(60)
 	var top: Vector3 = t["top"]
 	if t["defense"] != null:
 		(t["defense"] as Defense).disable()
@@ -436,6 +447,9 @@ func _finish() -> void:
 	var gained := 0
 	if not autoplay:
 		gained = GameState.record_raid(stars, loot_gained)
+	Audio.hum(0.0)
+	for i in stars:
+		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))
 	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.coins, GameState.raid_target == "self")
 
 
