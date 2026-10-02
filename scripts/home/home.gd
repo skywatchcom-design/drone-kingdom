@@ -4,11 +4,11 @@ extends Node3D
 ## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-hangar` to open a sheet on start.
 
 const RAID_SCENE := "res://scenes/raid/raid.tscn"
-const VIEW_SIZE := 56.0
+const VIEW_SIZE := 76.0
 const TAP_SLOP := 24.0
 const PICK_RADIUS := 90.0
 const COIN_PICK_RADIUS := 70.0
-const PAN_LIMIT := 30.0
+const PAN_LIMIT := 44.0
 const GOLD := Color(1.0, 0.85, 0.35)
 const SOFT := Color(0.8, 0.84, 0.9)
 const GOOD := Color(0.45, 0.95, 0.55)

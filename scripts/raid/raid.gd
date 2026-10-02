@@ -8,12 +8,12 @@ extends Node3D
 enum Phase { BATTLE, RESULT }
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
-const VIEW_SIZE := 54.0
+const VIEW_SIZE := 74.0
 const TRAVEL_ALT := 20.0
 const DEPLOY_CLEARANCE := 6.5
-const MAP_LIMIT := 46.0
+const MAP_LIMIT := 66.0
 const TAP_SLOP := 24.0
-const PAN_LIMIT := 30.0
+const PAN_LIMIT := 44.0
 const BOLT_COLORS := {
 	"courier": Color(0.4, 0.95, 1.0),
 	"scout": Color(1.0, 0.75, 0.25),

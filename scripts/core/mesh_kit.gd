@@ -49,6 +49,25 @@ static func add(parent: Node3D, mesh: Mesh, material: Material, pos: Vector3 = V
 	return mi
 
 
+## Many copies of one mesh in a single draw call (road dashes, trees, sidewalks).
+## `colors`, if given, tints each instance (the material must use vertex color as albedo).
+static func multi(parent: Node3D, mesh: Mesh, material: Material, transforms: Array, colors: Array = []) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = not colors.is_empty()
+	mm.mesh = mesh
+	mm.instance_count = transforms.size()
+	for i in transforms.size():
+		mm.set_instance_transform(i, transforms[i])
+		if mm.use_colors:
+			mm.set_instance_color(i, colors[i])
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.material_override = material
+	parent.add_child(mi)
+	return mi
+
+
 static func box(size: Vector3) -> BoxMesh:
 	var b := BoxMesh.new()
 	b.size = size
