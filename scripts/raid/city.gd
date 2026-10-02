@@ -1,46 +1,32 @@
 class_name City
 extends Node3D
-## A city block: a 7x7 playable grid of buildings inside a wider ring of streets.
-## Every building stands on its own sidewalk plot; asphalt roads with dashed lines and
-## crosswalks run between plots; trees, street lamps, parks, parked and moving cars fill
-## the streets. Rooftops carry the clutter of a real roof (solar water heaters, AC, tanks).
-## Repeated details use MultiMesh so the whole city stays cheap enough for phones.
+## The world: a flat drone compound in the countryside. A 7x7 grid of stone pads on a
+## trimmed lawn, ringed by a wooden fence with a gate and a dirt road. Outside the fence:
+## meadows with trees, bushes and rocks, a winding stream, striped farm fields, wind
+## turbines and low hills fading into the haze. Everything sits on the ground, so every
+## structure and every defense range is visible at a glance.
+## Repeated details use MultiMesh so the scene stays cheap enough for phones.
 
 const GRID := 7
-const SPACING := 13.0
-const FOOTPRINT := 6.4
-const PLOT := 7.8
-const PLOT_H := 0.22
-const ALT := 24.0
-const RING := 4
-const MOVING_CARS := 14
-
-const WALL_COLORS := [
-	Color(0.88, 0.85, 0.79), Color(0.8, 0.78, 0.74), Color(0.92, 0.9, 0.86),
-	Color(0.76, 0.72, 0.66), Color(0.84, 0.8, 0.72), Color(0.86, 0.8, 0.78), Color(0.78, 0.8, 0.82),
-]
-const CAR_COLORS := [
-	Color(0.85, 0.15, 0.12), Color(0.95, 0.95, 0.95), Color(0.12, 0.13, 0.15), Color(0.2, 0.35, 0.7),
-	Color(0.7, 0.72, 0.75), Color(0.95, 0.75, 0.1), Color(0.25, 0.5, 0.3),
-]
+const SPACING := 7.5
+const PAD := 5.4
+const PAD_H := 0.12
+const ALT := 12.0
+## Half the width of the fenced compound.
+const YARD := GRID * SPACING / 2.0 + 2.0
+const TURBINES := 3
 
 var heights := {}
 var _rng := RandomNumberGenerator.new()
-var _glass := MeshKit.mat(Color(0.2, 0.26, 0.32), 0.15, 0.3)
-var _roof := MeshKit.mat(Color(0.83, 0.64, 0.45), 0.92)
-var _white_metal := MeshKit.mat(Color(0.93, 0.93, 0.9), 0.4, 0.3)
-var _panel := MeshKit.mat(Color(0.1, 0.16, 0.28), 0.2, 0.4)
-var _ac := MeshKit.mat(Color(0.84, 0.84, 0.82), 0.6)
-var _dark := MeshKit.mat(Color(0.2, 0.21, 0.23), 0.5, 0.6)
-var _cars: Array[Node3D] = []
-# Collected while building, then turned into MultiMeshes in one go.
-var _balconies: Array = []
-var _rails: Array = []
+var _spinning: Array[Node3D] = []
 var _trunks: Array = []
 var _leaves: Array = []
 var _leaf_colors: Array = []
-var _poles: Array = []
-var _lamps: Array = []
+var _pines: Array = []
+var _pine_colors: Array = []
+var _bushes: Array = []
+var _rocks: Array = []
+var _stream: Array = []
 
 
 static func cell_pos(cell: Array) -> Vector3:
@@ -48,8 +34,9 @@ static func cell_pos(cell: Array) -> Vector3:
 	return Vector3((float(cell[0]) - half) * SPACING, 0.0, (float(cell[1]) - half) * SPACING)
 
 
+## Height of the pad a structure stands on.
 func roof_y(cell: Array) -> float:
-	return float(heights.get(_key(cell), 0.0))
+	return float(heights.get(_key(cell), PAD_H))
 
 
 func roof_top(cell: Array) -> Vector3:
@@ -58,235 +45,193 @@ func roof_top(cell: Array) -> Vector3:
 	return p
 
 
-## `keep_clear` lists cells that get no rooftop clutter (home pad, loot, defenses).
-func build(seed_value: int, keep_clear: Array) -> void:
+## `pad_cells` lists the cells that get a stone pad: every slot at home (so the player sees
+## where to build), only the occupied ones in a raid.
+func build(seed_value: int, pad_cells: Array) -> void:
 	_rng.seed = seed_value
-	var clear := {}
-	for c in keep_clear:
-		clear[_key(c)] = true
-	MeshKit.add(self, MeshKit.box(Vector3(600.0, 0.4, 600.0)), MeshKit.mat(Color(0.2, 0.21, 0.23), 0.95), Vector3(0, -0.2, 0))
-	_add_streets()
-	for c in range(-RING, GRID + RING):
-		for r in range(-RING, GRID + RING):
-			var cell := [c, r]
-			var playable := c >= 0 and c < GRID and r >= 0 and r < GRID
-			if playable:
-				_add_building(cell, clear.has(_key(cell)))
-			elif _rng.randf() < 0.16:
-				_add_park(cell)
-			else:
-				_add_skyline_building(cell)
-			_add_corner_details(cell)
+	MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.mat(Color(0.36, 0.55, 0.26), 0.95), Vector3(0, -0.2, 0))
+	_add_compound(pad_cells)
+	_add_stream()
+	_add_fields()
+	_add_road()
+	_add_turbines()
+	_add_hills()
+	_scatter_nature()
 	_flush_multimeshes()
-	_add_traffic()
 
 
 func _process(delta: float) -> void:
-	var edge := (RING + GRID / 2.0) * SPACING
-	for car in _cars:
-		var dir: Vector3 = car.get_meta("dir")
-		car.position += dir * float(car.get_meta("speed")) * delta
-		if absf(car.position.x) > edge:
-			car.position.x = -signf(car.position.x) * edge
-		if absf(car.position.z) > edge:
-			car.position.z = -signf(car.position.z) * edge
+	for rotor in _spinning:
+		rotor.rotation.z += delta * float(rotor.get_meta("speed"))
 
 
-# ---------------------------------------------------------------- streets
+# ---------------------------------------------------------------- compound
 
-## Sidewalk plots under every building, dashed center lines, and crosswalks.
-func _add_streets() -> void:
-	var plots := []
-	for c in range(-RING, GRID + RING):
-		for r in range(-RING, GRID + RING):
-			plots.append(Transform3D(Basis(), cell_pos([c, r]) + Vector3(0, PLOT_H / 2.0, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PLOT, PLOT_H, PLOT)), MeshKit.mat(Color(0.7, 0.68, 0.64), 0.9), plots)
-	var curbs := []
-	for t: Transform3D in plots:
-		curbs.append(Transform3D(Basis(), t.origin + Vector3(0, -0.03, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PLOT + 0.2, PLOT_H - 0.04, PLOT + 0.2)), MeshKit.mat(Color(0.5, 0.5, 0.5), 0.9), curbs)
+func _add_compound(pad_cells: Array) -> void:
+	var lawn := YARD * 2.0
+	MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.mat(Color(0.47, 0.64, 0.31), 0.95), Vector3(0, 0.03, 0))
+	for c in GRID:
+		for r in GRID:
+			heights[_key([c, r])] = PAD_H + 0.06
+	var pads := []
+	for cell in pad_cells:
+		pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), pads)
+	var borders := []
+	for t: Transform3D in pads:
+		borders.append(Transform3D(Basis(), t.origin + Vector3(0, -0.02, 0)))
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.mat(Color(0.52, 0.56, 0.42), 0.9), borders)
 
-	# Road center lines sit halfway between plots, in both directions.
-	var lines := []
-	for k in range(-RING - 1, GRID + RING):
-		lines.append(cell_pos([k, 0]).x + SPACING / 2.0)
-	var extent := (RING + GRID / 2.0) * SPACING
-	var dashes := []
-	for line in lines:
-		var p := -extent
-		while p < extent:
-			var near_crossing := false
-			for other in lines:
-				if absf(p - other) < 4.2:
-					near_crossing = true
-					break
-			if not near_crossing:
-				dashes.append(Transform3D(Basis(), Vector3(line, 0.02, p)))
-				dashes.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(p, 0.02, line)))
-			p += 2.6
-	MeshKit.multi(self, MeshKit.box(Vector3(0.14, 0.02, 1.2)), MeshKit.mat(Color(0.95, 0.85, 0.4), 0.7), dashes)
-
-	# Zebra crossings on all four sides of each intersection inside the playable area.
-	var stripes := []
-	for i in range(0, GRID + 1):
-		for j in range(0, GRID + 1):
-			var center := Vector3(lines[RING + i], 0.02, lines[RING + j])
-			for s in range(-3, 4):
-				var o := s * 0.65
-				stripes.append(Transform3D(Basis(), center + Vector3(o, 0, 3.6)))
-				stripes.append(Transform3D(Basis(), center + Vector3(o, 0, -3.6)))
-				stripes.append(Transform3D(Basis(Vector3.UP, PI / 2.0), center + Vector3(3.6, 0, o)))
-				stripes.append(Transform3D(Basis(Vector3.UP, PI / 2.0), center + Vector3(-3.6, 0, o)))
-	MeshKit.multi(self, MeshKit.box(Vector3(0.32, 0.02, 1.3)), MeshKit.mat(Color(0.93, 0.93, 0.9), 0.7), stripes)
+	# Wooden fence: posts every 2.5 m and two rails, with a gate gap on the near (+Z) side.
+	var posts := []
+	var rails := []
+	var gate := 4.0
+	var p := -YARD
+	while p <= YARD + 0.01:
+		for side in [Vector3(p, 0, -YARD), Vector3(-YARD, 0, p), Vector3(YARD, 0, p)]:
+			posts.append(Transform3D(Basis(), side + Vector3(0, 0.6, 0)))
+		if absf(p) > gate:
+			posts.append(Transform3D(Basis(), Vector3(p, 0.6, YARD)))
+		p += 2.5
+	for h in [0.45, 0.95]:
+		rails.append(Transform3D(Basis(), Vector3(0, h, -YARD)))
+		rails.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-YARD, h, 0)))
+		rails.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(YARD, h, 0)))
+		var piece := (YARD - gate) / 2.0
+		rails.append(Transform3D(Basis().scaled(Vector3(piece / (YARD * 2.0), 1, 1)), Vector3(-(gate + piece), h, YARD)))
+		rails.append(Transform3D(Basis().scaled(Vector3(piece / (YARD * 2.0), 1, 1)), Vector3(gate + piece, h, YARD)))
+	var wood := MeshKit.mat(Color(0.5, 0.36, 0.22), 0.9)
+	MeshKit.multi(self, MeshKit.box(Vector3(0.18, 1.2, 0.18)), wood, posts)
+	MeshKit.multi(self, MeshKit.box(Vector3(YARD * 2.0, 0.1, 0.08)), wood, rails)
+	# Gate pillars and a gravel apron.
+	for x in [-gate, gate]:
+		MeshKit.add(self, MeshKit.box(Vector3(0.5, 1.8, 0.5)), MeshKit.mat(Color(0.62, 0.6, 0.55), 0.85), Vector3(x, 0.9, YARD))
+		MeshKit.add(self, MeshKit.sphere(0.18, 10), MeshKit.glow(Color(1.0, 0.85, 0.5)), Vector3(x, 1.95, YARD))
 
 
-## Trees and street lamps on the corners of a plot.
-func _add_corner_details(cell: Array) -> void:
-	var base := cell_pos(cell)
-	var inset := PLOT / 2.0 - 0.45
-	for corner in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
-		var spot := base + Vector3(corner.x * inset, PLOT_H, corner.y * inset)
-		var roll := _rng.randf()
-		if roll < 0.32:
-			_tree(spot, _rng.randf_range(0.8, 1.2))
-		elif roll < 0.5:
-			_poles.append(Transform3D(Basis(), spot + Vector3(0, 1.6, 0)))
-			_lamps.append(Transform3D(Basis(), spot + Vector3(0, 3.25, 0)))
+func _add_road() -> void:
+	var dirt := MeshKit.mat(Color(0.62, 0.52, 0.38), 0.95)
+	MeshKit.add(self, MeshKit.box(Vector3(6.0, 0.05, 120.0)), dirt, Vector3(0, 0.025, YARD + 60.0))
+	MeshKit.add(self, MeshKit.box(Vector3(7.0, 0.06, 4.0)), dirt, Vector3(0, 0.03, YARD - 1.0))
 
 
-func _tree(spot: Vector3, size: float) -> void:
-	_trunks.append(Transform3D(Basis().scaled(Vector3.ONE * size), spot + Vector3(0, 0.75 * size, 0)))
-	_leaves.append(Transform3D(Basis().scaled(Vector3(1.0, 0.9, 1.0) * size), spot + Vector3(0, 2.0 * size, 0)))
-	_leaf_colors.append(Color(0.24, 0.5, 0.22).lerp(Color(0.42, 0.62, 0.25), _rng.randf()))
+# ---------------------------------------------------------------- countryside
+
+## A winding stream west of the compound, built from short overlapping segments.
+func _add_stream() -> void:
+	var water := MeshKit.mat(Color(0.25, 0.52, 0.72), 0.08, 0.2)
+	var bank := MeshKit.mat(Color(0.78, 0.72, 0.55), 0.95)
+	var z := -120.0
+	while z < 120.0:
+		var x := -YARD - 20.0 + sin(z * 0.045) * 7.0
+		var next_x := -YARD - 20.0 + sin((z + 3.0) * 0.045) * 7.0
+		var angle := atan2(next_x - x, 3.0)
+		var b := Basis(Vector3.UP, angle)
+		MeshKit.add(self, MeshKit.box(Vector3(9.5, 0.04, 3.4)), bank, Vector3(x, 0.02, z)).basis = b
+		MeshKit.add(self, MeshKit.box(Vector3(6.0, 0.06, 3.4)), water, Vector3(x, 0.05, z)).basis = b
+		_stream.append(Vector2(x, z))
+		z += 3.0
 
 
-func _add_park(cell: Array) -> void:
-	var base := cell_pos(cell)
-	MeshKit.add(self, MeshKit.box(Vector3(PLOT - 0.5, 0.3, PLOT - 0.5)), MeshKit.mat(Color(0.33, 0.55, 0.26), 0.95), base + Vector3(0, PLOT_H + 0.05, 0))
-	MeshKit.add(self, MeshKit.box(Vector3(1.0, 0.32, PLOT - 0.5)), MeshKit.mat(Color(0.78, 0.72, 0.6), 0.95), base + Vector3(0, PLOT_H + 0.07, 0))
-	for i in _rng.randi_range(3, 6):
-		_tree(base + Vector3(_rng.randf_range(-2.8, 2.8), PLOT_H + 0.2, _rng.randf_range(-2.8, 2.8)), _rng.randf_range(0.9, 1.5))
-
-
-func _add_traffic() -> void:
-	var lines := []
-	for k in range(-RING - 1, GRID + RING):
-		lines.append(cell_pos([k, 0]).x + SPACING / 2.0)
-	var extent := (RING + GRID / 2.0) * SPACING
-	# Parked cars along the curbs.
-	var parked := []
-	var parked_colors := []
-	for i in 70:
-		var line: float = lines[_rng.randi() % lines.size()]
-		var along := _rng.randf_range(-extent, extent)
-		var side := 1.0 if _rng.randf() < 0.5 else -1.0
-		if _rng.randf() < 0.5:
-			parked.append(Transform3D(Basis(), Vector3(line + side * 2.0, 0.3, along)))
-		else:
-			parked.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(along, 0.3, line + side * 2.0)))
-		parked_colors.append(CAR_COLORS[_rng.randi() % CAR_COLORS.size()])
-	var paint := MeshKit.mat(Color.WHITE, 0.35, 0.4)
+## Striped farm fields east of the compound.
+func _add_fields() -> void:
+	var rows := []
+	var colors := []
+	var palettes := [[Color(0.86, 0.74, 0.35), Color(0.8, 0.67, 0.3)], [Color(0.42, 0.62, 0.25), Color(0.36, 0.55, 0.22)], [Color(0.55, 0.42, 0.28), Color(0.48, 0.36, 0.24)]]
+	var fz := -YARD
+	while fz < YARD + 30.0:
+		var pal: Array = palettes[_rng.randi() % palettes.size()]
+		var fx := YARD + 14.0 + _rng.randf_range(0.0, 4.0)
+		var depth := _rng.randf_range(14.0, 20.0)
+		var width := _rng.randf_range(22.0, 32.0)
+		var stripe := 0.0
+		var i := 0
+		while stripe < depth:
+			rows.append(Transform3D(Basis().scaled(Vector3(width, 1, 1)), Vector3(fx + width / 2.0, 0.06, fz + stripe)))
+			colors.append(pal[i % 2])
+			stripe += 1.2
+			i += 1
+		fz += depth + 3.0
+	var paint := MeshKit.mat(Color.WHITE, 0.95)
 	paint.vertex_color_use_as_albedo = true
-	MeshKit.multi(self, MeshKit.box(Vector3(0.95, 0.5, 2.0)), paint, parked, parked_colors)
-	var cabins := []
-	for t: Transform3D in parked:
-		cabins.append(Transform3D(t.basis, t.origin + Vector3(0, 0.38, 0) + t.basis.z * -0.1))
-	MeshKit.multi(self, MeshKit.box(Vector3(0.85, 0.32, 1.05)), MeshKit.mat(Color(0.12, 0.15, 0.2), 0.15, 0.4), cabins)
-	# A few cars driving in their lanes; they wrap around at the edge of the city.
-	for i in MOVING_CARS:
-		var car := Node3D.new()
-		add_child(car)
-		var color: Color = CAR_COLORS[_rng.randi() % CAR_COLORS.size()]
-		MeshKit.add(car, MeshKit.box(Vector3(0.95, 0.5, 2.0)), MeshKit.mat(color, 0.35, 0.4), Vector3(0, 0.3, 0))
-		MeshKit.add(car, MeshKit.box(Vector3(0.85, 0.32, 1.05)), MeshKit.mat(Color(0.12, 0.15, 0.2), 0.15, 0.4), Vector3(0, 0.68, -0.1))
-		for x in [-0.3, 0.3]:
-			MeshKit.add(car, MeshKit.box(Vector3(0.18, 0.1, 0.04)), MeshKit.glow(Color(1.0, 0.97, 0.85)), Vector3(x, 0.35, 1.01))
-			MeshKit.add(car, MeshKit.box(Vector3(0.18, 0.1, 0.04)), MeshKit.glow(Color(0.9, 0.1, 0.1)), Vector3(x, 0.35, -1.01))
-		var line: float = lines[_rng.randi() % lines.size()]
-		var forward := _rng.randf() < 0.5
-		var along_z := _rng.randf() < 0.5
-		var lane := 1.0 if forward else -1.0
-		if along_z:
-			car.position = Vector3(line + lane, 0, _rng.randf_range(-extent, extent))
-			car.set_meta("dir", Vector3(0, 0, 1 if forward else -1))
-			car.rotation.y = 0.0 if forward else PI
+	MeshKit.multi(self, MeshKit.box(Vector3(1.0, 0.12, 1.2)), paint, rows, colors)
+
+
+func _add_turbines() -> void:
+	var white := MeshKit.mat(Color(0.94, 0.95, 0.96), 0.4, 0.2)
+	for i in TURBINES:
+		var base := Vector3(YARD + 30.0 + i * 14.0, 0, -YARD - 18.0 - i * 9.0)
+		MeshKit.add(self, MeshKit.cyl(0.35, 0.6, 18.0, 12), white, base + Vector3(0, 9.0, 0))
+		var hub := Node3D.new()
+		hub.position = base + Vector3(0, 18.2, 0.6)
+		add_child(hub)
+		MeshKit.add(hub, MeshKit.sphere(0.6, 12), white)
+		for b in 3:
+			var arm := Node3D.new()
+			arm.rotation.z = TAU * b / 3.0
+			hub.add_child(arm)
+			MeshKit.add(arm, MeshKit.box(Vector3(0.5, 7.0, 0.12)), white, Vector3(0, 3.6, 0))
+		hub.set_meta("speed", _rng.randf_range(0.6, 1.0))
+		_spinning.append(hub)
+
+
+func _add_hills() -> void:
+	for i in 10:
+		var a := TAU * i / 10.0 + _rng.randf_range(-0.2, 0.2)
+		var d := _rng.randf_range(110.0, 150.0)
+		var hill := MeshKit.add(self, MeshKit.sphere(1.0, 20), MeshKit.mat(Color(0.3, 0.47, 0.25).lerp(Color(0.42, 0.55, 0.32), _rng.randf()), 0.95), Vector3(cos(a) * d, -6.0, sin(a) * d))
+		hill.scale = Vector3(_rng.randf_range(40.0, 70.0), _rng.randf_range(14.0, 24.0), _rng.randf_range(30.0, 50.0))
+
+
+## Trees, pines, bushes and rocks everywhere outside the fence except the stream,
+## the fields and the road.
+func _scatter_nature() -> void:
+	var placed := 0
+	var tries := 0
+	while placed < 260 and tries < 3000:
+		tries += 1
+		var p := Vector3(_rng.randf_range(-100.0, 100.0), 0, _rng.randf_range(-100.0, 100.0))
+		if not _free_ground(p):
+			continue
+		placed += 1
+		var roll := _rng.randf()
+		var size := _rng.randf_range(0.8, 1.4)
+		if roll < 0.4:
+			_trunks.append(Transform3D(Basis().scaled(Vector3.ONE * size), p + Vector3(0, 0.75 * size, 0)))
+			_leaves.append(Transform3D(Basis().scaled(Vector3(1.0, 0.9, 1.0) * size * 1.3), p + Vector3(0, 2.2 * size, 0)))
+			_leaf_colors.append(Color(0.24, 0.5, 0.2).lerp(Color(0.45, 0.63, 0.24), _rng.randf()))
+		elif roll < 0.7:
+			_pines.append(Transform3D(Basis().scaled(Vector3(1.0, 1.0, 1.0) * size), p + Vector3(0, 2.4 * size, 0)))
+			_pine_colors.append(Color(0.14, 0.36, 0.2).lerp(Color(0.22, 0.45, 0.25), _rng.randf()))
+			_trunks.append(Transform3D(Basis().scaled(Vector3(0.7, 0.6, 0.7) * size), p + Vector3(0, 0.45 * size, 0)))
+		elif roll < 0.88:
+			_bushes.append(Transform3D(Basis().scaled(Vector3(1.0, 0.7, 1.0) * size), p + Vector3(0, 0.4 * size, 0)))
 		else:
-			car.position = Vector3(_rng.randf_range(-extent, extent), 0, line - lane)
-			car.set_meta("dir", Vector3(1 if forward else -1, 0, 0))
-			car.rotation.y = PI / 2.0 if forward else -PI / 2.0
-		car.set_meta("speed", _rng.randf_range(4.0, 7.0))
-		_cars.append(car)
+			var r := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(1.2, 0.6, 0.9) * size)
+			_rocks.append(Transform3D(r, p + Vector3(0, 0.25 * size, 0)))
+
+
+func _free_ground(p: Vector3) -> bool:
+	if absf(p.x) < YARD + 3.0 and absf(p.z) < YARD + 3.0:
+		return false
+	if absf(p.x) < 5.5 and p.z > YARD:
+		return false
+	if p.x > YARD + 12.0 and p.x < YARD + 54.0 and p.z > -YARD - 2.0 and p.z < YARD + 52.0:
+		return false
+	for s: Vector2 in _stream:
+		if absf(s.y - p.z) < 3.0 and absf(s.x - p.x) < 6.5:
+			return false
+	return true
 
 
 func _flush_multimeshes() -> void:
 	var leaf_mat := MeshKit.mat(Color.WHITE, 0.9)
 	leaf_mat.vertex_color_use_as_albedo = true
-	MeshKit.multi(self, MeshKit.cyl(0.12, 0.16, 1.5, 8), MeshKit.mat(Color(0.4, 0.28, 0.18), 0.9), _trunks)
+	MeshKit.multi(self, MeshKit.cyl(0.14, 0.2, 1.5, 8), MeshKit.mat(Color(0.42, 0.29, 0.18), 0.9), _trunks)
 	MeshKit.multi(self, MeshKit.sphere(1.0, 10), leaf_mat, _leaves, _leaf_colors)
-	MeshKit.multi(self, MeshKit.cyl(0.05, 0.07, 3.2, 8), MeshKit.mat(Color(0.25, 0.27, 0.3), 0.4, 0.7), _poles)
-	MeshKit.multi(self, MeshKit.sphere(0.18, 8), MeshKit.glow(Color(1.0, 0.92, 0.7)), _lamps)
-	MeshKit.multi(self, MeshKit.box(Vector3(FOOTPRINT * 0.7, 0.12, 0.9)), MeshKit.mat(Color(0.9, 0.89, 0.86), 0.8), _balconies)
-	var rail := MeshKit.mat(Color(0.75, 0.85, 0.9), 0.2, 0.3)
-	rail.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	rail.albedo_color.a = 0.55
-	MeshKit.multi(self, MeshKit.box(Vector3(FOOTPRINT * 0.7, 0.55, 0.04)), rail, _rails)
-
-
-# ---------------------------------------------------------------- buildings
-
-## A playable building. Styles: plain tower with window bands, balcony block (balconies on
-## the two sides the camera sees), or a tower with a set-back top floor.
-func _add_building(cell: Array, keep_roof_clear: bool) -> void:
-	var h := _rng.randf_range(5.0, 13.0)
-	var base := cell_pos(cell) + Vector3(0, PLOT_H, 0)
-	heights[_key(cell)] = PLOT_H + h + 0.3
-	var wall := MeshKit.mat(WALL_COLORS[_rng.randi() % WALL_COLORS.size()], 0.85)
-	MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT, h, FOOTPRINT)), wall, base + Vector3(0, h / 2.0, 0))
-	var floors := int((h - 1.5) / 3.0)
-	for f in floors:
-		MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT + 0.06, 0.9, FOOTPRINT + 0.06)), _glass, base + Vector3(0, 1.6 + f * 3.0, 0))
-	MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT + 0.3, 0.3, FOOTPRINT + 0.3)), _roof, base + Vector3(0, h + 0.15, 0))
-	var style := _rng.randf()
-	if style < 0.4:
-		for f in range(0, floors):
-			var y := 1.05 + f * 3.0
-			for face in [Vector3(0, 0, 1), Vector3(1, 0, 0)]:
-				var b := Basis(Vector3.UP, PI / 2.0) if face.x > 0.0 else Basis()
-				var out: Vector3 = face * (FOOTPRINT / 2.0 + 0.45)
-				_balconies.append(Transform3D(b, base + out + Vector3(0, y, 0)))
-				_rails.append(Transform3D(b, base + face * (FOOTPRINT / 2.0 + 0.88) + Vector3(0, y + 0.33, 0)))
-	elif style > 0.8 and not keep_roof_clear:
-		MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT * 0.55, 2.4, FOOTPRINT * 0.55)), wall, base + Vector3(-0.6, h + 1.5, -0.6))
-		MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT * 0.55 + 0.06, 0.8, FOOTPRINT * 0.55 + 0.06)), _glass, base + Vector3(-0.6, h + 1.6, -0.6))
-		MeshKit.add(self, MeshKit.box(Vector3(0.9, 0.6, 0.7)), _ac, base + Vector3(1.8, h + 0.6, 1.6))
-		return
-	if not keep_roof_clear:
-		_add_props(base + Vector3(0, h + 0.3, 0))
-
-
-## Background buildings around the playable grid: darker and simpler, so the play area stands out.
-func _add_skyline_building(cell: Array) -> void:
-	var h := _rng.randf_range(4.0, 10.0)
-	var base := cell_pos(cell) + Vector3(0, PLOT_H, 0)
-	var wall := MeshKit.mat(WALL_COLORS[_rng.randi() % WALL_COLORS.size()].darkened(0.3).lerp(Color(0.45, 0.5, 0.58), 0.3), 0.9)
-	MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT, h, FOOTPRINT)), wall, base + Vector3(0, h / 2.0, 0))
-	MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT + 0.06, 0.9, FOOTPRINT + 0.06)), _glass, base + Vector3(0, h - 1.4, 0))
-	if _rng.randf() < 0.5:
-		MeshKit.add(self, MeshKit.box(Vector3(FOOTPRINT + 0.06, 0.9, FOOTPRINT + 0.06)), _glass, base + Vector3(0, h * 0.5, 0))
-
-
-func _add_props(top: Vector3) -> void:
-	if _rng.randf() < 0.55:
-		var tank := MeshKit.add(self, MeshKit.cyl(0.45, 0.45, 1.6, 14), _white_metal, top + Vector3(-1.2, 1.3, -1.6))
-		tank.rotation.z = PI / 2.0
-		var panel := MeshKit.add(self, MeshKit.box(Vector3(1.8, 0.08, 1.2)), _panel, top + Vector3(-1.2, 0.6, -0.4))
-		panel.rotation.x = -0.6
-	if _rng.randf() < 0.6:
-		MeshKit.add(self, MeshKit.box(Vector3(0.9, 0.6, 0.7)), _ac, top + Vector3(1.6, 0.3, 1.4))
-	if _rng.randf() < 0.35:
-		MeshKit.add(self, MeshKit.cyl(0.05, 0.05, 3.0, 6), _dark, top + Vector3(2.2, 1.5, -2.2))
-	if _rng.randf() < 0.25:
-		MeshKit.add(self, MeshKit.cyl(0.8, 0.8, 1.4, 16), _dark, top + Vector3(1.6, 0.7, -1.4))
+	MeshKit.multi(self, MeshKit.cyl(0.0, 1.3, 3.6, 10), leaf_mat, _pines, _pine_colors)
+	MeshKit.multi(self, MeshKit.sphere(0.9, 8), MeshKit.mat(Color(0.3, 0.5, 0.22), 0.9), _bushes)
+	MeshKit.multi(self, MeshKit.sphere(0.8, 6), MeshKit.mat(Color(0.55, 0.55, 0.53), 0.9), _rocks)
 
 
 func _key(cell: Array) -> String:

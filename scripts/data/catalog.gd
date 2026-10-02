@@ -31,10 +31,10 @@ const INFO := {
 }
 
 const DEFENSES := {
-	"laser": {"name": "Laser Tower", "cost": 200, "radius": 13.0, "dps": 35.0},
-	"net": {"name": "Net Launcher", "cost": 250, "radius": 14.0, "speed": 16.0, "cooldown": 3.5},
-	"jammer": {"name": "Jammer", "cost": 300, "radius": 9.5},
-	"birds": {"name": "Gull Nest", "cost": 350, "radius": 9.5, "count": 6, "speed": 1.3, "damage": 15.0},
+	"laser": {"name": "Laser Tower", "cost": 200, "radius": 10.0, "dps": 35.0},
+	"net": {"name": "Net Launcher", "cost": 250, "radius": 11.0, "speed": 16.0, "cooldown": 3.5},
+	"jammer": {"name": "Jammer", "cost": 300, "radius": 7.5},
+	"birds": {"name": "Gull Nest", "cost": 350, "radius": 7.5, "count": 6, "speed": 1.3, "damage": 15.0},
 }
 
 const BUILDINGS := {

@@ -2,11 +2,15 @@ class_name StructureModels
 extends RefCounted
 ## Gray-box models for non-defense buildings. Each grows a little with level.
 
+## Models are drawn in a small unit size and scaled up to fill their pad.
+const SCALE := 1.35
+
 
 static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Node3D:
 	var root := Node3D.new()
 	parent.add_child(root)
 	root.position = top
+	root.scale = Vector3.ONE * SCALE
 	var height := 3.0
 	match type:
 		"hq":

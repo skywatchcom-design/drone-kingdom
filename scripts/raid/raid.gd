@@ -8,12 +8,12 @@ extends Node3D
 enum Phase { BATTLE, RESULT }
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
-const VIEW_SIZE := 74.0
-const TRAVEL_ALT := 20.0
+const VIEW_SIZE := 58.0
+const TRAVEL_ALT := 11.0
 const DEPLOY_CLEARANCE := 6.5
-const MAP_LIMIT := 66.0
+const MAP_LIMIT := 46.0
 const TAP_SLOP := 24.0
-const PAN_LIMIT := 44.0
+const PAN_LIMIT := 30.0
 const BOLT_COLORS := {
 	"courier": Color(0.4, 0.95, 1.0),
 	"scout": Color(1.0, 0.75, 0.25),
@@ -379,9 +379,10 @@ func _shake(index: int) -> void:
 	if node.has_meta("shaking"):
 		return
 	node.set_meta("shaking", true)
+	var rest := node.scale
 	var tween := create_tween()
-	tween.tween_property(node, "scale", Vector3(1.12, 0.9, 1.12), 0.05)
-	tween.tween_property(node, "scale", Vector3.ONE, 0.08)
+	tween.tween_property(node, "scale", rest * Vector3(1.12, 0.9, 1.12), 0.05)
+	tween.tween_property(node, "scale", rest, 0.08)
 	tween.tween_callback(func() -> void: node.remove_meta("shaking"))
 
 
