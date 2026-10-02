@@ -338,6 +338,7 @@ func _drone_card(type: String) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	card.add_child(box)
+	box.add_child(_drone_preview(type, st, owned))
 
 	var head := HBoxContainer.new()
 	box.add_child(head)
@@ -387,6 +388,49 @@ func _drone_card(type: String) -> Control:
 	if reason != "" and not (owned and lvl >= Catalog.MAX_LEVEL):
 		_wrap(HomeHud.make_label(box, reason, 21, BAD))
 	return card
+
+
+## A small 3D stage with the drone hovering on a turntable and looping its signature move.
+## Every preview uses the same camera distance, so the size difference between drones is real.
+func _drone_preview(type: String, stats: Dictionary, owned: bool) -> Control:
+	var frame := SubViewportContainer.new()
+	frame.stretch = true
+	frame.custom_minimum_size = Vector2(0, 230)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.msaa_3d = Viewport.MSAA_4X
+	frame.add_child(vp)
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CLEAR_COLOR
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.55, 0.6, 0.7)
+	env.ambient_light_energy = 0.8
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	var world_env := WorldEnvironment.new()
+	world_env.environment = env
+	vp.add_child(world_env)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-50, 30, 0)
+	light.light_energy = 1.6
+	light.shadow_enabled = true
+	vp.add_child(light)
+	var stage := Node3D.new()
+	vp.add_child(stage)
+	MeshKit.add(stage, MeshKit.cyl(3.4, 3.4, 0.05, 48), MeshKit.mat(Color(0.12, 0.14, 0.17), 0.95))
+	var cam := Camera3D.new()
+	cam.fov = 32.0
+	vp.add_child(cam)
+	cam.look_at_from_position(Vector3(0, 2.4, 7.6), Vector3(0, 1.3, 0))
+	var drone := Drone.new()
+	drone.configure(stats)
+	drone.showcase = true
+	drone.position = Vector3(0, 1.6, 0)
+	vp.add_child(drone)
+	if not owned:
+		frame.modulate = Color(0.55, 0.55, 0.6)
+	return frame
 
 
 # ---------------------------------------------------------------- small UI helpers

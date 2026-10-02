@@ -10,8 +10,6 @@ enum Phase { BATTLE, RESULT }
 const HOME_SCENE := "res://scenes/home/home.tscn"
 const VIEW_SIZE := 54.0
 const TRAVEL_ALT := 20.0
-const HOVER_ABOVE := 6.5
-const WORK_RADIUS := 4.5
 const DEPLOY_CLEARANCE := 6.5
 const MAP_LIMIT := 46.0
 const TAP_SLOP := 24.0
@@ -88,9 +86,12 @@ func _start() -> void:
 			"loot": Catalog.loot_value(type, lvl), "destroyed": false,
 		})
 
+	var plan: Dictionary = GameState.army
+	if autoplay:
+		plan = {"courier": 2, "scout": 3, "heavy": 1}
 	for type in Catalog.DRONE_ORDER:
-		var n := int(GameState.army.get(type, 0))
-		if n > 0 and GameState.drones.has(type):
+		var n := int(plan.get(type, 0))
+		if n > 0 and (autoplay or GameState.drones.has(type)):
 			army[type] = n
 			drone_names[type] = Catalog.display_name(type)
 	selected = _first_available()
@@ -207,19 +208,22 @@ func _process(delta: float) -> void:
 	else:
 		for d: Drone in alive:
 			d.steer(Vector3.ZERO, delta)
-			d.set_zap(false)
 	_update_bars()
 
 
 func _drone_ai(d: Drone, delta: float) -> void:
 	if d.target < 0 or targets[d.target]["destroyed"]:
+		var before := d.target
 		d.target = RaidRules.pick_target(d.prefers, d.position, targets)
+		if d.target >= 0 and d.target != before:
+			d.on_new_target()
 	if d.target < 0:
 		d.steer(Vector3.ZERO, delta)
 		return
 	var t := targets[d.target]
 	var top: Vector3 = t["top"]
-	var hover := top + Vector3(cos(d.orbit) * WORK_RADIUS, HOVER_ABOVE, sin(d.orbit) * WORK_RADIUS)
+	# Each kind works from its own distance: the heavy lifter hangs right above the roof to drop.
+	var hover := top + Vector3(cos(d.orbit) * d.hover_radius, d.hover_height, sin(d.orbit) * d.hover_radius)
 	var flat := PathUtils.flat_distance(hover, d.position)
 	var goal := hover
 	if flat > 6.0:
@@ -231,12 +235,29 @@ func _drone_ai(d: Drone, delta: float) -> void:
 		desired = desired.rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.005 + d.orbit) * 1.2)
 	d.steer(desired, delta)
 	var working := flat < 1.6 and absf(d.position.y - hover.y) < 1.5
-	if working:
-		d.orbit += delta * 0.9
+	if d.kind == "heavy" and (working or flat < 4.0):
+		d.dust_cooldown -= delta
+		if d.dust_cooldown <= 0.0:
+			d.dust_cooldown = 0.5
+			_dust_ring(Vector3(d.position.x, top.y + 0.1, d.position.z), 3.5, 1.0)
+	if working and d.can_fire():
+		d.orbit += delta * (0.25 if d.kind == "heavy" else 0.9)
 		d.fire_cooldown -= delta
 		if d.fire_cooldown <= 0.0:
-			d.fire_cooldown = d.fire_interval
-			_fire(d, d.target)
+			if d.shots_left <= 0:
+				d.shots_left = d.burst
+			d.shots_left -= 1
+			d.fire_cooldown = d.burst_gap if d.shots_left > 0 else d.fire_interval
+			if d.kind == "heavy":
+				_drop_weight(d, d.target)
+			else:
+				_fire(d, d.target)
+
+
+## Damage of one shot, so a full burst cycle deals the drone's damage per second.
+func _shot_damage(d: Drone) -> float:
+	var cycle := d.fire_interval + d.burst_gap * (d.burst - 1)
+	return d.dps * cycle / d.burst
 
 
 ## One shot: a glowing bolt flies to a random spot on the target; damage lands on impact
@@ -245,14 +266,15 @@ func _fire(d: Drone, index: int) -> void:
 	var t := targets[index]
 	var top: Vector3 = t["top"]
 	var hit := top + Vector3(randf_range(-1.2, 1.2), randf_range(0.6, 2.4), randf_range(-1.2, 1.2))
-	var from := d.global_position + Vector3(0, -0.3 * d.body_scale, 0)
+	var from := d.fire_origin()
 	var color: Color = BOLT_COLORS.get(d.kind, Color(0.4, 0.95, 1.0))
-	var bolt := MeshKit.add(level, MeshKit.sphere(0.6 if d.kind == "heavy" else 0.42, 8), MeshKit.glow(color), from)
+	var bolt := MeshKit.add(level, MeshKit.sphere(0.3 if d.kind == "scout" else 0.42, 8), MeshKit.glow(color), from)
 	bolt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if from.distance_to(hit) > 0.1:
 		bolt.look_at(hit, Vector3.UP if absf((hit - from).normalized().y) < 0.99 else Vector3.FORWARD)
 	bolt.scale = Vector3(1, 1, 3.5)
-	var damage := d.dps * d.fire_interval
+	var damage := _shot_damage(d)
+	d.on_fire()
 	d.velocity += (from - hit).normalized() * 1.2
 	_tracer(from, hit, color)
 	var tween := create_tween()
@@ -262,6 +284,48 @@ func _fire(d: Drone, index: int) -> void:
 		_impact(hit, color)
 		_shake(index)
 		_damage_target(index, damage))
+
+
+## The heavy lifter lets go of its winch weight. It falls under gravity onto the roof and
+## lands with a big hit, a dust ring and a hard jolt of the building.
+func _drop_weight(d: Drone, index: int) -> void:
+	var t := targets[index]
+	var top: Vector3 = t["top"]
+	var start := d.fire_origin()
+	var land := Vector3(lerpf(start.x, top.x, 0.5), top.y + 0.4, lerpf(start.z, top.z, 0.5))
+	var weight := Node3D.new()
+	level.add_child(weight)
+	weight.global_position = start
+	weight.scale = Vector3.ONE * d.body_scale
+	MeshKit.add(weight, MeshKit.box(Vector3(0.36, 0.3, 0.36)), MeshKit.mat(Color(0.35, 0.39, 0.43), 0.35, 0.8))
+	MeshKit.add(weight, MeshKit.box(Vector3(0.38, 0.06, 0.38)), MeshKit.coat(Color(0.95, 0.72, 0.02)), Vector3(0, 0.1, 0))
+	var damage := _shot_damage(d)
+	d.on_fire()
+	d.velocity.y += 2.5
+	var fall := sqrt(2.0 * maxf(start.y - land.y, 0.5) / 22.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(weight, "global_position", land, fall).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(weight, "rotation:x", 1.2, fall)
+	tween.chain().tween_callback(func() -> void:
+		weight.queue_free()
+		_impact(land, Color(1.0, 0.8, 0.2))
+		_impact(land + Vector3(0, 0.5, 0), Color(1.0, 1.0, 1.0))
+		_dust_ring(Vector3(land.x, top.y + 0.1, land.z), 6.0, 0.9)
+		_shake(index)
+		_damage_target(index, damage))
+
+
+## A flat ring of dust spreading over a roof (rotor downwash, weight impacts).
+func _dust_ring(pos: Vector3, max_scale: float, life: float) -> void:
+	var ring := MeshKit.add(level, MeshKit.ring(1.0, 0.18), MeshKit.glow(Color(0.85, 0.79, 0.63), 0.5), pos)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.scale = Vector3.ONE * 0.3
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3(max_scale, 1.0, max_scale), life)
+	tween.tween_property(ring.material_override, "albedo_color:a", 0.0, life)
+	tween.chain().tween_callback(ring.queue_free)
 
 
 ## A short-lived streak of light along the shot, so every shot reads even on a small screen.

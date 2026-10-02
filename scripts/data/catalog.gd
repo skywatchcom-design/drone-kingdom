@@ -63,14 +63,14 @@ const LIMITS := {
 ## housing: how much hangar space one drone of this type takes in the army.
 const DRONES := {
 	"courier": {"name": "Courier", "role": "All-rounder. Goes for whatever is closest.",
-		"health": 140.0, "speed": 9.0, "dps": 42.0, "fire": 0.3, "housing": 2, "prefers": "any", "scale": 2.0,
-		"color": Color(0.93, 0.94, 0.95), "hangar": 1, "unlock": 0},
+		"health": 140.0, "speed": 9.0, "dps": 42.0, "fire": 0.3, "burst": 1, "housing": 2, "prefers": "any", "scale": 1.6, "hover": [4.5, 6.5],
+		"color": Color(0.31, 0.7, 1.0), "hangar": 1, "unlock": 0},
 	"scout": {"name": "Scout", "role": "Fast and fragile. Heads straight for generators, silos and the Command Tower.",
-		"health": 80.0, "speed": 12.5, "dps": 26.0, "fire": 0.2, "housing": 1, "prefers": "loot", "scale": 1.7,
-		"color": Color(1.0, 0.55, 0.2), "hangar": 2, "unlock": 400},
+		"health": 80.0, "speed": 12.5, "dps": 26.0, "fire": 0.55, "burst": 3, "housing": 1, "prefers": "loot", "scale": 1.5, "hover": [4.0, 5.5],
+		"color": Color(1.0, 0.48, 0.1), "hangar": 2, "unlock": 400},
 	"heavy": {"name": "Heavy Lifter", "role": "Slow and tough. Takes out defenses first, so the others survive.",
-		"health": 380.0, "speed": 6.5, "dps": 72.0, "fire": 0.55, "housing": 4, "prefers": "defense", "scale": 2.5,
-		"color": Color(0.3, 0.33, 0.37), "hangar": 3, "unlock": 900},
+		"health": 380.0, "speed": 6.5, "dps": 72.0, "fire": 1.4, "burst": 1, "housing": 4, "prefers": "defense", "scale": 1.2, "hover": [1.0, 8.5],
+		"color": Color(0.95, 0.72, 0.02), "hangar": 3, "unlock": 900},
 }
 const DRONE_ORDER := ["courier", "scout", "heavy"]
 
@@ -169,6 +169,7 @@ static func drone_stats(type: String, level: int) -> Dictionary:
 	var s: Dictionary = DRONES[type].duplicate()
 	var step := float(level - 1)
 	s["level"] = level
+	s["kind"] = type
 	s["health"] = float(s["health"]) * (1.0 + 0.2 * step)
 	s["dps"] = float(s["dps"]) * (1.0 + 0.2 * step)
 	s["speed"] = float(s["speed"]) * (1.0 + 0.04 * step)

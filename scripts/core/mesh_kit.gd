@@ -11,6 +11,24 @@ static func mat(color: Color, rough: float = 0.8, metal: float = 0.0) -> Standar
 	return m
 
 
+## Glossy clear-coated paint (pearl shells, industrial yellow).
+static func coat(color: Color, rough: float = 0.3, metal: float = 0.1) -> StandardMaterial3D:
+	var m := mat(color, rough, metal)
+	m.clearcoat_enabled = true
+	m.clearcoat = 1.0
+	m.clearcoat_roughness = 0.1
+	return m
+
+
+static func capsule(radius: float, height: float) -> CapsuleMesh:
+	var c := CapsuleMesh.new()
+	c.radius = radius
+	c.height = height
+	c.radial_segments = 24
+	c.rings = 8
+	return c
+
+
 ## Unshaded material for beams, rings and UI-like markers in the world.
 static func glow(color: Color, alpha: float = 1.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
