@@ -1,6 +1,6 @@
 class_name RaidHud
 extends CanvasLayer
-## Battle UI: timer and destruction at the top, drone cards for deploying at the bottom,
+## Battle UI (landscape): timer and destruction at the top, drone cards for deploying at the bottom,
 ## floating health bars over damaged structures and drones, and the result panel.
 
 signal unit_selected(type: String)
@@ -140,6 +140,8 @@ func set_army(army: Dictionary, names: Dictionary, selected: String) -> void:
 	_card_buttons.clear()
 	for type in army:
 		var b := HomeHud.make_button(_cards, "", 24, 120)
+		b.custom_minimum_size.x = 190
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		b.toggle_mode = true
 		b.pressed.connect(func() -> void: unit_selected.emit(type))
 		_card_buttons[type] = b

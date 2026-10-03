@@ -1,12 +1,13 @@
 class_name WorldSetup
 extends RefCounted
 ## Sky, sun, haze and the isometric orthographic camera shared by Home and Raid.
+## The game is played sideways, so the camera keeps a fixed view height.
 
 const CAM_DIR := Vector3(1.0, 1.15, 1.0)
 const CAM_DISTANCE := 150.0
 
 
-static func create(parent: Node3D, view_width: float) -> Camera3D:
+static func create(parent: Node3D, view_height: float) -> Camera3D:
 	var sky_mat := ProceduralSkyMaterial.new()
 	sky_mat.sky_top_color = Color(0.45, 0.62, 0.82)
 	sky_mat.sky_horizon_color = Color(0.78, 0.84, 0.9)
@@ -40,8 +41,8 @@ static func create(parent: Node3D, view_width: float) -> Camera3D:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.keep_aspect = Camera3D.KEEP_WIDTH
-	cam.size = view_width
+	cam.keep_aspect = Camera3D.KEEP_HEIGHT
+	cam.size = view_height
 	cam.near = 0.1
 	cam.far = 600.0
 	parent.add_child(cam)

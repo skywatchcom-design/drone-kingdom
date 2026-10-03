@@ -1,10 +1,13 @@
 extends Node3D
-## The player's rooftop base. Tap a roof to build or upgrade, tap a floating coin to collect
-## from a generator, set up the attack army in the Hangar, then Attack (or Test your own base).
-## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-hangar` to open a sheet on start.
+## The player's base. Tap a pad to build or upgrade (or press Build, pick, then tap a free pad),
+## tap a floating coin or fuel drop to collect, set up the attack army in the Hangar, then
+## Attack. Settings holds language, sound, practice on your own base and dev tools.
+## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-hangar` /
+## `--screenshot-settings` to open a sheet on start.
 
 const RAID_SCENE := "res://scenes/raid/raid.tscn"
-const VIEW_SIZE := 58.0
+## Height of the view in meters (the screen is held sideways).
+const VIEW_SIZE := 52.0
 const TAP_SLOP := 24.0
 const PICK_RADIUS := 90.0
 const COIN_PICK_RADIUS := 70.0
@@ -23,6 +26,8 @@ var coins: Array[CoinBubble] = []
 ## Countdown labels over structures being built or upgraded, by cell key.
 var timers := {}
 var open_cell: Array = []
+## Structure type picked from the Build menu, waiting for a free pad to be tapped.
+var placing := ""
 var marker: MeshInstance3D
 var press_pos := Vector2.ZERO
 var header_timer := 0.0
@@ -36,15 +41,11 @@ func _ready() -> void:
 	hud = HomeHud.new()
 	add_child(hud)
 	hud.attack_pressed.connect(func() -> void: _go_raid("enemy"))
-	hud.test_pressed.connect(func() -> void: _go_raid("self"))
 	hud.hangar_pressed.connect(_open_hangar)
-	hud.language_pressed.connect(_toggle_language)
-	hud.dev_coins_pressed.connect(_toggle_infinite)
+	hud.build_pressed.connect(func() -> void: _open_build([]))
+	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
-	hud.sound_pressed.connect(func() -> void:
-		GameState.set_sound(not GameState.sound_on)
-		Audio.set_enabled(GameState.sound_on))
-	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
+	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
 	GameState.finish_ready()
 	_rebuild()
 	var args := OS.get_cmdline_user_args()
@@ -54,6 +55,8 @@ func _ready() -> void:
 		_open_cell([4, 4])
 	elif args.has("--screenshot-hangar"):
 		_open_hangar()
+	elif args.has("--screenshot-settings"):
+		_open_settings()
 
 
 func _rebuild() -> void:
@@ -194,6 +197,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _try_collect(touch.position):
 		return
 	var cell := _pick_cell(touch.position)
+	if placing != "" and not cell.is_empty() and GameState.structure_at(cell).is_empty():
+		var type := placing
+		placing = ""
+		_do_build(type, cell)
+		return
+	placing = ""
 	if cell.is_empty():
 		hud.hide_panel()
 		open_cell = []
@@ -262,7 +271,7 @@ func _open_cell(cell: Array) -> void:
 	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
 	var s := GameState.structure_at(cell)
 	if s.is_empty():
-		hud.show_content(I18n.t("Empty roof"), _build_menu(cell))
+		hud.show_content(I18n.t("Build here"), _build_menu(cell))
 	else:
 		var title := "%s  ·  %s" % [Catalog.display_name(s["type"]), I18n.t("Lv %d") % int(s["level"])]
 		hud.show_content(title, _structure_sheet(cell, s))
@@ -290,8 +299,50 @@ func _build_menu(cell: Array) -> Control:
 		b.custom_minimum_size.x = 200
 		b.disabled = why != ""
 		_gold(b, why == "")
-		b.pressed.connect(func() -> void: _do_build(option, cell))
+		b.pressed.connect(func() -> void:
+			if cell.is_empty():
+				_start_placing(option)
+			else:
+				_do_build(option, cell))
 	return box
+
+
+## The Build button: pick something, then tap a free pad for it.
+func _open_build(cell: Array) -> void:
+	open_cell = []
+	marker.visible = false
+	hud.show_content(I18n.t("Build"), _build_menu(cell))
+
+
+func _start_placing(type: String) -> void:
+	placing = type
+	hud.hide_panel()
+	hud.toast(I18n.t("Tap a free pad for the %s") % Catalog.display_name(type))
+
+
+func _open_settings() -> void:
+	open_cell = []
+	marker.visible = false
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	box.add_child(grid)
+	# The language button always names the *other* language, in that language.
+	HomeHud.make_button(grid, "English" if I18n.rtl() else "עברית", 24, 80).pressed.connect(_toggle_language)
+	var sound := HomeHud.make_button(grid, I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"), 24, 80)
+	sound.pressed.connect(func() -> void:
+		GameState.set_sound(not GameState.sound_on)
+		Audio.set_enabled(GameState.sound_on)
+		sound.text = I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"))
+	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
+	if GameState.dev_tools_available():
+		var dev := HomeHud.make_button(grid, I18n.t("DEV: free ON") if GameState.infinite_coins else I18n.t("DEV: free OFF"), 24, 80)
+		dev.add_theme_color_override("font_color", GOOD if GameState.infinite_coins else SOFT)
+		dev.pressed.connect(_toggle_infinite)
+	hud.show_content(I18n.t("Settings"), box)
 
 
 # ---------------------------------------------------------------- structure sheet
@@ -624,9 +675,8 @@ func _toggle_language() -> void:
 
 func _toggle_infinite() -> void:
 	GameState.set_infinite_coins(not GameState.infinite_coins)
-	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
 	_refresh_header()
-	hud.hide_panel()
+	_open_settings()
 
 
 func _set_army(type: String, count: int) -> void:

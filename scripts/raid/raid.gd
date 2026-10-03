@@ -8,7 +8,7 @@ extends Node3D
 enum Phase { BATTLE, RESULT }
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
-const VIEW_SIZE := 58.0
+const VIEW_SIZE := 50.0
 const TRAVEL_ALT := 11.0
 const DEPLOY_CLEARANCE := 6.5
 const MAP_LIMIT := 46.0
