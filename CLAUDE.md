@@ -47,5 +47,6 @@ Next (GDD week 1): landscape orientation, 9x9 base, two resources (coins + fuel)
 build timers with workers. Then ground units, new defenses (MG, AT, AA), support abilities,
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
-Still waiting on the owner: final approval of the ground-forces sketch
-(https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o), casualty style, Apple Developer and Google Play accounts.
+Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
+style (hit soldier vanishes, a small helmet rolls on the ground). Next sketch: new defenses (MG, AT, AA, mortar).
+Still waiting on the owner: Apple Developer and Google Play accounts.
