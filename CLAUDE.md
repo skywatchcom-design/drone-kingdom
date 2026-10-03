@@ -47,7 +47,8 @@ Week 1 rules done (save v4): 9x9 base, coins + fuel + gems, Fuel Pump and Fuel T
 build timers with 2 workers (3rd for gems), gem speed-ups. Landscape (1280x720) with the approved
 layout B (https://claude.ai/artifact/1wkMTctCpsPu4sa8wBtP6r): resources and badge in the top corners,
 round Attack and Hangar/Build/Settings at the bottom, info sheets as a bottom-middle card.
-Godot mirrors anchors of a control that is itself RTL; `HomeHud._pin` accounts for that. Then ground units, new defenses (MG, AT, AA), support abilities,
+Godot mirrors anchors of a control that is itself RTL; `HomeHud._pin` accounts for that.
+Next: ground units, new defenses (MG, AT, AA), support abilities,
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
