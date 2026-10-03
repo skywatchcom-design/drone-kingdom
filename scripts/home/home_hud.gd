@@ -9,9 +9,11 @@ signal test_pressed
 signal language_pressed
 signal dev_coins_pressed
 signal sound_pressed
+signal workers_pressed
 
 var _title: Label
 var _coins: Label
+var _workers: Button
 var _attack: Button
 var _panel: PanelContainer
 var _panel_title: Label
@@ -33,7 +35,7 @@ func _ready() -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
 	_title = make_label(top, "", 30)
-	_coins = make_label(top, "", 36)
+	_coins = make_label(top, "", 30)
 	_coins.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
 	_tools = HBoxContainer.new()
 	_tools.add_theme_constant_override("separation", 10)
@@ -49,6 +51,10 @@ func _ready() -> void:
 	sound.pressed.connect(func() -> void:
 		sound_pressed.emit()
 		sound.text = I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"))
+	_workers = make_button(_tools, "", 22, 56)
+	_workers.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_workers.custom_minimum_size.x = 150
+	_workers.pressed.connect(func() -> void: workers_pressed.emit())
 	_dev = make_button(_tools, "", 22, 56)
 	_dev.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_dev.custom_minimum_size.x = 230
@@ -119,14 +125,32 @@ func _process(delta: float) -> void:
 ## Shows the developer-only infinite coins switch (debug builds only).
 func set_dev(available: bool, infinite: bool) -> void:
 	_dev.visible = available
-	_dev.text = I18n.t("DEV: infinite coins ON") if infinite else I18n.t("DEV: infinite coins OFF")
+	_dev.text = I18n.t("DEV: free ON") if infinite else I18n.t("DEV: free OFF")
 	_dev.add_theme_color_override("font_color", Color(0.45, 0.95, 0.55) if infinite else Color(0.8, 0.84, 0.9))
 
 
-func set_header(hq_level: int, coins: int, cap: int, target_name: String, infinite: bool = false) -> void:
+func set_header(hq_level: int, target_name: String, infinite: bool = false) -> void:
 	_title.text = I18n.t("Your Base  ·  Command Tower Lv %d") % hq_level
-	_coins.text = I18n.t("Coins: unlimited (dev)") if infinite else I18n.t("Coins %d / %d") % [coins, cap]
+	if infinite:
+		_coins.text = I18n.t("Coins, fuel and gems: unlimited (dev)")
+	else:
+		_coins.text = I18n.t("Coins %d / %d") % [GameState.coins, GameState.coin_cap()] + "   " \
+			+ I18n.t("Fuel %d / %d") % [GameState.fuel, GameState.fuel_cap()] + "   " \
+			+ I18n.t("Gems %d") % GameState.gems
+	_workers.text = I18n.t("Workers %d/%d") % [GameState.free_workers(), GameState.workers]
 	_attack.text = I18n.t("ATTACK\n%s") % target_name
+
+
+## Time left as 0:45, 12:05 or 3:04:10.
+static func clock(seconds: float) -> String:
+	var s := maxi(0, ceili(seconds))
+	if s >= 3600:
+		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
+	return "%d:%02d" % [s / 60, s % 60]
+
+
+func panel_open() -> bool:
+	return _panel.visible
 
 
 ## Bottom sheet with an info line and a grid of buttons. Each action is {text, enabled, call}.

@@ -19,6 +19,10 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _generator(root, level)
 		"storage":
 			height = _storage(root, level)
+		"pump":
+			height = _pump(root, level)
+		"tank":
+			height = _tank(root, level)
 		"hangar":
 			height = _hangar(root, level)
 	level_label(root, level, height + 1.2)
@@ -69,6 +73,32 @@ static func _storage(root: Node3D, level: int) -> float:
 	var dome := MeshKit.add(root, MeshKit.sphere(1.4, 20), MeshKit.mat(Color(0.85, 0.88, 0.92), 0.35, 0.5), Vector3(0, h, 0))
 	dome.scale = Vector3(1, 0.5, 1)
 	return h + 0.7
+
+
+## Gray-box until the sketch is approved: a nodding pumpjack beside a small fuel drum.
+static func _pump(root: Node3D, level: int) -> float:
+	var steel := MeshKit.mat(Color(0.35, 0.37, 0.4), 0.5, 0.6)
+	var accent := MeshKit.mat(Color(0.86, 0.3, 0.45), 0.4, 0.3)
+	MeshKit.add(root, MeshKit.box(Vector3(3.2, 0.25, 1.6)), steel, Vector3(0, 0.12, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(0.25, 1.8, 0.25)), steel, Vector3(0, 1.0, 0))
+	var beam := MeshKit.add(root, MeshKit.box(Vector3(3.0, 0.3, 0.35)), accent, Vector3(0, 1.95, 0))
+	beam.rotation.z = 0.15
+	MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.7, 0.4)), accent, Vector3(-1.5, 1.65, 0))
+	var h := 0.9 + level * 0.15
+	MeshKit.add(root, MeshKit.cyl(0.55, 0.55, h, 16), MeshKit.mat(Color(0.86, 0.3, 0.45), 0.5, 0.3), Vector3(1.2, h / 2.0, 0.9))
+	return 2.4
+
+
+## Gray-box until the sketch is approved: a round fuel tank on legs, taller with level.
+static func _tank(root: Node3D, level: int) -> float:
+	var h := 1.4 + level * 0.45
+	var shell := MeshKit.mat(Color(0.88, 0.86, 0.82), 0.4, 0.4)
+	MeshKit.add(root, MeshKit.cyl(1.5, 1.5, h, 24), shell, Vector3(0, 0.3 + h / 2.0, 0))
+	MeshKit.add(root, MeshKit.cyl(1.55, 1.55, 0.3, 24), MeshKit.mat(Color(0.86, 0.3, 0.45), 0.4, 0.3), Vector3(0, 0.3 + h * 0.6, 0))
+	for a in 4:
+		var ang := TAU * a / 4.0 + PI / 4.0
+		MeshKit.add(root, MeshKit.box(Vector3(0.18, 0.4, 0.18)), MeshKit.mat(Color(0.3, 0.3, 0.32), 0.6, 0.5), Vector3(cos(ang) * 1.2, 0.2, sin(ang) * 1.2))
+	return h + 0.6
 
 
 static func _hangar(root: Node3D, level: int) -> float:

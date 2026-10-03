@@ -1,11 +1,25 @@
 extends RefCounted
 
 
+const HQ := [4, 4]
+const GENERATOR := [3, 4]
+const PUMP := [4, 5]
+const HANGAR := [5, 4]
+
+
 func _fresh_state() -> Node:
 	var gs: Node = load("res://scripts/autoload/game_state.gd").new()
 	gs.persist = false
 	gs.new_player()
 	return gs
+
+
+## Pretends every running build or upgrade has finished.
+func _skip_time(gs: Node) -> void:
+	for s in gs.structures:
+		if s.has("busy_until"):
+			s["busy_until"] = 0.0
+	gs.finish_ready()
 
 
 func test_upgrade_costs_grow() -> bool:
@@ -54,7 +68,8 @@ func test_new_player_can_build_one_more_generator_only_after_upgrade() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 5000
 	var blocked: bool = gs.build("generator", [0, 0]) == false
-	gs.upgrade([3, 3])
+	gs.upgrade(HQ)
+	_skip_time(gs)
 	var allowed: bool = gs.build("generator", [0, 0])
 	gs.free()
 	return blocked and allowed
@@ -63,14 +78,14 @@ func test_new_player_can_build_one_more_generator_only_after_upgrade() -> bool:
 func test_buildings_cannot_outlevel_command_tower() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 5000
-	var reason: String = gs.upgrade_block_reason([2, 3])
+	var reason: String = gs.upgrade_block_reason(GENERATOR)
 	gs.free()
 	return reason == "Upgrade the Command Tower first"
 
 
 func test_command_tower_cannot_be_removed() -> bool:
 	var gs := _fresh_state()
-	var removed: bool = gs.remove([3, 3])
+	var removed: bool = gs.remove(HQ)
 	gs.free()
 	return not removed
 
@@ -78,7 +93,8 @@ func test_command_tower_cannot_be_removed() -> bool:
 func test_building_costs_coins_and_occupies_roof() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 1000
-	gs.upgrade([3, 3])
+	gs.upgrade(HQ)
+	_skip_time(gs)
 	gs.coins = 1000
 	var before: int = gs.coins
 	var ok: bool = gs.build("net", [0, 0])
@@ -91,9 +107,12 @@ func test_building_costs_coins_and_occupies_roof() -> bool:
 func test_scout_needs_hangar_level_two() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 5000
+	gs.fuel = 2000
 	var first: String = gs.drone_block_reason("scout")
-	gs.upgrade([3, 3])
-	gs.upgrade([4, 3])
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.upgrade(HANGAR)
+	_skip_time(gs)
 	var unlocked: bool = gs.upgrade_drone("scout")
 	gs.free()
 	return first == "Needs Hangar Lv 2" and unlocked
@@ -111,10 +130,10 @@ func test_army_respects_hangar_space() -> bool:
 
 func test_generator_collect_keeps_overflow() -> bool:
 	var gs := _fresh_state()
-	var gen: Dictionary = gs.structure_at([2, 3])
+	var gen: Dictionary = gs.structure_at(GENERATOR)
 	gen["collected_at"] = Time.get_unix_time_from_system() - 100.0 * 60.0
 	gs.coins = gs.coin_cap() - 50
-	var got: int = gs.collect_generator([2, 3])
+	var got: int = gs.collect_generator(GENERATOR)
 	var left: int = gs.generator_pending(gen)
 	gs.free()
 	return got == 50 and left > 400
@@ -124,7 +143,8 @@ func test_infinite_coins_make_everything_free() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 0
 	gs.infinite_coins = true
-	var upgraded: bool = gs.upgrade([3, 3])
+	var upgraded: bool = gs.upgrade(HQ)
+	_skip_time(gs)
 	var built: bool = gs.build("net", [0, 0])
 	var unchanged: bool = gs.coins == 0
 	gs.free()
@@ -137,3 +157,133 @@ func test_coins_are_capped() -> bool:
 	var capped: bool = gs.coins == gs.coin_cap()
 	gs.free()
 	return capped
+
+
+func test_upgrade_takes_time_and_a_worker() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	var still_one: bool = gs.hq_level() == 1 and gs.free_workers() == 1
+	_skip_time(gs)
+	var done: bool = gs.hq_level() == 2 and gs.free_workers() == 2
+	gs.free()
+	return still_one and done
+
+
+func test_workers_limit_parallel_builds() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	var a: bool = gs.build("generator", [0, 0])
+	var b: bool = gs.build("storage", [1, 0])
+	var reason: String = gs.build_block_reason("pump")
+	var c: bool = gs.build("pump", [2, 0])
+	gs.free()
+	return a and b and not c and reason == "All workers are busy"
+
+
+func test_fresh_build_produces_nothing_until_done() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.build("pump", [0, 0])
+	var p: Dictionary = gs.structure_at([0, 0])
+	var idle: bool = gs.generator_pending(p) == 0 and gs.collect_generator([0, 0]) == 0
+	var cant_upgrade: bool = gs.upgrade_block_reason([0, 0]) == "Under construction"
+	var cant_remove: bool = gs.remove([0, 0]) == false
+	gs.free()
+	return idle and cant_upgrade and cant_remove
+
+
+func test_speed_up_costs_gems_and_finishes() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	var cost: int = gs.speedup_cost(HQ)
+	var gems_before: int = gs.gems
+	var ok: bool = gs.speed_up(HQ)
+	var result: bool = ok and cost > 0 and gs.gems == gems_before - cost and gs.hq_level() == 2
+	gs.free()
+	return result
+
+
+func test_speedup_gems_grow_with_time() -> bool:
+	return Catalog.speedup_gems(0.0) == 0 and Catalog.speedup_gems(5.0) == 1 \
+		and Catalog.speedup_gems(3600.0) == 20 and Catalog.speedup_gems(86400.0) == 260 \
+		and Catalog.speedup_gems(7200.0) > Catalog.speedup_gems(3600.0)
+
+
+func test_build_times_grow_with_level() -> bool:
+	for lvl in range(1, Catalog.MAX_LEVEL):
+		if Catalog.build_seconds("laser", lvl + 1) <= Catalog.build_seconds("laser", lvl):
+			return false
+	return Catalog.build_seconds("hq", 2) > Catalog.build_seconds("laser", 2)
+
+
+func test_hire_worker_costs_gems() -> bool:
+	var gs := _fresh_state()
+	gs.gems = Catalog.WORKER_GEMS - 1
+	var too_poor: bool = gs.hire_worker() == false
+	gs.gems = Catalog.WORKER_GEMS
+	var hired: bool = gs.hire_worker() and gs.workers == 3 and gs.gems == 0
+	gs.gems = 5000
+	var capped: bool = gs.hire_worker() == false
+	gs.free()
+	return too_poor and hired and capped
+
+
+func test_pump_fills_fuel_and_respects_cap() -> bool:
+	var gs := _fresh_state()
+	var pump: Dictionary = gs.structure_at(PUMP)
+	pump["collected_at"] = Time.get_unix_time_from_system() - 30.0 * 60.0
+	gs.fuel = 0
+	var got: int = gs.collect_generator(PUMP)
+	var right: bool = got == int(Catalog.pump_rate(1) * 30.0) and gs.fuel == got
+	gs.add_fuel(1_000_000)
+	var capped: bool = gs.fuel == gs.fuel_cap()
+	gs.free()
+	return right and capped
+
+
+func test_drones_cost_fuel_not_coins() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.fuel = 0
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.upgrade(HANGAR)
+	_skip_time(gs)
+	var reason: String = gs.drone_block_reason("scout")
+	gs.fuel = 400
+	var unlocked: bool = gs.upgrade_drone("scout") and gs.fuel == 0
+	gs.free()
+	return reason == "Need 400 more fuel" and unlocked
+
+
+func test_upgrading_producer_banks_old_rate() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	var gen: Dictionary = gs.structure_at(GENERATOR)
+	gen["collected_at"] = Time.get_unix_time_from_system() - 10.0 * 60.0
+	gs.upgrade(GENERATOR)
+	gs.coins = 0
+	_skip_time(gs)
+	var banked: bool = gs.coins >= int(Catalog.generator_rate(1) * 10.0) - 1
+	var reset: bool = gs.generator_pending(gen) <= 1
+	gs.free()
+	return banked and reset and int(gen["level"]) == 2
+
+
+func test_raid_loot_banks_coins_and_fuel() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 0
+	gs.fuel = 0
+	var got: Dictionary = gs.record_raid(1, 100, 80)
+	gs.raid_target = "self"
+	var practice: Dictionary = gs.record_raid(3, 100, 80)
+	gs.free()
+	return got["coins"] == 100 and got["fuel"] == 80 and practice["coins"] == 0

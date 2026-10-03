@@ -20,6 +20,9 @@ var level: Node3D
 var city: City
 var defenses: Array[Defense] = []
 var coins: Array[CoinBubble] = []
+## Countdown labels over structures being built or upgraded, by cell key.
+var timers := {}
+var open_cell: Array = []
 var marker: MeshInstance3D
 var press_pos := Vector2.ZERO
 var header_timer := 0.0
@@ -37,16 +40,18 @@ func _ready() -> void:
 	hud.hangar_pressed.connect(_open_hangar)
 	hud.language_pressed.connect(_toggle_language)
 	hud.dev_coins_pressed.connect(_toggle_infinite)
+	hud.workers_pressed.connect(_open_workers)
 	hud.sound_pressed.connect(func() -> void:
 		GameState.set_sound(not GameState.sound_on)
 		Audio.set_enabled(GameState.sound_on))
 	hud.set_dev(GameState.dev_tools_available(), GameState.infinite_coins)
+	GameState.finish_ready()
 	_rebuild()
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
 		_open_cell([1, 3])
 	elif args.has("--screenshot-hq"):
-		_open_cell([3, 3])
+		_open_cell([4, 4])
 	elif args.has("--screenshot-hangar"):
 		_open_hangar()
 
@@ -58,6 +63,7 @@ func _rebuild() -> void:
 	add_child(level)
 	defenses.clear()
 	coins.clear()
+	timers.clear()
 	var all_cells := []
 	for c in City.GRID:
 		for r in City.GRID:
@@ -76,6 +82,10 @@ func _rebuild() -> void:
 func _spawn(s: Dictionary) -> void:
 	var type: String = s["type"]
 	var lvl := int(s["level"])
+	if GameState.is_busy(s):
+		_construction(s)
+		if s.get("fresh", false):
+			return
 	if Catalog.is_defense(type):
 		var defense := Catalog.make_defense(type)
 		level.add_child(defense)
@@ -84,12 +94,49 @@ func _spawn(s: Dictionary) -> void:
 		defenses.append(defense)
 		return
 	StructureModels.build(level, type, lvl, city.roof_top(s["cell"]))
-	if type == "generator":
+	if GameState.is_producer(type):
 		var bubble := CoinBubble.new()
 		bubble.cell = s["cell"]
+		bubble.fuel = type == "pump"
 		bubble.position = city.roof_top(s["cell"]) + Vector3(0, 4.2, 0)
 		level.add_child(bubble)
 		coins.append(bubble)
+
+
+## Scaffolding around a pad that is being built or upgraded, with a countdown over it.
+func _construction(s: Dictionary) -> void:
+	var top := city.roof_top(s["cell"])
+	var frame := Node3D.new()
+	frame.position = top
+	level.add_child(frame)
+	var pole := MeshKit.mat(Color(0.95, 0.72, 0.15), 0.6, 0.3)
+	for x in [-2.3, 2.3]:
+		for z in [-2.3, 2.3]:
+			MeshKit.add(frame, MeshKit.box(Vector3(0.18, 3.2, 0.18)), pole, Vector3(x, 1.6, z))
+	for y in [1.0, 3.1]:
+		for side in [Vector3(0, y, -2.3), Vector3(0, y, 2.3)]:
+			MeshKit.add(frame, MeshKit.box(Vector3(4.8, 0.14, 0.14)), pole, side)
+		for side in [Vector3(-2.3, y, 0), Vector3(2.3, y, 0)]:
+			MeshKit.add(frame, MeshKit.box(Vector3(0.14, 0.14, 4.8)), pole, side)
+	if s.get("fresh", false):
+		# A pile of crates until the real model appears.
+		MeshKit.add(frame, MeshKit.box(Vector3(1.6, 1.0, 1.6)), MeshKit.mat(Color(0.6, 0.45, 0.28), 0.9), Vector3(-0.6, 0.5, 0.4))
+		MeshKit.add(frame, MeshKit.box(Vector3(1.1, 0.8, 1.1)), MeshKit.mat(Color(0.55, 0.42, 0.26), 0.9), Vector3(0.9, 0.4, -0.5))
+	var label := StructureModels.level_label(frame, 0, 6.5)
+	label.modulate = Color(1.0, 0.85, 0.35)
+	label.font_size = 64
+	timers[_key(s["cell"])] = {"label": label, "cell": s["cell"]}
+	_update_timers()
+
+
+func _update_timers() -> void:
+	for key in timers:
+		var s := GameState.structure_at(timers[key]["cell"])
+		(timers[key]["label"] as Label3D).text = HomeHud.clock(GameState.seconds_left(s))
+
+
+func _key(cell: Array) -> String:
+	return "%d,%d" % [int(cell[0]), int(cell[1])]
 
 
 func _process(delta: float) -> void:
@@ -98,12 +145,26 @@ func _process(delta: float) -> void:
 	header_timer -= delta
 	if header_timer <= 0.0:
 		header_timer = 1.0
-		_refresh_header()
+		_tick_second()
+
+
+func _tick_second() -> void:
+	var done := GameState.finish_ready()
+	if not done.is_empty():
+		Audio.play("build")
+		hud.toast(I18n.t("%s is ready") % Catalog.display_name(done[0]["type"]))
+		_rebuild()
+		_reopen()
+		return
+	_update_timers()
+	_refresh_header()
+	if not open_cell.is_empty() and GameState.is_busy(GameState.structure_at(open_cell)):
+		_open_cell(open_cell)
 
 
 func _refresh_header() -> void:
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
-	hud.set_header(GameState.hq_level(), GameState.coins, GameState.coin_cap(), target["name"], GameState.infinite_coins)
+	hud.set_header(GameState.hq_level(), target["name"], GameState.infinite_coins)
 	for bubble in coins:
 		if bubble.scale.x > 0.99:
 			bubble.set_amount(GameState.generator_pending(GameState.structure_at(bubble.cell)))
@@ -135,6 +196,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var cell := _pick_cell(touch.position)
 	if cell.is_empty():
 		hud.hide_panel()
+		open_cell = []
 		marker.visible = false
 	else:
 		_open_cell(cell)
@@ -149,10 +211,12 @@ func _try_collect(screen_pos: Vector2) -> bool:
 			continue
 		var got := GameState.collect_generator(bubble.cell)
 		if got > 0:
-			hud.toast(I18n.t("+%d coins") % got)
+			hud.toast(I18n.t("+%d fuel") % got if bubble.fuel else I18n.t("+%d coins") % got)
 			bubble.pop()
 			Audio.play("coin")
 			Audio.buzz(20)
+		elif bubble.fuel:
+			hud.toast(I18n.t("Fuel tanks are full. Build or upgrade a Fuel Tank."))
 		else:
 			hud.toast(I18n.t("Coin silos are full. Build or upgrade a Coin Silo."))
 		_refresh_header()
@@ -185,9 +249,15 @@ func _pick_cell(screen_pos: Vector2) -> Array:
 	return best
 
 
+func _reopen() -> void:
+	if not open_cell.is_empty() and hud.panel_open():
+		_open_cell(open_cell)
+
+
 # ---------------------------------------------------------------- build menu
 
 func _open_cell(cell: Array) -> void:
+	open_cell = cell
 	marker.visible = true
 	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
 	var s := GameState.structure_at(cell)
@@ -215,7 +285,7 @@ func _build_menu(cell: Array) -> Control:
 		_wrap(HomeHud.make_label(info, I18n.t(Catalog.INFO[option]), 20, SOFT))
 		if why != "":
 			_wrap(HomeHud.make_label(info, why, 20, BAD))
-		var b := HomeHud.make_button(row, I18n.t("Build  ·  %d") % Catalog.build_cost(option), 22, 80)
+		var b := HomeHud.make_button(row, I18n.t("Build  ·  %d\n%s") % [Catalog.build_cost(option), HomeHud.clock(Catalog.build_seconds(option, 1))], 22, 80)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		b.custom_minimum_size.x = 200
 		b.disabled = why != ""
@@ -262,10 +332,20 @@ func _structure_sheet(cell: Array, s: Dictionary) -> Control:
 			_wrap(HomeHud.make_label(box, I18n.t("Upgrading unlocks: %s") % unlocks, 22, GOLD))
 
 	var reason := GameState.upgrade_block_reason(cell)
-	if maxed:
+	if GameState.is_busy(s):
+		var what := I18n.t("Building") if s.get("fresh", false) else I18n.t("Upgrading to Lv %d") % (lvl + 1)
+		var line := HomeHud.make_label(box, "%s  ·  %s" % [what, HomeHud.clock(GameState.seconds_left(s))], 28, GOLD)
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var gems := GameState.speedup_cost(cell)
+		var fast := HomeHud.make_button(box, I18n.t("Finish now  ·  %d gems") % gems, 28, 100)
+		var can := GameState.infinite_coins or GameState.gems >= gems
+		fast.disabled = not can
+		_gold(fast, can)
+		fast.pressed.connect(func() -> void: _do_speed_up(cell))
+	elif maxed:
 		HomeHud.make_label(box, I18n.t("Max level reached"), 26, GOLD)
 	else:
-		var up := HomeHud.make_button(box, I18n.t("Upgrade to Lv %d  ·  %d coins") % [lvl + 1, Catalog.upgrade_cost(type, lvl)], 28, 100)
+		var up := HomeHud.make_button(box, I18n.t("Upgrade to Lv %d  ·  %d coins  ·  %s") % [lvl + 1, Catalog.upgrade_cost(type, lvl), HomeHud.clock(Catalog.build_seconds(type, lvl + 1))], 26, 100)
 		up.disabled = reason != ""
 		_gold(up, reason == "")
 		up.pressed.connect(func() -> void: _do_upgrade(cell))
@@ -278,7 +358,7 @@ func _structure_sheet(cell: Array, s: Dictionary) -> Control:
 	box.add_child(extra)
 	if type == "hangar":
 		HomeHud.make_button(extra, I18n.t("Open hangar"), 22, 72).pressed.connect(_open_hangar)
-	if type != "hq":
+	if type != "hq" and not GameState.is_busy(s):
 		HomeHud.make_button(extra, I18n.t("Remove (no refund)"), 22, 72).pressed.connect(func() -> void: _do_remove(cell))
 	return box
 
@@ -294,6 +374,12 @@ func _stat_lines(type: String, lvl: int) -> Array:
 				[I18n.t("Holds up to"), str(int(rate * Catalog.GENERATOR_FILL_MINUTES))]]
 		"storage":
 			return [[I18n.t("Coin cap bonus"), "+%d" % (700 * lvl)]]
+		"pump":
+			var rate := Catalog.pump_rate(lvl)
+			return [[I18n.t("Fuel per minute"), str(int(rate))],
+				[I18n.t("Holds up to"), str(int(rate * Catalog.GENERATOR_FILL_MINUTES))]]
+		"tank":
+			return [[I18n.t("Fuel cap bonus"), "+%d" % (600 * lvl)]]
 		"hangar":
 			return [[I18n.t("Army space"), str(Catalog.army_capacity(lvl))], [I18n.t("Drone max level"), str(lvl)]]
 	var st := Catalog.defense_stats(type, lvl)
@@ -381,13 +467,13 @@ func _drone_card(type: String) -> Control:
 		plus.pressed.connect(func() -> void: _set_army(type, count + 1))
 		var up_text := I18n.t("Max level")
 		if lvl < Catalog.MAX_LEVEL:
-			up_text = I18n.t("Upgrade  ·  %d") % Catalog.drone_upgrade_cost(type, lvl)
+			up_text = I18n.t("Upgrade  ·  %d fuel") % Catalog.drone_upgrade_cost(type, lvl)
 		var up := HomeHud.make_button(row, up_text, 20, 76)
 		up.disabled = reason != ""
 		_gold(up, reason == "")
 		up.pressed.connect(func() -> void: _do_drone(type))
 	else:
-		var unlock := HomeHud.make_button(row, I18n.t("Unlock  ·  %d") % int(def["unlock"]), 22, 76)
+		var unlock := HomeHud.make_button(row, I18n.t("Unlock  ·  %d fuel") % int(def["unlock"]), 22, 76)
 		unlock.disabled = reason != ""
 		_gold(unlock, reason == "")
 		unlock.pressed.connect(func() -> void: _do_drone(type))
@@ -477,9 +563,43 @@ func _do_build(type: String, cell: Array) -> void:
 func _do_upgrade(cell: Array) -> void:
 	if GameState.upgrade(cell):
 		Audio.play("build")
-		hud.toast(I18n.t("Upgraded"))
+		hud.toast(I18n.t("Upgrade started"))
 		_rebuild()
 		_open_cell(cell)
+
+
+func _do_speed_up(cell: Array) -> void:
+	if GameState.speed_up(cell):
+		Audio.play("build")
+		hud.toast(I18n.t("Done!"))
+		_rebuild()
+		_open_cell(cell)
+
+
+## Who is working on what, and the button to hire one more worker for gems.
+func _open_workers() -> void:
+	open_cell = []
+	marker.visible = false
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	HomeHud.make_label(box, I18n.t("Free workers: %d / %d") % [GameState.free_workers(), GameState.workers], 28, GOLD)
+	_wrap(HomeHud.make_label(box, I18n.t("Every build or upgrade needs a free worker until it is done."), 21, SOFT))
+	for s in GameState.structures:
+		if GameState.is_busy(s):
+			HomeHud.make_label(box, "%s  ·  %s" % [Catalog.display_name(s["type"]), HomeHud.clock(GameState.seconds_left(s))], 24)
+	var why := GameState.hire_worker_reason()
+	if GameState.workers < Catalog.MAX_WORKERS:
+		var hire := HomeHud.make_button(box, I18n.t("Hire a worker  ·  %d gems") % Catalog.WORKER_GEMS, 26, 90)
+		hire.disabled = why != ""
+		_gold(hire, why == "")
+		hire.pressed.connect(func() -> void:
+			if GameState.hire_worker():
+				Audio.play("build")
+				_refresh_header()
+				_open_workers())
+	if why != "":
+		_wrap(HomeHud.make_label(box, why, 21, BAD))
+	hud.show_content(I18n.t("Workers"), box)
 
 
 func _do_remove(cell: Array) -> void:

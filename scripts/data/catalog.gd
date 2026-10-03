@@ -14,7 +14,7 @@ const DEFENSE_HEAD := 4.5
 ## Tuned so a squad of four Couriers drops a small building in about a second and the
 ## Command Tower in a few, while a lone drone loses a duel with a laser.
 const HP := {
-	"hq": 600.0, "generator": 180.0, "storage": 260.0, "hangar": 220.0,
+	"hq": 600.0, "generator": 180.0, "storage": 260.0, "pump": 180.0, "tank": 260.0, "hangar": 220.0,
 	"laser": 300.0, "net": 280.0, "jammer": 220.0, "birds": 200.0,
 }
 
@@ -23,6 +23,8 @@ const INFO := {
 	"hq": "The heart of your base. Its level caps every other building and unlocks new ones.",
 	"generator": "Makes coins over time. Tap the coin above it to collect.",
 	"storage": "Raises how many coins you can hold. Attackers loot it.",
+	"pump": "Pumps fuel over time. Tap the drop above it to collect.",
+	"tank": "Raises how much fuel you can hold. Attackers loot it.",
 	"hangar": "Houses your attack drones. Higher levels fit a bigger army and stronger drones.",
 	"laser": "Turret that locks onto the nearest drone and burns it.",
 	"net": "Fires nets that slow drones to a crawl.",
@@ -41,17 +43,21 @@ const BUILDINGS := {
 	"hq": {"name": "Command Tower", "cost": 500},
 	"generator": {"name": "Solar Generator", "cost": 150},
 	"storage": {"name": "Coin Silo", "cost": 200},
+	"pump": {"name": "Fuel Pump", "cost": 150},
+	"tank": {"name": "Fuel Tank", "cost": 200},
 	"hangar": {"name": "Drone Hangar", "cost": 250},
 }
 
 ## Order of the build menu.
-const BUILD_ORDER := ["generator", "storage", "hangar", "laser", "net", "jammer", "birds"]
+const BUILD_ORDER := ["generator", "storage", "pump", "tank", "hangar", "laser", "net", "jammer", "birds"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
 const LIMITS := {
 	"hq": [1, 1, 1, 1, 1],
 	"generator": [1, 2, 2, 3, 3],
 	"storage": [1, 1, 2, 2, 3],
+	"pump": [1, 2, 2, 3, 3],
+	"tank": [1, 1, 2, 2, 3],
 	"hangar": [1, 1, 1, 1, 1],
 	"laser": [1, 2, 2, 3, 3],
 	"net": [0, 1, 1, 2, 2],
@@ -142,6 +148,18 @@ static func generator_rate(level: int) -> float:
 const GENERATOR_FILL_MINUTES := 240.0
 
 
+## Fuel per minute from one pump.
+static func pump_rate(level: int) -> float:
+	return 4.0 * level
+
+
+static func fuel_cap(hq_level: int, tank_levels: Array) -> int:
+	var cap := 500 + 250 * hq_level
+	for l in tank_levels:
+		cap += 600 * int(l)
+	return cap
+
+
 static func coin_cap(hq_level: int, storage_levels: Array) -> int:
 	var cap := 600 + 300 * hq_level
 	for l in storage_levels:
@@ -149,7 +167,7 @@ static func coin_cap(hq_level: int, storage_levels: Array) -> int:
 	return cap
 
 
-## Loot an attacker grabs from an enemy building.
+## Coins an attacker grabs from an enemy building.
 static func loot_value(type: String, level: int) -> int:
 	match type:
 		"hq":
@@ -158,6 +176,18 @@ static func loot_value(type: String, level: int) -> int:
 			return 80 * level
 		"generator":
 			return 40 * level
+	return 0
+
+
+## Fuel an attacker grabs from an enemy building.
+static func loot_fuel(type: String, level: int) -> int:
+	match type:
+		"hq":
+			return 100 + 40 * level
+		"tank":
+			return 70 * level
+		"pump":
+			return 30 * level
 	return 0
 
 
@@ -184,6 +214,40 @@ static func army_capacity(hangar_level: int) -> int:
 static func drone_upgrade_cost(type: String, level: int) -> int:
 	var base := maxi(int(DRONES[type]["unlock"]), 200)
 	return _round10(base * 0.75 * pow(1.9, level))
+
+
+# ---------------------------------------------------------------- time, workers, gems
+
+## Players start with this many workers; one more can be hired with gems.
+const START_WORKERS := 2
+const MAX_WORKERS := 3
+const WORKER_GEMS := 500
+const START_GEMS := 250
+
+## Seconds to build a structure (level 1) or upgrade it to `level`.
+## Level 1 takes seconds so the first minutes feel fast; each level takes four times longer.
+const BUILD_SECONDS := {"hq": 60.0}
+const DEFAULT_BUILD_SECONDS := 15.0
+
+
+static func build_seconds(type: String, level: int) -> float:
+	var base := float(BUILD_SECONDS.get(type, DEFAULT_BUILD_SECONDS))
+	return base * pow(4.0, level - 1)
+
+
+## Gems to finish something now, Clash-style: about 1 gem a minute at first, getting
+## cheaper per minute for long waits. Anything left at all costs at least 1 gem.
+static func speedup_gems(seconds_left: float) -> int:
+	if seconds_left <= 0.0:
+		return 0
+	var points := [[0.0, 0.0], [60.0, 1.0], [3600.0, 20.0], [86400.0, 260.0], [604800.0, 1000.0]]
+	for i in range(1, points.size()):
+		var a: Array = points[i - 1]
+		var b: Array = points[i]
+		if seconds_left <= b[0] or i == points.size() - 1:
+			var k: float = (seconds_left - a[0]) / (b[0] - a[0])
+			return maxi(1, ceili(lerpf(float(a[1]), float(b[1]), k)))
+	return 1
 
 
 static func _round10(value: float) -> int:

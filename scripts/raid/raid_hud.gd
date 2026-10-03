@@ -129,8 +129,8 @@ func set_progress(percent: int, stars: int) -> void:
 	_progress.text = I18n.t("%d%%  ·  Stars %d/3") % [percent, stars]
 
 
-func set_loot(amount: int) -> void:
-	_loot.text = I18n.t("Loot %d") % amount
+func set_loot(coins: int, fuel: int) -> void:
+	_loot.text = I18n.t("Loot %d coins · %d fuel") % [coins, fuel]
 
 
 ## One card per drone type with how many are left to deploy. `names` maps type -> label.
@@ -177,13 +177,14 @@ func update_bars(entries: Array) -> void:
 			(_bars[key] as ProgressBar).visible = false
 
 
-func show_result(stars: int, percent: int, coins: int, total: int, practice: bool) -> void:
+## `gained` is {coins, fuel} actually banked.
+func show_result(stars: int, percent: int, gained: Dictionary, practice: bool) -> void:
 	_result_title.text = I18n.t("Battle over")
 	_result_stars.text = I18n.t("Stars %d / 3   ·   %d%%") % [stars, percent]
 	if practice:
 		_result_info.text = I18n.t("Practice run on your own base.\nNo coins at stake.")
 	else:
-		_result_info.text = I18n.t("Loot banked: %d\nTotal coins: %d") % [coins, total]
+		_result_info.text = I18n.t("Loot banked: %d coins, %d fuel") % [int(gained["coins"]), int(gained["fuel"])]
 	_result.visible = true
 	_cards.visible = false
 	_end.visible = false

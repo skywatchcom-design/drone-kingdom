@@ -1,16 +1,22 @@
 extends Node
-## The player's save: coins, the structures on their rooftop base, their drone fleet and
-## the army they take into the next attack. Every change goes through a method here so
+## The player's save: coins, fuel and gems, the structures on their base, their drone fleet
+## and the army they take into the next attack. Every change goes through a method here so
 ## the rules live in one place.
+## Building and upgrading take time and a free worker: the structure gets busy_until (unix
+## seconds) and, for a fresh build, "fresh": true. finish_ready() completes whatever is done.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 ## Turned off by unit tests so they never touch the real save file.
 var persist := true
 
 var coins := 0
-## Each: {type, cell: [c, r], level}; generators also carry collected_at (unix seconds).
+var fuel := 0
+var gems := 0
+var workers := Catalog.START_WORKERS
+## Each: {type, cell: [c, r], level}; generators and pumps also carry collected_at (unix
+## seconds); structures being built or upgraded carry busy_until.
 var structures: Array = []
 ## Unlocked drone types and their levels.
 var drones := {}
@@ -22,7 +28,7 @@ var city_seed := 7
 var best_stars := {}
 
 const SETTINGS_PATH := "user://settings.json"
-## Development only: building and upgrading cost nothing. Forced off in release exports,
+## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
 ## where OS.is_debug_build() is false, so players can never get it.
 var infinite_coins := false
 var sound_on := true
@@ -79,15 +85,33 @@ func _spend(cost: int) -> void:
 		coins -= cost
 
 
+func _spend_fuel(cost: int) -> void:
+	if not infinite_coins:
+		fuel -= cost
+
+
+func _spend_gems(cost: int) -> void:
+	if not infinite_coins:
+		gems -= cost
+
+
+func now() -> float:
+	return Time.get_unix_time_from_system()
+
+
 func new_player() -> void:
-	var now := Time.get_unix_time_from_system()
+	var t := now()
 	coins = 400
+	fuel = 300
+	gems = Catalog.START_GEMS
+	workers = Catalog.START_WORKERS
 	structures = [
-		{"type": "hq", "cell": [3, 3], "level": 1},
-		# Starts 20 minutes in, so there is a coin to collect right away.
-		{"type": "generator", "cell": [2, 3], "level": 1, "collected_at": now - 20.0 * 60.0},
-		{"type": "hangar", "cell": [4, 3], "level": 1},
-		{"type": "laser", "cell": [3, 2], "level": 1},
+		{"type": "hq", "cell": [4, 4], "level": 1},
+		# Start 20 minutes in, so there is something to collect right away.
+		{"type": "generator", "cell": [3, 4], "level": 1, "collected_at": t - 20.0 * 60.0},
+		{"type": "pump", "cell": [4, 5], "level": 1, "collected_at": t - 20.0 * 60.0},
+		{"type": "hangar", "cell": [5, 4], "level": 1},
+		{"type": "laser", "cell": [4, 3], "level": 1},
 	]
 	drones = {"courier": 1}
 	army = {"courier": 4}
@@ -128,19 +152,60 @@ func count_of(type: String) -> int:
 	return n
 
 
-func coin_cap() -> int:
-	var storage_levels := []
+## Levels of the finished structures of one type (one still being built holds nothing).
+func _working_levels(type: String) -> Array:
+	var levels := []
 	for s in structures:
-		if s["type"] == "storage":
-			storage_levels.append(int(s["level"]))
-	return Catalog.coin_cap(hq_level(), storage_levels)
+		if s["type"] == type and not s.get("fresh", false):
+			levels.append(int(s["level"]))
+	return levels
 
 
-## Coins waiting in one generator.
+func coin_cap() -> int:
+	return Catalog.coin_cap(hq_level(), _working_levels("storage"))
+
+
+func fuel_cap() -> int:
+	return Catalog.fuel_cap(hq_level(), _working_levels("tank"))
+
+
+static func is_producer(type: String) -> bool:
+	return type == "generator" or type == "pump"
+
+
+## Per-minute output of a generator (coins) or pump (fuel).
+static func producer_rate(s: Dictionary) -> float:
+	var lvl := int(s["level"])
+	return Catalog.generator_rate(lvl) if s["type"] == "generator" else Catalog.pump_rate(lvl)
+
+
+## Coins or fuel waiting in one generator or pump. Nothing while it is first being built.
 func generator_pending(s: Dictionary) -> int:
-	var minutes := (Time.get_unix_time_from_system() - float(s.get("collected_at", 0.0))) / 60.0
+	if s.get("fresh", false):
+		return 0
+	var minutes := (now() - float(s.get("collected_at", 0.0))) / 60.0
 	minutes = clampf(minutes, 0.0, Catalog.GENERATOR_FILL_MINUTES)
-	return int(Catalog.generator_rate(int(s["level"])) * minutes)
+	return int(producer_rate(s) * minutes)
+
+
+func is_busy(s: Dictionary) -> bool:
+	return s.has("busy_until")
+
+
+func seconds_left(s: Dictionary) -> float:
+	return maxf(0.0, float(s.get("busy_until", 0.0)) - now())
+
+
+func workers_busy() -> int:
+	var n := 0
+	for s in structures:
+		if is_busy(s):
+			n += 1
+	return n
+
+
+func free_workers() -> int:
+	return workers - workers_busy()
 
 
 func army_capacity() -> int:
@@ -168,23 +233,35 @@ func build_block_reason(type: String) -> String:
 		return I18n.t("Needs Command Tower Lv %d") % needed
 	if count_of(type) >= allowed:
 		return I18n.t("Limit reached (%d)") % allowed
-	return _coins_reason(Catalog.build_cost(type))
+	var money := _coins_reason(Catalog.build_cost(type))
+	return money if money != "" else _worker_reason()
 
 
 func _coins_reason(cost: int) -> String:
 	return "" if infinite_coins or coins >= cost else I18n.t("Need %d more coins") % (cost - coins)
 
 
+func _fuel_reason(cost: int) -> String:
+	return "" if infinite_coins or fuel >= cost else I18n.t("Need %d more fuel") % (cost - fuel)
+
+
+func _worker_reason() -> String:
+	return "" if free_workers() > 0 else I18n.t("All workers are busy")
+
+
 func upgrade_block_reason(cell: Array) -> String:
 	var s := structure_at(cell)
 	if s.is_empty():
 		return I18n.t("Nothing here")
+	if is_busy(s):
+		return I18n.t("Under construction")
 	var level := int(s["level"])
 	if level >= Catalog.MAX_LEVEL:
 		return I18n.t("Max level")
 	if s["type"] != "hq" and level >= hq_level():
 		return I18n.t("Upgrade the Command Tower first")
-	return _coins_reason(Catalog.upgrade_cost(s["type"], level))
+	var money := _coins_reason(Catalog.upgrade_cost(s["type"], level))
+	return money if money != "" else _worker_reason()
 
 
 func drone_block_reason(type: String) -> String:
@@ -196,8 +273,8 @@ func drone_block_reason(type: String) -> String:
 			return I18n.t("Max level")
 		if level >= hangar_level():
 			return I18n.t("Upgrade the Hangar first")
-		return _coins_reason(Catalog.drone_upgrade_cost(type, level))
-	return _coins_reason(int(Catalog.DRONES[type]["unlock"]))
+		return _fuel_reason(Catalog.drone_upgrade_cost(type, level))
+	return _fuel_reason(int(Catalog.DRONES[type]["unlock"]))
 
 
 ## The player's own base in the same format as enemy bases, for the defense test.
@@ -207,7 +284,8 @@ func player_base() -> Dictionary:
 		if structure_at([c, City.GRID - 1]).is_empty():
 			pad = [c, City.GRID - 1]
 			break
-	return {"name": I18n.t("Your Base (practice)"), "seed": city_seed, "pad": pad, "structures": structures}
+	var built := structures.filter(func(s: Dictionary) -> bool: return not s.get("fresh", false))
+	return {"name": I18n.t("Your Base (practice)"), "seed": city_seed, "pad": pad, "structures": built}
 
 
 # ---------------------------------------------------------------- actions
@@ -219,45 +297,115 @@ func add_coins(amount: int) -> int:
 	return coins - before
 
 
-## Moves a generator's coins into the bank. If the bank is nearly full, whatever doesn't
-## fit stays in the generator, as in Clash.
+func add_fuel(amount: int) -> int:
+	var before := fuel
+	fuel = mini(fuel_cap(), fuel + amount)
+	save_game()
+	return fuel - before
+
+
+## Moves a generator's coins (or a pump's fuel) into the bank. If the bank is nearly full,
+## whatever doesn't fit stays in the producer, as in Clash.
 func collect_generator(cell: Array) -> int:
 	var s := structure_at(cell)
-	if s.is_empty() or s["type"] != "generator":
+	if s.is_empty() or not is_producer(s["type"]):
 		return 0
 	var pending := generator_pending(s)
-	var taken := mini(pending, coin_cap() - coins)
-	var rate := Catalog.generator_rate(int(s["level"]))
-	var left_minutes := float(pending - taken) / rate
-	s["collected_at"] = Time.get_unix_time_from_system() - left_minutes * 60.0
-	return add_coins(taken)
+	var room := coin_cap() - coins if s["type"] == "generator" else fuel_cap() - fuel
+	var taken := mini(pending, maxi(room, 0))
+	var left_minutes := float(pending - taken) / producer_rate(s)
+	s["collected_at"] = now() - left_minutes * 60.0
+	return add_coins(taken) if s["type"] == "generator" else add_fuel(taken)
 
 
 func build(type: String, cell: Array) -> bool:
 	if build_block_reason(type) != "" or not structure_at(cell).is_empty():
 		return false
 	_spend(Catalog.build_cost(type))
-	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1}
-	if type == "generator":
-		s["collected_at"] = Time.get_unix_time_from_system()
+	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1, "fresh": true,
+		"busy_until": now() + Catalog.build_seconds(type, 1)}
 	structures.append(s)
 	save_game()
 	return true
 
 
+## Starts an upgrade. The structure keeps working at its old level until it is done.
 func upgrade(cell: Array) -> bool:
 	if upgrade_block_reason(cell) != "":
 		return false
 	var s := structure_at(cell)
-	_spend(Catalog.upgrade_cost(s["type"], int(s["level"])))
+	var lvl := int(s["level"])
+	_spend(Catalog.upgrade_cost(s["type"], lvl))
+	s["busy_until"] = now() + Catalog.build_seconds(s["type"], lvl + 1)
+	save_game()
+	return true
+
+
+## Completes every build or upgrade whose time is up. Returns the finished structures.
+func finish_ready() -> Array:
+	var done := []
+	var t := now()
+	for s in structures:
+		if is_busy(s) and float(s["busy_until"]) <= t:
+			_complete(s)
+			done.append(s)
+	if not done.is_empty():
+		save_game()
+	return done
+
+
+func _complete(s: Dictionary) -> void:
+	s.erase("busy_until")
+	if s.get("fresh", false):
+		s.erase("fresh")
+		if is_producer(s["type"]):
+			s["collected_at"] = now()
+		return
+	# Bank what a producer made at the old rate, so the new rate doesn't apply backwards.
+	if is_producer(s["type"]):
+		collect_generator(s["cell"])
 	s["level"] = int(s["level"]) + 1
+
+
+func speedup_cost(cell: Array) -> int:
+	var s := structure_at(cell)
+	return 0 if s.is_empty() or not is_busy(s) else Catalog.speedup_gems(seconds_left(s))
+
+
+## Finishes a build or upgrade right away for gems.
+func speed_up(cell: Array) -> bool:
+	var s := structure_at(cell)
+	if s.is_empty() or not is_busy(s):
+		return false
+	var cost := speedup_cost(cell)
+	if not infinite_coins and gems < cost:
+		return false
+	_spend_gems(cost)
+	_complete(s)
+	save_game()
+	return true
+
+
+func hire_worker_reason() -> String:
+	if workers >= Catalog.MAX_WORKERS:
+		return I18n.t("All workers hired")
+	if not infinite_coins and gems < Catalog.WORKER_GEMS:
+		return I18n.t("Need %d more gems") % (Catalog.WORKER_GEMS - gems)
+	return ""
+
+
+func hire_worker() -> bool:
+	if hire_worker_reason() != "":
+		return false
+	_spend_gems(Catalog.WORKER_GEMS)
+	workers += 1
 	save_game()
 	return true
 
 
 func remove(cell: Array) -> bool:
 	var s := structure_at(cell)
-	if s.is_empty() or s["type"] == "hq":
+	if s.is_empty() or s["type"] == "hq" or is_busy(s):
 		return false
 	structures.erase(s)
 	if s["type"] == "hangar":
@@ -270,10 +418,10 @@ func upgrade_drone(type: String) -> bool:
 	if drone_block_reason(type) != "":
 		return false
 	if drones.has(type):
-		_spend(Catalog.drone_upgrade_cost(type, int(drones[type])))
+		_spend_fuel(Catalog.drone_upgrade_cost(type, int(drones[type])))
 		drones[type] = int(drones[type]) + 1
 	else:
-		_spend(int(Catalog.DRONES[type]["unlock"]))
+		_spend_fuel(int(Catalog.DRONES[type]["unlock"]))
 		drones[type] = 1
 	save_game()
 	return true
@@ -291,14 +439,15 @@ func set_army_count(type: String, count: int) -> bool:
 	return true
 
 
-func record_raid(stars: int, loot: int) -> int:
+## Banks the loot of an attack on an enemy. Returns {coins, fuel} actually banked.
+func record_raid(stars: int, loot: int, loot_fuel: int = 0) -> Dictionary:
 	if raid_target != "enemy":
-		return 0
+		return {"coins": 0, "fuel": 0}
 	var key := str(enemy_index)
 	best_stars[key] = maxi(int(best_stars.get(key, 0)), stars)
 	if stars > 0:
 		enemy_index += 1
-	return add_coins(loot)
+	return {"coins": add_coins(loot), "fuel": add_fuel(loot_fuel)}
 
 
 # ---------------------------------------------------------------- save
@@ -311,7 +460,8 @@ func save_game() -> void:
 		push_warning("Could not write save file")
 		return
 	file.store_string(JSON.stringify({
-		"version": SAVE_VERSION, "coins": coins, "structures": structures, "drones": drones,
+		"version": SAVE_VERSION, "coins": coins, "fuel": fuel, "gems": gems, "workers": workers,
+		"structures": structures, "drones": drones,
 		"army": army, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 	}))
 
@@ -323,12 +473,16 @@ func load_game() -> bool:
 	if not (data is Dictionary) or int(data.get("version", 0)) != SAVE_VERSION:
 		return false
 	coins = int(data["coins"])
+	fuel = int(data.get("fuel", 0))
+	gems = int(data.get("gems", 0))
+	workers = int(data.get("workers", Catalog.START_WORKERS))
 	structures = data["structures"]
 	for s in structures:
 		s["level"] = int(s["level"])
 		s["cell"] = [int(s["cell"][0]), int(s["cell"][1])]
-		if s.has("collected_at"):
-			s["collected_at"] = float(s["collected_at"])
+		for k: String in ["collected_at", "busy_until"]:
+			if s.has(k):
+				s[k] = float(s[k])
 	drones = {}
 	for k in data["drones"]:
 		drones[k] = int(data["drones"][k])

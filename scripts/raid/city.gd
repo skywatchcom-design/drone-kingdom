@@ -1,13 +1,13 @@
 class_name City
 extends Node3D
-## The world: a flat drone compound in the countryside. A 7x7 grid of stone pads on a
+## The world: a flat drone compound in the countryside. A 9x9 grid of stone pads on a
 ## trimmed lawn, ringed by a wooden fence with a gate and a dirt road. Outside the fence:
 ## meadows with trees, bushes and rocks, a winding stream, striped farm fields, wind
 ## turbines and low hills fading into the haze. Everything sits on the ground, so every
 ## structure and every defense range is visible at a glance.
 ## Repeated details use MultiMesh so the scene stays cheap enough for phones.
 
-const GRID := 7
+const GRID := 9
 const SPACING := 7.5
 const PAD := 5.4
 const PAD_H := 0.12

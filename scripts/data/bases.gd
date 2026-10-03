@@ -9,44 +9,50 @@ const STARTERS := [
 	{
 		"name": "Quiet Block",
 		"seed": 11,
-		"pad": [5, 6],
+		"pad": [6, 7],
 		"structures": [
-			{"type": "hq", "cell": [1, 1], "level": 1},
-			{"type": "generator", "cell": [4, 3], "level": 1},
-			{"type": "storage", "cell": [1, 4], "level": 1},
-			{"type": "generator", "cell": [3, 1], "level": 1},
-			{"type": "laser", "cell": [3, 3], "level": 1},
-			{"type": "birds", "cell": [2, 2], "level": 1},
+			{"type": "hq", "cell": [2, 2], "level": 1},
+			{"type": "generator", "cell": [5, 4], "level": 1},
+			{"type": "storage", "cell": [2, 5], "level": 1},
+			{"type": "generator", "cell": [4, 2], "level": 1},
+			{"type": "pump", "cell": [6, 2], "level": 1},
+			{"type": "tank", "cell": [3, 6], "level": 1},
+			{"type": "laser", "cell": [4, 4], "level": 1},
+			{"type": "birds", "cell": [3, 3], "level": 1},
 		],
 	},
 	{
 		"name": "Antenna Row",
 		"seed": 27,
-		"pad": [6, 5],
+		"pad": [7, 6],
 		"structures": [
-			{"type": "hq", "cell": [0, 1], "level": 2},
-			{"type": "generator", "cell": [5, 2], "level": 2},
-			{"type": "storage", "cell": [2, 5], "level": 1},
-			{"type": "generator", "cell": [1, 3], "level": 1},
-			{"type": "laser", "cell": [4, 4], "level": 1},
-			{"type": "net", "cell": [2, 3], "level": 1},
-			{"type": "jammer", "cell": [3, 1], "level": 1},
+			{"type": "hq", "cell": [1, 2], "level": 2},
+			{"type": "generator", "cell": [6, 3], "level": 2},
+			{"type": "storage", "cell": [3, 6], "level": 1},
+			{"type": "generator", "cell": [2, 4], "level": 1},
+			{"type": "pump", "cell": [7, 4], "level": 1},
+			{"type": "tank", "cell": [5, 7], "level": 1},
+			{"type": "laser", "cell": [5, 5], "level": 1},
+			{"type": "net", "cell": [3, 4], "level": 1},
+			{"type": "jammer", "cell": [4, 2], "level": 1},
 		],
 	},
 	{
 		"name": "Fortress Roof",
 		"seed": 42,
-		"pad": [5, 6],
+		"pad": [6, 7],
 		"structures": [
-			{"type": "hq", "cell": [1, 0], "level": 3},
-			{"type": "generator", "cell": [6, 2], "level": 2},
-			{"type": "storage", "cell": [0, 4], "level": 2},
-			{"type": "generator", "cell": [3, 3], "level": 2},
-			{"type": "laser", "cell": [2, 1], "level": 2},
-			{"type": "laser", "cell": [4, 3], "level": 1},
-			{"type": "net", "cell": [1, 3], "level": 1},
-			{"type": "jammer", "cell": [2, 4], "level": 1},
-			{"type": "birds", "cell": [4, 1], "level": 1},
+			{"type": "hq", "cell": [2, 1], "level": 3},
+			{"type": "generator", "cell": [7, 3], "level": 2},
+			{"type": "storage", "cell": [1, 5], "level": 2},
+			{"type": "generator", "cell": [4, 4], "level": 2},
+			{"type": "pump", "cell": [6, 5], "level": 2},
+			{"type": "tank", "cell": [1, 3], "level": 2},
+			{"type": "laser", "cell": [3, 2], "level": 2},
+			{"type": "laser", "cell": [5, 4], "level": 1},
+			{"type": "net", "cell": [2, 4], "level": 1},
+			{"type": "jammer", "cell": [3, 5], "level": 1},
+			{"type": "birds", "cell": [5, 2], "level": 1},
 		],
 	},
 ]
@@ -73,7 +79,7 @@ static func generate(seed_value: int, hq: int) -> Dictionary:
 	var hq_cell := [rng.randi_range(0, 2), rng.randi_range(0, 2)]
 	taken["%d,%d" % hq_cell] = true
 	structures.append({"type": "hq", "cell": hq_cell, "level": hq})
-	for type in ["generator", "storage", "laser", "net", "jammer", "birds"]:
+	for type in ["generator", "storage", "pump", "tank", "laser", "net", "jammer", "birds"]:
 		for i in Catalog.max_count(type, hq):
 			var cell := _free_cell(rng, taken)
 			if cell.is_empty():

@@ -26,7 +26,9 @@ var level: Node3D
 var city: City
 var cam: Camera3D
 var hud: RaidHud
-## One entry per structure: {type, level, cell, top, hp, max_hp, node, defense, is_defense, loot, destroyed}.
+## One entry per structure: {type, level, cell, top, hp, max_hp, node, defense, is_defense,
+## loot, loot_fuel, destroyed}. `loot` counts coins plus fuel, so drones that go for loot
+## treat fuel buildings as loot too.
 var targets: Array[Dictionary] = []
 var drones: Array[Drone] = []
 var army := {}
@@ -35,6 +37,7 @@ var selected := ""
 var started := false
 var time_left := Catalog.BATTLE_SECONDS
 var loot_gained := 0
+var fuel_gained := 0
 var end_timer := -1.0
 var focus := Vector3(0, 10, 0)
 var press_pos := Vector2.ZERO
@@ -83,7 +86,8 @@ func _start() -> void:
 		targets.append({
 			"type": type, "level": lvl, "cell": s["cell"], "top": top, "hp": hp, "max_hp": hp,
 			"node": node, "defense": defense, "is_defense": defense != null,
-			"loot": Catalog.loot_value(type, lvl), "destroyed": false,
+			"loot": Catalog.loot_value(type, lvl) + Catalog.loot_fuel(type, lvl),
+			"loot_coins": Catalog.loot_value(type, lvl), "loot_fuel": Catalog.loot_fuel(type, lvl), "destroyed": false,
 		})
 
 	var plan: Dictionary = GameState.army
@@ -98,7 +102,7 @@ func _start() -> void:
 	hud.set_title(base["name"])
 	hud.set_army(army, drone_names, selected)
 	hud.set_timer(time_left)
-	hud.set_loot(0)
+	hud.set_loot(0, 0)
 	_update_progress()
 	hud.set_status(I18n.t("Tap outside the base to release drones"))
 	if autoplay:
@@ -406,11 +410,16 @@ func _destroy(index: int) -> void:
 	else:
 		(t["node"] as Node3D).visible = false
 	_rubble(top)
-	var loot := int(t["loot"])
-	if loot > 0:
+	var loot := int(t["loot_coins"])
+	var loot_fuel := int(t["loot_fuel"])
+	if loot > 0 or loot_fuel > 0:
 		loot_gained += loot
-		hud.set_loot(loot_gained)
+		fuel_gained += loot_fuel
+		hud.set_loot(loot_gained, fuel_gained)
+	if loot > 0:
 		_float_text(top + Vector3(0, 3, 0), "+%d" % loot, Color(1.0, 0.85, 0.3))
+	if loot_fuel > 0:
+		_float_text(top + Vector3(0, 4.6, 0), "+%d" % loot_fuel, Color(1.0, 0.55, 0.75))
 	_update_progress()
 
 
@@ -445,13 +454,13 @@ func _finish() -> void:
 		if t["type"] == "hq" and t["destroyed"]:
 			hq_down = true
 	var stars := RaidRules.battle_stars(ratio, hq_down)
-	var gained := 0
+	var gained := {"coins": 0, "fuel": 0}
 	if not autoplay:
-		gained = GameState.record_raid(stars, loot_gained)
+		gained = GameState.record_raid(stars, loot_gained, fuel_gained)
 	Audio.hum(0.0)
 	for i in stars:
 		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))
-	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.coins, GameState.raid_target == "self")
+	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.raid_target == "self")
 
 
 func _destroyed_ratio() -> float:
