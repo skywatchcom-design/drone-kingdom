@@ -41,7 +41,7 @@ func tick(delta: float, drones: Array) -> void:
 		_cooldowns[i] -= delta
 		if _cooldowns[i] > 0.0:
 			continue
-		for d: Drone in drones:
+		for d: Unit in drones:
 			if d.dead or bird.global_position.distance_to(d.global_position) > 2.0:
 				continue
 			d.damage(float(stats.get("damage", 15.0)))

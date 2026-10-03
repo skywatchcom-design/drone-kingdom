@@ -1,12 +1,15 @@
 extends Node
-## The player's save: coins, fuel and gems, the structures on their base, their drone fleet
-## and the army they take into the next attack. Every change goes through a method here so
-## the rules live in one place.
+## The player's save: coins, fuel and gems, the structures on their base, their unit levels,
+## the trained army and the training queue. Every change goes through a method here so the
+## rules live in one place.
 ## Building and upgrading take time and a free worker: the structure gets busy_until (unix
 ## seconds) and, for a fresh build, "fresh": true. finish_ready() completes whatever is done.
+## Training, as in Clash: the Training Camp works through its queue one unit at a time, for
+## fuel and time; trained units wait in the Quarters, and an attack uses up what it deploys.
+## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 
 ## Turned off by unit tests so they never touch the real save file.
 var persist := true
@@ -18,10 +21,13 @@ var workers := Catalog.START_WORKERS
 ## Each: {type, cell: [c, r], level}; generators and pumps also carry collected_at (unix
 ## seconds); structures being built or upgraded carry busy_until.
 var structures: Array = []
-## Unlocked drone types and their levels.
-var drones := {}
-## How many of each drone type go into the next attack.
+## Unlocked unit types (ground units and drones) and their levels.
+var units := {}
+## Trained units ready for the next attack, by type.
 var army := {}
+## Unit types waiting to be trained, in order. The first one started at train_started.
+var training: Array = []
+var train_started := 0.0
 var enemy_index := 0
 var raid_target := "enemy"
 var city_seed := 7
@@ -112,9 +118,13 @@ func new_player() -> void:
 		{"type": "pump", "cell": [4, 5], "level": 1, "collected_at": t - 20.0 * 60.0},
 		{"type": "hangar", "cell": [5, 4], "level": 1},
 		{"type": "laser", "cell": [4, 3], "level": 1},
+		{"type": "camp", "cell": [3, 5], "level": 1},
+		{"type": "quarters", "cell": [5, 5], "level": 1},
 	]
-	drones = {"courier": 1}
-	army = {"courier": 4}
+	units = {"infantry": 1, "courier": 1}
+	army = {"infantry": 2, "courier": 2}
+	training = []
+	train_started = 0.0
 	enemy_index = 0
 	raid_target = "enemy"
 	best_stars = {}
@@ -130,11 +140,18 @@ func hq_level() -> int:
 	return 1
 
 
+## Level of the first finished structure of this type, or 0 if there is none.
+func level_of(type: String) -> int:
+	var levels := _working_levels(type)
+	return 0 if levels.is_empty() else int(levels[0])
+
+
 func hangar_level() -> int:
-	for s in structures:
-		if s["type"] == "hangar":
-			return int(s["level"])
-	return 0
+	return level_of("hangar")
+
+
+func camp_level() -> int:
+	return level_of("camp")
 
 
 func structure_at(cell: Array) -> Dictionary:
@@ -209,18 +226,48 @@ func free_workers() -> int:
 
 
 func army_capacity() -> int:
-	return Catalog.army_capacity(hangar_level())
+	return Catalog.army_capacity(_working_levels("quarters"))
 
 
-func army_used() -> int:
+static func _space(counts: Dictionary) -> int:
 	var used := 0
-	for type in army:
-		used += int(army[type]) * int(Catalog.DRONES[type]["housing"])
+	for type in counts:
+		used += int(counts[type]) * int(Catalog.unit_def(type)["housing"])
 	return used
 
 
-func drone_stats_for(type: String) -> Dictionary:
-	return Catalog.drone_stats(type, int(drones.get(type, 1)))
+## Space taken by the trained army.
+func army_used() -> int:
+	return _space(army)
+
+
+## Space the training queue will take once it is done.
+func queued_space() -> int:
+	var n := 0
+	for type in training:
+		n += int(Catalog.unit_def(type)["housing"])
+	return n
+
+
+func unit_stats_for(type: String) -> Dictionary:
+	return Catalog.unit_stats(type, int(units.get(type, 1)))
+
+
+## Seconds until the first unit in the queue is done (0 when the queue is empty).
+func train_head_left() -> float:
+	if training.is_empty():
+		return 0.0
+	return maxf(0.0, train_started + Catalog.train_seconds(training[0], camp_level()) - now())
+
+
+## Seconds until the whole queue is done.
+func train_total_left() -> float:
+	if training.is_empty():
+		return 0.0
+	var total := train_head_left()
+	for i in range(1, training.size()):
+		total += Catalog.train_seconds(training[i], camp_level())
+	return total
 
 
 ## Empty string when the player may build `type`; otherwise the reason they can't.
@@ -264,17 +311,35 @@ func upgrade_block_reason(cell: Array) -> String:
 	return money if money != "" else _worker_reason()
 
 
-func drone_block_reason(type: String) -> String:
-	if hangar_level() < int(Catalog.DRONES[type]["hangar"]):
-		return I18n.t("Needs Hangar Lv %d") % int(Catalog.DRONES[type]["hangar"])
-	if drones.has(type):
-		var level := int(drones[type])
+## Why `type` can't be unlocked or upgraded right now ("" if it can). The Garage caps
+## ground units and the Hangar caps drones.
+func unit_block_reason(type: String) -> String:
+	var ground := Catalog.is_ground(type)
+	var lab := level_of(Catalog.unit_lab(type))
+	var needed := Catalog.unit_lab_level(type)
+	if lab < needed:
+		return (I18n.t("Needs Garage Lv %d") if ground else I18n.t("Needs Hangar Lv %d")) % needed
+	if units.has(type):
+		var level := int(units[type])
 		if level >= Catalog.MAX_LEVEL:
 			return I18n.t("Max level")
-		if level >= hangar_level():
-			return I18n.t("Upgrade the Hangar first")
-		return _fuel_reason(Catalog.drone_upgrade_cost(type, level))
-	return _fuel_reason(int(Catalog.DRONES[type]["unlock"]))
+		if level >= lab:
+			return I18n.t("Upgrade the Garage first") if ground else I18n.t("Upgrade the Hangar first")
+		return _fuel_reason(Catalog.unit_upgrade_cost(type, level))
+	return _fuel_reason(int(Catalog.unit_def(type)["unlock"]))
+
+
+## Why one more `type` can't be queued for training ("" if it can).
+func train_block_reason(type: String) -> String:
+	if camp_level() <= 0:
+		return I18n.t("Build a Training Camp first")
+	if not units.has(type):
+		return I18n.t("Locked")
+	if army_capacity() <= 0:
+		return I18n.t("Build Quarters first")
+	if army_used() + queued_space() + int(Catalog.unit_def(type)["housing"]) > army_capacity():
+		return I18n.t("Not enough army space")
+	return _fuel_reason(Catalog.train_fuel(type))
 
 
 ## The player's own base in the same format as enemy bases, for the defense test.
@@ -408,35 +473,103 @@ func remove(cell: Array) -> bool:
 	if s.is_empty() or s["type"] == "hq" or is_busy(s):
 		return false
 	structures.erase(s)
-	if s["type"] == "hangar":
-		army = {}
 	save_game()
 	return true
 
 
-func upgrade_drone(type: String) -> bool:
-	if drone_block_reason(type) != "":
+func upgrade_unit(type: String) -> bool:
+	if unit_block_reason(type) != "":
 		return false
-	if drones.has(type):
-		_spend_fuel(Catalog.drone_upgrade_cost(type, int(drones[type])))
-		drones[type] = int(drones[type]) + 1
+	if units.has(type):
+		_spend_fuel(Catalog.unit_upgrade_cost(type, int(units[type])))
+		units[type] = int(units[type]) + 1
 	else:
-		_spend_fuel(int(Catalog.DRONES[type]["unlock"]))
-		drones[type] = 1
+		_spend_fuel(int(Catalog.unit_def(type)["unlock"]))
+		units[type] = 1
 	save_game()
 	return true
 
 
-## Sets how many drones of `type` join the next attack, if they fit in the hangar.
-func set_army_count(type: String, count: int) -> bool:
-	if not drones.has(type) or count < 0:
+# ---------------------------------------------------------------- training
+
+## Adds one unit to the end of the training queue and pays its fuel.
+func train(type: String) -> bool:
+	if train_block_reason(type) != "":
 		return false
-	var used := army_used() - int(army.get(type, 0)) * int(Catalog.DRONES[type]["housing"])
-	if used + count * int(Catalog.DRONES[type]["housing"]) > army_capacity():
-		return false
-	army[type] = count
+	process_training()
+	_spend_fuel(Catalog.train_fuel(type))
+	if training.is_empty():
+		train_started = now()
+	training.append(type)
 	save_game()
 	return true
+
+
+## Takes the last queued unit of `type` out of the queue and refunds its fuel.
+func cancel_training(type: String) -> bool:
+	var index := training.rfind(type)
+	if index < 0:
+		return false
+	training.remove_at(index)
+	if not infinite_coins:
+		fuel = mini(fuel_cap(), fuel + Catalog.train_fuel(type))
+	if index == 0:
+		train_started = now()
+	save_game()
+	return true
+
+
+## Moves every finished unit from the queue into the army. A unit that is done but has no
+## room waits at the head of the queue. Returns how many units finished.
+func process_training() -> int:
+	var done := 0
+	var camp := camp_level()
+	if camp <= 0:
+		return 0
+	while not training.is_empty():
+		var type: String = training[0]
+		var ready_at := train_started + Catalog.train_seconds(type, camp)
+		if ready_at > now():
+			break
+		if army_used() + int(Catalog.unit_def(type)["housing"]) > army_capacity():
+			train_started = now() - Catalog.train_seconds(type, camp)
+			break
+		training.remove_at(0)
+		army[type] = int(army.get(type, 0)) + 1
+		train_started = ready_at
+		done += 1
+	if done > 0:
+		save_game()
+	return done
+
+
+func training_speedup_cost() -> int:
+	return Catalog.speedup_gems(train_total_left())
+
+
+## Finishes the whole queue right away for gems.
+func speed_up_training() -> bool:
+	if training.is_empty():
+		return false
+	var cost := training_speedup_cost()
+	if not infinite_coins and gems < cost:
+		return false
+	_spend_gems(cost)
+	for type in training:
+		army[type] = int(army.get(type, 0)) + 1
+	training = []
+	save_game()
+	return true
+
+
+## Removes the units an attack deployed from the army.
+func use_army(deployed: Dictionary) -> void:
+	for type in deployed:
+		army[type] = maxi(0, int(army.get(type, 0)) - int(deployed[type]))
+		if army[type] == 0:
+			army.erase(type)
+	process_training()
+	save_game()
 
 
 ## Banks the loot of an attack on an enemy. Returns {coins, fuel} actually banked.
@@ -452,6 +585,24 @@ func record_raid(stars: int, loot: int, loot_fuel: int = 0) -> Dictionary:
 
 # ---------------------------------------------------------------- save
 
+## Saves from before ground units have no Training Camp or Quarters: put one of each on
+## the free pads closest to the middle.
+func _add_army_buildings() -> void:
+	for type in ["camp", "quarters"]:
+		if count_of(type) > 0:
+			continue
+		var best := []
+		var best_d := INF
+		for c in City.GRID:
+			for r in City.GRID:
+				var d := Vector2(c - 4, r - 4).length()
+				if d < best_d and structure_at([c, r]).is_empty():
+					best_d = d
+					best = [c, r]
+		if not best.is_empty():
+			structures.append({"type": type, "cell": best, "level": 1})
+
+
 func save_game() -> void:
 	if not persist:
 		return
@@ -461,8 +612,8 @@ func save_game() -> void:
 		return
 	file.store_string(JSON.stringify({
 		"version": SAVE_VERSION, "coins": coins, "fuel": fuel, "gems": gems, "workers": workers,
-		"structures": structures, "drones": drones,
-		"army": army, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
+		"structures": structures, "units": units, "army": army, "training": training,
+		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 	}))
 
 
@@ -470,7 +621,8 @@ func load_game() -> bool:
 	if not persist or not FileAccess.file_exists(SAVE_PATH):
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
-	if not (data is Dictionary) or int(data.get("version", 0)) != SAVE_VERSION:
+	# Version 4 saves (before ground units) load too: their drones become units.
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -483,12 +635,20 @@ func load_game() -> bool:
 		for k: String in ["collected_at", "busy_until"]:
 			if s.has(k):
 				s[k] = float(s[k])
-	drones = {}
-	for k in data["drones"]:
-		drones[k] = int(data["drones"][k])
+	units = {"infantry": 1}
+	var saved_units: Dictionary = data.get("units", data.get("drones", {}))
+	for k in saved_units:
+		units[k] = int(saved_units[k])
 	army = {}
 	for k in data.get("army", {}):
-		army[k] = int(data["army"][k])
+		if int(data["army"][k]) > 0:
+			army[k] = int(data["army"][k])
+	training = []
+	for k in data.get("training", []):
+		training.append(str(k))
+	train_started = float(data.get("train_started", now()))
+	if int(data["version"]) == 4:
+		_add_army_buildings()
 	enemy_index = int(data.get("enemy_index", 0))
 	city_seed = int(data.get("city_seed", 7))
 	best_stars = data.get("best_stars", {})

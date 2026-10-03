@@ -1,9 +1,10 @@
 extends Node3D
 ## The player's base. Tap a pad to build or upgrade (or press Build, pick, then tap a free pad),
-## tap a floating coin or fuel drop to collect, set up the attack army in the Hangar, then
-## Attack. Settings holds language, sound, practice on your own base and dev tools.
-## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-hangar` /
-## `--screenshot-settings` to open a sheet on start.
+## tap a floating coin or fuel drop to collect, train an army (Army button or the Training
+## Camp), unlock and upgrade units in the Garage and the Hangar, then Attack. Settings holds
+## language, sound, practice on your own base and dev tools.
+## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` /
+## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-settings` to open a sheet on start.
 
 const RAID_SCENE := "res://scenes/raid/raid.tscn"
 ## Height of the view in meters (the screen is held sideways).
@@ -26,6 +27,9 @@ var coins: Array[CoinBubble] = []
 ## Countdown labels over structures being built or upgraded, by cell key.
 var timers := {}
 var open_cell: Array = []
+## Which sheet is open besides a structure's ("army", "hangar", "garage" or ""), so it can
+## be refreshed as training moves on.
+var open_sheet := ""
 ## Structure type picked from the Build menu, waiting for a free pad to be tapped.
 var placing := ""
 var marker: MeshInstance3D
@@ -41,20 +45,25 @@ func _ready() -> void:
 	hud = HomeHud.new()
 	add_child(hud)
 	hud.attack_pressed.connect(func() -> void: _go_raid("enemy"))
-	hud.hangar_pressed.connect(_open_hangar)
+	hud.army_pressed.connect(_open_army)
 	hud.build_pressed.connect(func() -> void: _open_build([]))
 	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
 	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
 	GameState.finish_ready()
+	GameState.process_training()
 	_rebuild()
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
 		_open_cell([1, 3])
 	elif args.has("--screenshot-hq"):
 		_open_cell([4, 4])
+	elif args.has("--screenshot-army"):
+		_open_army()
 	elif args.has("--screenshot-hangar"):
-		_open_hangar()
+		_open_lab("hangar")
+	elif args.has("--screenshot-garage"):
+		_open_lab("garage")
 	elif args.has("--screenshot-settings"):
 		_open_settings()
 
@@ -159,10 +168,15 @@ func _tick_second() -> void:
 		_rebuild()
 		_reopen()
 		return
+	var trained := GameState.process_training()
+	if trained > 0:
+		hud.toast(I18n.t("Training done") if GameState.training.is_empty() else I18n.t("+%d trained") % trained)
 	_update_timers()
 	_refresh_header()
 	if not open_cell.is_empty() and GameState.is_busy(GameState.structure_at(open_cell)):
 		_open_cell(open_cell)
+	elif open_sheet == "army" and hud.panel_open() and (trained > 0 or not GameState.training.is_empty()):
+		_open_army()
 
 
 func _refresh_header() -> void:
@@ -267,6 +281,7 @@ func _reopen() -> void:
 
 func _open_cell(cell: Array) -> void:
 	open_cell = cell
+	open_sheet = ""
 	marker.visible = true
 	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
 	var s := GameState.structure_at(cell)
@@ -310,6 +325,7 @@ func _build_menu(cell: Array) -> Control:
 ## The Build button: pick something, then tap a free pad for it.
 func _open_build(cell: Array) -> void:
 	open_cell = []
+	open_sheet = ""
 	marker.visible = false
 	hud.show_content(I18n.t("Build"), _build_menu(cell))
 
@@ -322,6 +338,7 @@ func _start_placing(type: String) -> void:
 
 func _open_settings() -> void:
 	open_cell = []
+	open_sheet = ""
 	marker.visible = false
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
@@ -407,8 +424,10 @@ func _structure_sheet(cell: Array, s: Dictionary) -> Control:
 	var extra := HBoxContainer.new()
 	extra.add_theme_constant_override("separation", 12)
 	box.add_child(extra)
-	if type == "hangar":
-		HomeHud.make_button(extra, I18n.t("Open hangar"), 22, 72).pressed.connect(_open_hangar)
+	if type == "hangar" or type == "garage":
+		HomeHud.make_button(extra, I18n.t("Unlock and upgrade units"), 22, 72).pressed.connect(func() -> void: _open_lab(type))
+	if type == "camp" or type == "quarters":
+		HomeHud.make_button(extra, I18n.t("Train army"), 22, 72).pressed.connect(_open_army)
 	if type != "hq" and not GameState.is_busy(s):
 		HomeHud.make_button(extra, I18n.t("Remove (no refund)"), 22, 72).pressed.connect(func() -> void: _do_remove(cell))
 	return box
@@ -432,7 +451,13 @@ func _stat_lines(type: String, lvl: int) -> Array:
 		"tank":
 			return [[I18n.t("Fuel cap bonus"), "+%d" % (600 * lvl)]]
 		"hangar":
-			return [[I18n.t("Army space"), str(Catalog.army_capacity(lvl))], [I18n.t("Drone max level"), str(lvl)]]
+			return [[I18n.t("Drone max level"), str(lvl)]]
+		"garage":
+			return [[I18n.t("Soldier and tank max level"), str(lvl)]]
+		"quarters":
+			return [[I18n.t("Army space"), str(Catalog.quarters_space(lvl))]]
+		"camp":
+			return [[I18n.t("Training speed"), "x%.2f" % (1.0 + 0.25 * (lvl - 1))]]
 	var st := Catalog.defense_stats(type, lvl)
 	var lines := [[I18n.t("Range"), I18n.t("%.1f m") % st["radius"]]]
 	match type:
@@ -456,89 +481,199 @@ func _hq_unlocks(lvl: int) -> String:
 	return ", ".join(parts)
 
 
-# ---------------------------------------------------------------- hangar
+# ---------------------------------------------------------------- army and training
 
-func _open_hangar() -> void:
-	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 18)
-	var cap := GameState.army_capacity()
-	var used := GameState.army_used()
-	HomeHud.make_label(content, I18n.t("Next attack army: %d / %d space") % [used, cap], 28, GOLD)
-	_wrap(HomeHud.make_label(content, I18n.t("Pick how many of each drone you take into battle. Bigger drones take more space. Upgrade the Hangar for more space."), 21, SOFT))
-	for type in Catalog.DRONE_ORDER:
-		content.add_child(_drone_card(type))
-	hud.show_content(I18n.t("Drone Hangar"), content)
-
-
-func _drone_card(type: String) -> Control:
-	var def: Dictionary = Catalog.DRONES[type]
-	var owned: bool = GameState.drones.has(type)
-	var lvl := int(GameState.drones.get(type, 1))
-	var st := Catalog.drone_stats(type, lvl)
-	var top := Catalog.drone_stats("heavy", Catalog.MAX_LEVEL)
-
-	var card := _card(owned)
+## The Army sheet: what is trained and waiting, the training queue, and a card per unit to
+## train more. Opens from the Army button, the Training Camp and the Quarters.
+func _open_army() -> void:
+	open_cell = []
+	open_sheet = "army"
+	marker.visible = false
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	card.add_child(box)
-	box.add_child(_drone_preview(type, st, owned))
-
+	box.add_theme_constant_override("separation", 14)
 	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 18)
 	box.add_child(head)
-	var name_label := HomeHud.make_label(head, Catalog.display_name(type), 32, def["color"] if owned else Color(0.6, 0.62, 0.66))
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	HomeHud.make_label(head, I18n.t("Lv %d") % lvl if owned else I18n.t("Locked"), 26, SOFT)
-	_wrap(HomeHud.make_label(box, I18n.t(def["role"]), 21, SOFT))
+	var space := HomeHud.make_label(head, I18n.t("Army %d / %d space") % [GameState.army_used(), GameState.army_capacity()], 28, GOLD)
+	space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if GameState.queued_space() > 0:
+		HomeHud.make_label(head, I18n.t("+%d in training") % GameState.queued_space(), 24, SOFT)
+	_wrap(HomeHud.make_label(box, _army_summary(), 22))
 
-	HomeHud.stat_bar(box, I18n.t("Health %d") % int(st["health"]), st["health"], 700.0, Color(0.35, 0.85, 0.45))
-	HomeHud.stat_bar(box, I18n.t("Speed %.1f") % st["speed"], st["speed"], 14.0, Color(0.35, 0.75, 1.0))
-	HomeHud.stat_bar(box, I18n.t("Damage %d/s") % int(st["dps"]), st["dps"], float(top["dps"]), Color(1.0, 0.55, 0.3))
-	HomeHud.make_label(box, I18n.t("Takes %d space") % int(def["housing"]), 21, SOFT)
+	if not GameState.training.is_empty():
+		var queue := _card(true)
+		box.add_child(queue)
+		var qbox := VBoxContainer.new()
+		qbox.add_theme_constant_override("separation", 10)
+		queue.add_child(qbox)
+		var now_type: String = GameState.training[0]
+		var line := I18n.t("Training %s  ·  %s") % [Catalog.display_name(now_type), HomeHud.clock(GameState.train_head_left())]
+		if GameState.training.size() > 1:
+			line += "  ·  " + I18n.t("%d more after it") % (GameState.training.size() - 1)
+		_wrap(HomeHud.make_label(qbox, line, 24))
+		var gems := GameState.training_speedup_cost()
+		var fast := HomeHud.make_button(qbox, I18n.t("Finish training now  ·  %d gems") % gems, 24, 72)
+		var can := GameState.infinite_coins or GameState.gems >= gems
+		fast.disabled = not can
+		_gold(fast, can)
+		fast.pressed.connect(func() -> void:
+			if GameState.speed_up_training():
+				Audio.play("build")
+				_refresh_header()
+				_open_army())
 
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	box.add_child(grid)
+	for type in Catalog.UNIT_ORDER:
+		grid.add_child(_train_card(type))
+	hud.show_content(I18n.t("Army"), box)
+
+
+## "Infantry Squad x2  ·  Courier x2", or a hint when the army is empty.
+func _army_summary() -> String:
+	var parts := []
+	for type in Catalog.UNIT_ORDER:
+		if int(GameState.army.get(type, 0)) > 0:
+			parts.append("%s x%d" % [Catalog.display_name(type), int(GameState.army[type])])
+	if parts.is_empty():
+		return I18n.t("No army yet. Train units below; they wait in the Quarters for the next attack.")
+	return I18n.t("Ready: %s") % "  ·  ".join(parts)
+
+
+func _train_card(type: String) -> Control:
+	var def := Catalog.unit_def(type)
+	var owned: bool = GameState.units.has(type)
+	var card := _card(owned)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	card.add_child(box)
+	HomeHud.make_label(box, Catalog.display_name(type), 26, def["color"] if owned else Color(0.6, 0.62, 0.66))
+	if not owned:
+		var where := I18n.t("Unlock it in the Garage") if Catalog.is_ground(type) else I18n.t("Unlock it in the Hangar")
+		_wrap(HomeHud.make_label(box, where, 20, SOFT))
+		return card
+	HomeHud.make_label(box, I18n.t("%d space  ·  %d fuel  ·  %s") % [int(def["housing"]), Catalog.train_fuel(type), HomeHud.clock(Catalog.train_seconds(type, GameState.camp_level()))], 20, SOFT)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("separation", 8)
 	box.add_child(row)
-	var reason := GameState.drone_block_reason(type)
-	if owned:
-		var count := int(GameState.army.get(type, 0))
-		var minus := HomeHud.make_button(row, "-", 34, 76)
-		minus.custom_minimum_size.x = 76
-		minus.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		minus.disabled = count <= 0
-		minus.pressed.connect(func() -> void: _set_army(type, count - 1))
-		var in_army := HomeHud.make_label(row, I18n.t("In army: %d") % count, 26)
-		in_army.custom_minimum_size.x = 170
-		in_army.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		in_army.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		in_army.size_flags_vertical = Control.SIZE_FILL
-		var plus := HomeHud.make_button(row, "+", 34, 76)
-		plus.custom_minimum_size.x = 76
-		plus.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		plus.disabled = GameState.army_used() + int(def["housing"]) > GameState.army_capacity()
-		plus.pressed.connect(func() -> void: _set_army(type, count + 1))
-		var up_text := I18n.t("Max level")
-		if lvl < Catalog.MAX_LEVEL:
-			up_text = I18n.t("Upgrade  ·  %d fuel") % Catalog.drone_upgrade_cost(type, lvl)
-		var up := HomeHud.make_button(row, up_text, 20, 76)
-		up.disabled = reason != ""
-		_gold(up, reason == "")
-		up.pressed.connect(func() -> void: _do_drone(type))
-	else:
-		var unlock := HomeHud.make_button(row, I18n.t("Unlock  ·  %d fuel") % int(def["unlock"]), 22, 76)
-		unlock.disabled = reason != ""
-		_gold(unlock, reason == "")
-		unlock.pressed.connect(func() -> void: _do_drone(type))
-	if reason != "" and not (owned and lvl >= Catalog.MAX_LEVEL):
-		_wrap(HomeHud.make_label(box, reason, 21, BAD))
+	var queued := GameState.training.count(type)
+	var minus := HomeHud.make_button(row, "-", 30, 64)
+	minus.custom_minimum_size.x = 64
+	minus.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	minus.disabled = queued <= 0
+	minus.pressed.connect(func() -> void:
+		GameState.cancel_training(type)
+		_refresh_header()
+		_open_army())
+	var count := HomeHud.make_label(row, I18n.t("Queued %d") % queued, 22)
+	count.custom_minimum_size.x = 110
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	count.size_flags_vertical = Control.SIZE_FILL
+	var reason := GameState.train_block_reason(type)
+	var plus := HomeHud.make_button(row, I18n.t("Train"), 24, 64)
+	plus.disabled = reason != ""
+	_gold(plus, reason == "")
+	plus.pressed.connect(func() -> void:
+		if GameState.train(type):
+			Audio.play("click")
+			_refresh_header()
+			_open_army())
+	if reason != "":
+		_wrap(HomeHud.make_label(box, reason, 19, BAD))
 	return card
 
 
-## A small 3D stage with the drone hovering on a turntable and looping its signature move.
-## Every preview uses the same camera distance, so the size difference between drones is real.
-func _drone_preview(type: String, stats: Dictionary, owned: bool) -> Control:
+# ---------------------------------------------------------------- hangar and garage
+
+## The Hangar (drones) or the Garage (infantry, engineers, tanks): unlock and upgrade units.
+func _open_lab(lab: String) -> void:
+	open_cell = []
+	open_sheet = lab
+	marker.visible = false
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 18)
+	var lab_level := GameState.level_of(lab)
+	var hint := I18n.t("Unlock and upgrade drones here. The Hangar's level caps their level.") if lab == "hangar" \
+		else I18n.t("Unlock and upgrade soldiers and tanks here. The Garage's level caps their level.")
+	_wrap(HomeHud.make_label(content, hint, 21, SOFT))
+	if lab_level <= 0:
+		_wrap(HomeHud.make_label(content, I18n.t("Build it first: tap a free pad or press Build."), 22, BAD))
+	var order: Array = Catalog.DRONE_ORDER if lab == "hangar" else Catalog.GROUND_ORDER
+	for type in order:
+		content.add_child(_unit_card(type, order))
+	hud.show_content(Catalog.display_name(lab), content)
+
+
+func _unit_card(type: String, order: Array) -> Control:
+	var def := Catalog.unit_def(type)
+	var owned: bool = GameState.units.has(type)
+	var lvl := int(GameState.units.get(type, 1))
+	var st := Catalog.unit_stats(type, lvl)
+	var ground := Catalog.is_ground(type)
+	# Bars are scaled to the strongest unit in this lab at max level, so they compare fairly.
+	var top_health := 1.0
+	var top_dps := 1.0
+	for other in order:
+		var o := Catalog.unit_stats(other, Catalog.MAX_LEVEL)
+		top_health = maxf(top_health, float(o["health"]) * float(o.get("squad", 1)))
+		top_dps = maxf(top_dps, float(o["dps"]) * float(o.get("squad", 1)))
+	var squad := float(st.get("squad", 1))
+
+	var card := _card(owned)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	card.add_child(row)
+	var preview := _unit_preview(type, st, owned)
+	preview.custom_minimum_size = Vector2(240, 220)
+	row.add_child(preview)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(box)
+
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var name_label := HomeHud.make_label(head, Catalog.display_name(type), 30, def["color"] if owned else Color(0.6, 0.62, 0.66))
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	HomeHud.make_label(head, I18n.t("Lv %d") % lvl if owned else I18n.t("Locked"), 24, SOFT)
+	_wrap(HomeHud.make_label(box, I18n.t(def["role"]), 20, SOFT))
+	HomeHud.stat_bar(box, I18n.t("Health %d") % int(float(st["health"]) * squad), float(st["health"]) * squad, top_health, Color(0.35, 0.85, 0.45))
+	HomeHud.stat_bar(box, I18n.t("Speed %.1f") % st["speed"], st["speed"], 14.0 if not ground else 6.0, Color(0.35, 0.75, 1.0))
+	HomeHud.stat_bar(box, I18n.t("Damage %d/s") % int(float(st["dps"]) * squad), float(st["dps"]) * squad, top_dps, Color(1.0, 0.55, 0.3))
+	var facts := I18n.t("Takes %d space") % int(def["housing"])
+	if ground and int(st.get("squad", 1)) > 1:
+		facts += "  ·  " + I18n.t("%d soldiers") % int(st["squad"])
+	HomeHud.make_label(box, facts, 20, SOFT)
+
+	var reason := GameState.unit_block_reason(type)
+	if owned:
+		var up_text := I18n.t("Max level")
+		if lvl < Catalog.MAX_LEVEL:
+			up_text = I18n.t("Upgrade  ·  %d fuel") % Catalog.unit_upgrade_cost(type, lvl)
+		var up := HomeHud.make_button(box, up_text, 22, 64)
+		up.disabled = reason != ""
+		_gold(up, reason == "")
+		up.pressed.connect(func() -> void: _do_unit(type))
+	else:
+		var unlock := HomeHud.make_button(box, I18n.t("Unlock  ·  %d fuel") % int(def["unlock"]), 22, 64)
+		unlock.disabled = reason != ""
+		_gold(unlock, reason == "")
+		unlock.pressed.connect(func() -> void: _do_unit(type))
+	if reason != "" and not (owned and lvl >= Catalog.MAX_LEVEL):
+		_wrap(HomeHud.make_label(box, reason, 20, BAD))
+	return card
+
+
+## A small 3D stage with the unit on a turntable looping its signature move. Drones share one
+## camera distance and ground units another, so sizes compare honestly within each lab.
+func _unit_preview(type: String, stats: Dictionary, owned: bool) -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
-	frame.custom_minimum_size = Vector2(0, 230)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
@@ -561,16 +696,28 @@ func _drone_preview(type: String, stats: Dictionary, owned: bool) -> Control:
 	vp.add_child(light)
 	var stage := Node3D.new()
 	vp.add_child(stage)
-	MeshKit.add(stage, MeshKit.cyl(3.4, 3.4, 0.05, 48), MeshKit.mat(Color(0.12, 0.14, 0.17), 0.95))
 	var cam := Camera3D.new()
 	cam.fov = 32.0
 	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(0, 2.4, 7.6), Vector3(0, 1.3, 0))
-	var drone := Drone.new()
-	drone.configure(stats)
-	drone.showcase = true
-	drone.position = Vector3(0, 1.6, 0)
-	vp.add_child(drone)
+	if Catalog.is_ground(type):
+		MeshKit.add(stage, MeshKit.cyl(4.2, 4.2, 0.05, 48), MeshKit.mat(Color(0.2, 0.24, 0.16), 0.95))
+		cam.look_at_from_position(Vector3(0, 6.0, 15.0), Vector3(0, 1.2, 0))
+		var count := int(stats.get("squad", 1))
+		for i in count:
+			var u := GroundUnit.new()
+			u.configure(stats)
+			u.showcase = true
+			u.kneels = i % 2 == 0
+			u.position = Vector3((i - (count - 1) / 2.0) * 1.6, 0, (i % 2) * -1.0)
+			vp.add_child(u)
+	else:
+		MeshKit.add(stage, MeshKit.cyl(3.4, 3.4, 0.05, 48), MeshKit.mat(Color(0.12, 0.14, 0.17), 0.95))
+		cam.look_at_from_position(Vector3(0, 2.4, 7.6), Vector3(0, 1.3, 0))
+		var drone := Drone.new()
+		drone.configure(stats)
+		drone.showcase = true
+		drone.position = Vector3(0, 1.6, 0)
+		vp.add_child(drone)
 	if not owned:
 		frame.modulate = Color(0.55, 0.55, 0.6)
 	return frame
@@ -630,6 +777,7 @@ func _do_speed_up(cell: Array) -> void:
 ## Who is working on what, and the button to hire one more worker for gems.
 func _open_workers() -> void:
 	open_cell = []
+	open_sheet = ""
 	marker.visible = false
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
@@ -659,12 +807,12 @@ func _do_remove(cell: Array) -> void:
 		hud.hide_panel()
 
 
-func _do_drone(type: String) -> void:
-	if GameState.upgrade_drone(type):
+func _do_unit(type: String) -> void:
+	if GameState.upgrade_unit(type):
 		Audio.play("build")
-		hud.toast(I18n.t("%s Lv %d") % [Catalog.display_name(type), int(GameState.drones[type])])
+		hud.toast(I18n.t("%s Lv %d") % [Catalog.display_name(type), int(GameState.units[type])])
 		_refresh_header()
-		_open_hangar()
+		_open_lab(Catalog.unit_lab(type))
 
 
 ## Switches every text in the game between Hebrew and English; the scene reloads to redraw.
@@ -679,15 +827,10 @@ func _toggle_infinite() -> void:
 	_open_settings()
 
 
-func _set_army(type: String, count: int) -> void:
-	GameState.set_army_count(type, count)
-	_open_hangar()
-
-
 func _go_raid(target: String) -> void:
 	if GameState.army_used() <= 0:
-		hud.toast(I18n.t("Add drones to your army in the Hangar first"))
-		_open_hangar()
+		hud.toast(I18n.t("Train an army first"))
+		_open_army()
 		return
 	GameState.raid_target = target
 	get_tree().change_scene_to_file(RAID_SCENE)

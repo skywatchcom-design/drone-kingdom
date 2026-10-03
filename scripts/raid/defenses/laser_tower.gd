@@ -1,6 +1,7 @@
 class_name LaserTower
 extends Defense
 ## Turret that turns toward the nearest drone and burns it while the beam is on target.
+## Until the anti-tank gun and machine-gun nest arrive, it also burns soldiers and tanks.
 
 const TURN_SPEED := 2.6
 const AIM_TOLERANCE_DEG := 10.0
@@ -11,6 +12,7 @@ var _angle := 0.0
 
 
 func _build() -> void:
+	hits_ground = true
 	MeshKit.add(self, MeshKit.sphere(0.9, 16), MeshKit.mat(Color(0.3, 0.32, 0.36), 0.3, 0.7), Vector3(0, head_y, 0))
 	_pivot = Node3D.new()
 	_pivot.position = Vector3(0, head_y, 0)

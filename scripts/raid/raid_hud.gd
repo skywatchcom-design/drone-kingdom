@@ -67,8 +67,8 @@ func _ready() -> void:
 	bottom.anchor_bottom = 1.0
 	bottom.offset_left = 16.0
 	bottom.offset_right = -16.0
-	bottom.offset_top = -150.0
-	bottom.offset_bottom = -30.0
+	bottom.offset_top = -120.0
+	bottom.offset_bottom = -20.0
 	bottom.add_theme_constant_override("separation", 10)
 	root.add_child(bottom)
 	_cards = HBoxContainer.new()
@@ -139,8 +139,8 @@ func set_army(army: Dictionary, names: Dictionary, selected: String) -> void:
 		child.queue_free()
 	_card_buttons.clear()
 	for type in army:
-		var b := HomeHud.make_button(_cards, "", 24, 120)
-		b.custom_minimum_size.x = 190
+		var b := HomeHud.make_button(_cards, "", 20, 96)
+		b.custom_minimum_size.x = 140
 		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		b.toggle_mode = true
 		b.pressed.connect(func() -> void: unit_selected.emit(type))

@@ -8,6 +8,8 @@ var roof_y := 0.0
 var head_y := 0.0
 var stats := {}
 var disabled := false
+## Whether this defense can hit soldiers and tanks; most only hit drones.
+var hits_ground := false
 var _ring: MeshInstance3D
 var _mast: MeshInstance3D
 
@@ -41,11 +43,11 @@ func head_position() -> Vector3:
 	return global_position + Vector3(0, head_y, 0)
 
 
-## Closest living drone in range, or null.
-func nearest_drone(drones: Array) -> Drone:
-	var best: Drone = null
+## Closest living unit in range, or null.
+func nearest_drone(drones: Array) -> Unit:
+	var best: Unit = null
 	var best_d := INF
-	for d: Drone in drones:
+	for d: Unit in drones:
 		if d.dead:
 			continue
 		var dist := flat_distance(d.global_position)
@@ -55,7 +57,8 @@ func nearest_drone(drones: Array) -> Drone:
 	return best
 
 
-## Called every frame with the drones currently in the air (empty at home).
+## Called every frame with the units it can hit (empty at home): drones in the air, plus
+## ground units when hits_ground is on.
 func tick(_delta: float, _drones: Array) -> void:
 	pass
 

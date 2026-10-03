@@ -1,9 +1,11 @@
 extends Node3D
-## A Clash-style attack. Pick a drone card, tap outside the base to release it, and the
-## drones take it from there: each flies to the structure its role prefers and works it
-## down with its beam while the defenses fight back. Stars for 50%, the Command Tower,
-## and 100%. Loot comes out of every generator, silo and Command Tower you knock out.
-## Run with `-- --autoplay` to deploy the whole army automatically (used for screenshots).
+## A Clash-style attack. Pick a unit card, tap outside the base to send it in, and the units
+## take it from there: each goes for the structure its role prefers while the defenses
+## fight back. Drones fly over everything; soldiers and tanks walk, and the fence stops them:
+## they come in through the gate or through a hole the engineers blow. Stars for 50%, the
+## Command Tower, and 100%. Loot comes out of every generator, pump, store and Command Tower.
+## Deployed units are used up (practice runs on your own base are free).
+## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots).
 
 enum Phase { BATTLE, RESULT }
 
@@ -14,6 +16,10 @@ const DEPLOY_CLEARANCE := 6.5
 const MAP_LIMIT := 46.0
 const TAP_SLOP := 24.0
 const PAN_LIMIT := 30.0
+## Half the footprint of a structure, for ground units' firing range and avoidance.
+const STRUCTURE_RADIUS := 2.7
+## How wide a hole the engineers' charge blows in the fence.
+const BREACH_WIDTH := 6.0
 const BOLT_COLORS := {
 	"courier": Color(0.4, 0.95, 1.0),
 	"scout": Color(1.0, 0.75, 0.25),
@@ -31,8 +37,15 @@ var hud: RaidHud
 ## treat fuel buildings as loot too.
 var targets: Array[Dictionary] = []
 var drones: Array[Drone] = []
+var ground: Array[GroundUnit] = []
 var army := {}
+## Units sent in, by type; they are used up when the battle ends.
+var deployed := {}
 var drone_names := {}
+## Points on the fence line where ground units can cross: the gate, then any breaches.
+var openings: Array = [City.gate_point()]
+## Breaches an engineer is on the way to blow, so the other engineers don't double up.
+var pending_breaches: Array = []
 var selected := ""
 var started := false
 var time_left := Catalog.BATTLE_SECONDS
@@ -92,10 +105,10 @@ func _start() -> void:
 
 	var plan: Dictionary = GameState.army
 	if autoplay:
-		plan = {"courier": 2, "scout": 3, "heavy": 1}
-	for type in Catalog.DRONE_ORDER:
+		plan = {"infantry": 3, "engineers": 1, "armor": 1, "courier": 2, "scout": 2, "heavy": 1}
+	for type in Catalog.UNIT_ORDER:
 		var n := int(plan.get(type, 0))
-		if n > 0 and (autoplay or GameState.drones.has(type)):
+		if n > 0:
 			army[type] = n
 			drone_names[type] = Catalog.display_name(type)
 	selected = _first_available()
@@ -104,7 +117,7 @@ func _start() -> void:
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
 	_update_progress()
-	hud.set_status(I18n.t("Tap outside the base to release drones"))
+	hud.set_status(I18n.t("Tap outside the fence to send in your army"))
 	if autoplay:
 		_autoplay_deploy()
 
@@ -149,7 +162,19 @@ func _try_deploy(screen_pos: Vector2) -> void:
 	if phase != Phase.BATTLE:
 		return
 	if selected == "" or int(army.get(selected, 0)) <= 0:
-		hud.set_status(I18n.t("No drones left to release"))
+		hud.set_status(I18n.t("No units left to send"))
+		return
+	if Catalog.is_ground(selected):
+		var ground_hit = Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
+		if ground_hit == null:
+			return
+		var g: Vector3 = ground_hit
+		if absf(g.x) > MAP_LIMIT or absf(g.z) > MAP_LIMIT:
+			return
+		if absf(g.x) < City.YARD + 1.5 and absf(g.z) < City.YARD + 1.5:
+			hud.set_status(I18n.t("Ground units start outside the fence."))
+			return
+		_deploy_ground(selected, g)
 		return
 	var hit = Plane(Vector3.UP, TRAVEL_ALT).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
 	if hit == null:
@@ -166,7 +191,8 @@ func _try_deploy(screen_pos: Vector2) -> void:
 
 func _deploy(type: String, p: Vector3) -> void:
 	army[type] = int(army[type]) - 1
-	var stats := GameState.drone_stats_for(type)
+	deployed[type] = int(deployed.get(type, 0)) + 1
+	var stats := GameState.unit_stats_for(type)
 	var d := Drone.new()
 	d.configure(stats)
 	d.kind = type
@@ -184,12 +210,53 @@ func _deploy(type: String, p: Vector3) -> void:
 	hud.set_status("")
 
 
+## A card's worth of ground units: an infantry squad of four, two engineers, or one tank,
+## lined up facing the base.
+func _deploy_ground(type: String, p: Vector3) -> void:
+	army[type] = int(army[type]) - 1
+	deployed[type] = int(deployed.get(type, 0)) + 1
+	var stats := GameState.unit_stats_for(type)
+	var count := int(stats.get("squad", 1))
+	var facing := atan2(-p.x, -p.z)
+	var right := Vector3(cos(facing), 0, -sin(facing))
+	var back := -Vector3(sin(facing), 0, cos(facing))
+	var offsets := [Vector3.ZERO]
+	if count == 4:
+		offsets = [Vector3.ZERO, right * -1.4 + back * 1.2, right * 1.4 + back * 1.2, back * 2.4]
+	elif count == 2:
+		offsets = [right * -0.9, right * 0.9]
+	for i in count:
+		var u := GroundUnit.new()
+		u.configure(stats)
+		u.kneels = i % 2 == 0
+		u.invulnerable = false
+		u.rotation.y = facing
+		u.position = p + offsets[i]
+		level.add_child(u)
+		ground.append(u)
+		u.crashed.connect(func() -> void:
+			Audio.play("tank_down" if u.is_tank() else "soldier_down", -4.0)
+			u.knock_out(level))
+	Audio.play("deploy", -3.0)
+	Audio.buzz(15)
+	started = true
+	if int(army[type]) <= 0:
+		selected = _first_available()
+	hud.update_army(army, drone_names, selected)
+	hud.set_status("")
+
+
 func _autoplay_deploy() -> void:
 	var spots := [Vector3(30, TRAVEL_ALT, 34), Vector3(36, TRAVEL_ALT, 24), Vector3(34, TRAVEL_ALT, 30)]
+	var ground_spots := [Vector3(12, 0, 44), Vector3(-22, 0, 42), Vector3(26, 0, 42), Vector3(-6, 0, 45)]
 	var i := 0
 	for type in army.keys():
 		while int(army[type]) > 0:
-			_deploy(type, spots[i % spots.size()] + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)))
+			if Catalog.is_ground(type):
+				var spot: Vector3 = Vector3(-44, 0, 4) if type == "engineers" else ground_spots[i % ground_spots.size()]
+				_deploy_ground(type, spot)
+			else:
+				_deploy(type, spots[i % spots.size()] + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)))
 			i += 1
 
 
@@ -201,10 +268,17 @@ func _process(delta: float) -> void:
 		d.jammed = false
 		if not d.dead:
 			alive.append(d)
+	var alive_ground: Array = []
+	for u in ground:
+		if not u.dead:
+			alive_ground.append(u)
+	var everyone := alive + alive_ground
 	for t in targets:
 		if t["destroyed"] or t["defense"] == null:
 			continue
-		(t["defense"] as Defense).tick(delta, alive if phase == Phase.BATTLE else [])
+		var defense: Defense = t["defense"]
+		var in_reach: Array = everyone if defense.hits_ground else alive
+		defense.tick(delta, in_reach if phase == Phase.BATTLE else [])
 	if phase == Phase.BATTLE:
 		if started:
 			time_left -= delta
@@ -212,11 +286,251 @@ func _process(delta: float) -> void:
 		Audio.hum(minf(1.0, alive.size() / 5.0))
 		for d: Drone in alive:
 			_drone_ai(d, delta)
+		for u: GroundUnit in alive_ground:
+			_ground_ai(u, delta, alive_ground)
 		_check_end(delta)
 	else:
 		for d: Drone in alive:
 			d.steer(Vector3.ZERO, delta)
+		for u: GroundUnit in alive_ground:
+			u.walk(Vector3.ZERO, delta)
 	_update_bars()
+
+
+# ---------------------------------------------------------------- ground units
+
+func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array) -> void:
+	if u.kind == "engineers" and u.breach_state != "done":
+		_engineer_breach(u, delta, alive_ground)
+		return
+	if u.target < 0 or targets[u.target]["destroyed"]:
+		var prefers := "any" if u.prefers == "fence" else u.prefers
+		u.target = RaidRules.pick_target(prefers, u.position, targets)
+	if u.target < 0:
+		u.walk(Vector3.ZERO, delta)
+		return
+	var t := targets[u.target]
+	var top: Vector3 = t["top"]
+	var reach := STRUCTURE_RADIUS + u.attack_range
+	# Soldiers outside the fence can shoot over it; engineers have to get right up to a building.
+	if PathUtils.flat_distance(u.position, top) <= reach:
+		u.walk(Vector3.ZERO, delta)
+		u.aim_at(top, delta)
+		u.fire_cooldown -= delta
+		if u.fire_cooldown <= 0.0 and u.aimed_at(top):
+			u.fire_cooldown = u.fire_interval * randf_range(0.85, 1.15)
+			_ground_fire(u, u.target)
+		return
+	var waypoint := RaidRules.ground_waypoint(u.position, top, City.YARD, openings)
+	_move_ground(u, waypoint, delta, alive_ground)
+
+
+## Walks toward `goal`, steering around standing buildings and other units, and never
+## through the fence except at an opening.
+func _move_ground(u: GroundUnit, goal: Vector3, delta: float, alive_ground: Array) -> void:
+	var to := goal - u.position
+	to.y = 0.0
+	var desired := to.normalized() * u.max_speed * clampf(to.length() / 1.5, 0.0, 1.0)
+	var r := u.body_radius()
+	for t in targets:
+		if t["destroyed"]:
+			continue
+		var away: Vector3 = u.position - (t["top"] as Vector3)
+		away.y = 0.0
+		var d := away.length()
+		var keep := STRUCTURE_RADIUS + r + 0.4
+		if d < keep and d > 0.01:
+			desired += away / d * (keep - d) * 4.0
+	for other: GroundUnit in alive_ground:
+		if other == u:
+			continue
+		var away := u.position - other.position
+		away.y = 0.0
+		var d := away.length()
+		var keep := r + other.body_radius()
+		if d < keep and d > 0.01:
+			desired += away / d * (keep - d) * 3.0
+	var before := u.position
+	u.walk(desired, delta)
+	if City.inside_yard(before) != City.inside_yard(u.position) and not _near_opening(u.position):
+		u.position = before
+		u.velocity = Vector3.ZERO
+
+
+func _near_opening(p: Vector3) -> bool:
+	for o: Vector3 in openings:
+		if PathUtils.flat_distance(p, o) < BREACH_WIDTH / 2.0 - 0.6:
+			return true
+	return false
+
+
+## Engineers: run to the nearest stretch of fence, kneel and plant a charge, fall back, and
+## blow a hole in it. If another engineer is already on it, wait for the hole.
+func _engineer_breach(u: GroundUnit, delta: float, alive_ground: Array) -> void:
+	match u.breach_state:
+		"":
+			var spot := City.fence_point(u.position)
+			if City.inside_yard(u.position) or _opening_near(spot, openings):
+				u.breach_state = "done"
+				return
+			if _opening_near(spot, pending_breaches):
+				u.breach_state = "waiting"
+				return
+			u.breach_point = spot
+			pending_breaches.append(spot)
+			u.breach_state = "going"
+		"waiting":
+			u.walk(Vector3.ZERO, delta)
+			if _opening_near(City.fence_point(u.position), openings):
+				u.breach_state = "done"
+		"going":
+			var stand := u.breach_point + RaidRules.fence_normal(u.breach_point) * 1.0
+			if PathUtils.flat_distance(u.position, stand) < 0.5:
+				u.breach_state = "planting"
+				u.breach_timer = 2.0
+				u.walk(Vector3.ZERO, delta)
+				_plant_charge(u)
+			else:
+				_move_ground(u, stand, delta, alive_ground)
+		"planting":
+			u.walk(Vector3.ZERO, delta)
+			u.aim_at(u.breach_point, delta)
+			u.breach_timer -= delta
+			if u.breach_timer <= 0.0:
+				u.breach_state = "clear"
+				u.breach_timer = 1.6
+		"clear":
+			_move_ground(u, u.breach_point + RaidRules.fence_normal(u.breach_point) * 6.0, delta, alive_ground)
+			u.breach_timer -= delta
+			if u.breach_timer <= 0.0:
+				_blow_breach(u.breach_point)
+				u.breach_state = "done"
+
+
+func _opening_near(p: Vector3, list: Array) -> bool:
+	for o: Vector3 in list:
+		if PathUtils.flat_distance(p, o) < BREACH_WIDTH:
+			return true
+	return false
+
+
+## A satchel on the fence with a blinking red light, until it goes off.
+func _plant_charge(u: GroundUnit) -> void:
+	var charge := Node3D.new()
+	level.add_child(charge)
+	charge.position = u.breach_point + Vector3(0, 0.6, 0)
+	MeshKit.add(charge, MeshKit.box(Vector3(0.6, 0.45, 0.35)), MeshKit.mat(Color(0.23, 0.23, 0.18), 0.7))
+	var lamp := MeshKit.add(charge, MeshKit.sphere(0.12, 8), MeshKit.glow(Color(1.0, 0.16, 0.16)), Vector3(0, 0.32, 0))
+	var tween := create_tween().set_loops(12)
+	tween.tween_callback(func() -> void:
+		lamp.visible = not lamp.visible
+		Audio.play("charge", -14.0))
+	tween.tween_interval(0.15)
+	charge.set_meta("point", u.breach_point)
+	charge.add_to_group("charges")
+
+
+func _blow_breach(point: Vector3) -> void:
+	for charge in get_tree().get_nodes_in_group("charges"):
+		if (charge.get_meta("point") as Vector3).is_equal_approx(point):
+			charge.queue_free()
+	Audio.play("breach")
+	Audio.buzz(80)
+	var pieces := city.breach(point, BREACH_WIDTH)
+	openings.append(point)
+	pending_breaches.erase(point)
+	_impact(point + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2))
+	_impact(point + Vector3(0, 1.6, 0), Color(1.0, 1.0, 0.9))
+	_dust_ring(point + Vector3(0, 0.1, 0), 7.0, 1.0)
+	var smoke := MeshKit.add(level, MeshKit.sphere(1.2, 10), MeshKit.glow(Color(0.35, 0.33, 0.3), 0.7), point + Vector3(0, 1.5, 0))
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var st := create_tween()
+	st.set_parallel(true)
+	st.tween_property(smoke, "scale", Vector3.ONE * 4.0, 1.4)
+	st.tween_property(smoke, "position:y", point.y + 5.0, 1.4)
+	st.tween_property(smoke.material_override, "albedo_color:a", 0.0, 1.4)
+	st.chain().tween_callback(smoke.queue_free)
+	# Bits of fence fly off and land inside.
+	var wood := MeshKit.mat(Color(0.5, 0.36, 0.22), 0.9)
+	var n := RaidRules.fence_normal(point)
+	for p: Vector3 in pieces:
+		var bit := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.5, 1.6), 0.12, 0.12)), wood, p + Vector3(0, 0.7, 0))
+		var land := p - n * randf_range(2.0, 5.0) + Vector3(randf_range(-1.5, 1.5), 0.08, randf_range(-1.5, 1.5))
+		var bt := create_tween()
+		bt.set_parallel(true)
+		bt.tween_property(bit, "position", Vector3(land.x, 0.08, land.z), 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		bt.tween_property(bit, "rotation", Vector3(randf() * 6.0, randf() * 6.0, randf() * 6.0), 0.7)
+
+
+## One shot from a soldier or the tank, or an engineer's demolition charge.
+func _ground_fire(u: GroundUnit, index: int) -> void:
+	var t := targets[index]
+	var top: Vector3 = t["top"]
+	var damage := u.dps * u.fire_interval
+	u.on_fire()
+	match u.kind:
+		"armor":
+			var from := u.fire_origin()
+			var hit := top + Vector3(randf_range(-1.0, 1.0), randf_range(1.0, 2.2), randf_range(-1.0, 1.0))
+			Audio.play("cannon", -2.0)
+			Audio.buzz(30)
+			_muzzle_flash(from, 0.9)
+			_dust_ring(Vector3(from.x, 0.1, from.z), 3.0, 0.6)
+			var shell := MeshKit.add(level, MeshKit.sphere(0.3, 8), MeshKit.glow(Color(1.0, 0.8, 0.4)), from)
+			shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_tracer(from, hit, Color(1.0, 0.76, 0.35))
+			var tween := create_tween()
+			tween.tween_property(shell, "global_position", hit, 0.15)
+			tween.tween_callback(func() -> void:
+				shell.queue_free()
+				_impact(hit, Color(1.0, 0.55, 0.2))
+				_dust_ring(Vector3(hit.x, top.y + 0.1, hit.z), 5.0, 0.8)
+				_shake(index)
+				_damage_target(index, damage))
+		"engineers":
+			var spot := top + (u.position - top).normalized() * STRUCTURE_RADIUS * 0.8
+			spot.y = top.y + 0.6
+			Audio.play("impact", -6.0)
+			_impact(spot, Color(1.0, 0.65, 0.25))
+			_shake(index)
+			_damage_target(index, damage)
+		_:
+			var from := u.fire_origin()
+			var hit := top + Vector3(randf_range(-1.4, 1.4), randf_range(0.5, 2.6), randf_range(-1.4, 1.4))
+			Audio.play("rifle", -12.0, 0.04)
+			_muzzle_flash(from, 0.25)
+			_thin_tracer(from, hit)
+			_damage_target(index, damage)
+
+
+func _muzzle_flash(pos: Vector3, size: float) -> void:
+	var flash := MeshKit.add(level, MeshKit.sphere(size, 8), MeshKit.glow(Color(1.0, 0.9, 0.55), 0.95), pos)
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "scale", Vector3.ONE * 1.8, 0.08)
+	tween.tween_property(flash.material_override, "albedo_color:a", 0.0, 0.08)
+	tween.chain().tween_callback(flash.queue_free)
+
+
+## A rifle tracer: a thin yellow streak that fades fast, with a tiny spark where it hits.
+func _thin_tracer(from: Vector3, to: Vector3) -> void:
+	var dir := to - from
+	if dir.length() < 0.1:
+		return
+	var streak := MeshKit.add(level, MeshKit.cyl(0.05, 0.05, 1.0, 5), MeshKit.glow(Color(1.0, 0.85, 0.3), 0.9))
+	streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var b := Basis(Quaternion(Vector3.UP, dir.normalized())) * Basis.from_scale(Vector3(1, dir.length(), 1))
+	streak.global_transform = Transform3D(b, from + dir * 0.5)
+	var spark := MeshKit.add(level, MeshKit.sphere(0.25, 6), MeshKit.glow(Color(1, 1, 0.9), 0.9), to)
+	spark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(streak.material_override, "albedo_color:a", 0.0, 0.1)
+	tween.tween_property(spark.material_override, "albedo_color:a", 0.0, 0.12)
+	tween.chain().tween_callback(func() -> void:
+		streak.queue_free()
+		spark.queue_free())
 
 
 func _drone_ai(d: Drone, delta: float) -> void:
@@ -434,6 +748,10 @@ func _check_end(delta: float) -> void:
 		if not d.dead:
 			flying = true
 			break
+	for u in ground:
+		if not u.dead:
+			flying = true
+			break
 	var reserves := _first_available() != ""
 	var over := not standing or (started and time_left <= 0.0) or (started and not flying and not reserves)
 	if over and end_timer < 0.0:
@@ -457,6 +775,8 @@ func _finish() -> void:
 	var gained := {"coins": 0, "fuel": 0}
 	if not autoplay:
 		gained = GameState.record_raid(stars, loot_gained, fuel_gained)
+		if GameState.raid_target == "enemy":
+			GameState.use_army(deployed)
 	Audio.hum(0.0)
 	for i in stars:
 		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))
@@ -498,6 +818,12 @@ func _update_bars() -> void:
 			continue
 		entries.append({"key": "d%d" % i, "friendly": true, "ratio": d.health / d.max_health,
 			"pos": cam.unproject_position(d.global_position + Vector3(0, 2.2, 0))})
+	for i in ground.size():
+		var u := ground[i]
+		if u.dead or u.health >= u.max_health:
+			continue
+		entries.append({"key": "g%d" % i, "friendly": true, "ratio": u.health / u.max_health,
+			"pos": cam.unproject_position(u.global_position + Vector3(0, 4.2 if u.is_tank() else 3.4, 0))})
 	hud.update_bars(entries)
 
 

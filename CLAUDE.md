@@ -36,7 +36,7 @@ Read the GDD before changing gameplay: it records every product decision made wi
 - `scripts/data/catalog.gd` – all numbers (costs, HP, limits, unit and defense stats).
 - `scripts/data/bases.gd` – starter enemy bases and the generator for the rest.
 - `scripts/raid/city.gd` – the flat countryside compound (world builder). `drone.gd` + `drone_models.gd` – the three approved drones.
-- `scripts/raid/raid.gd` – battle (deploy, unit AI, effects). `scripts/home/home.gd` – the base screen.
+- `scripts/raid/raid.gd` – battle (deploy, drone and ground-unit AI, fence breaches, effects). `scripts/home/home.gd` – the base screen.
 - Dev-only infinite coins exist only when `OS.is_debug_build()`.
 
 ## Status (3.10.2026)
@@ -48,7 +48,13 @@ build timers with 2 workers (3rd for gems), gem speed-ups. Landscape (1280x720) 
 layout B (https://claude.ai/artifact/1wkMTctCpsPu4sa8wBtP6r): resources and badge in the top corners,
 round Attack and Hangar/Build/Settings at the bottom, info sheets as a bottom-middle card.
 Godot mirrors anchors of a control that is itself RTL; `HomeHud._pin` accounts for that.
-Next: ground units, new defenses (MG, AT, AA), support abilities,
+Week 2 done (save v5, v4 saves migrate): Training Camp (queue, fuel + time), Quarters (army
+space), Garage (unlocks/upgrades ground units; Hangar does drones), army used up per attack.
+Ground units (`ground_unit.gd`, `unit_models.gd`, shared `Unit` base with drones): infantry
+squads, engineers who breach the fence (`City.breach`), heavy tank (unit key `armor`; `tank` is
+the Fuel Tank). The fence stops ground units: `RaidRules.ground_waypoint` routes via the gate or
+breaches. Until week 3's defenses, only the Laser hits ground units. Camp/Quarters/Garage gray-box.
+Next: new defenses (MG, AT, AA), defending infantry squad, support abilities,
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty

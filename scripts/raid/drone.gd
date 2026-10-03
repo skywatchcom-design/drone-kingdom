@@ -1,5 +1,5 @@
 class_name Drone
-extends Node3D
+extends Unit
 ## An attack drone. Movement comes from steer(); the body tilts from its own acceleration.
 ## Each kind has its own model (DroneModels) and signature motion:
 ##   courier: unfolds its arms on release; the gimbal camera stays level; the lens flashes per shot
@@ -7,31 +7,19 @@ extends Node3D
 ##   heavy:   lowers a weight on its winch and drops it; reels the cable back in
 ## With `showcase` on (hangar preview) it hovers on a turntable and loops its signature moves.
 
-signal crashed
-
 const ACCEL := 14.0
 const SPIN := {"courier": 48.0, "scout": 85.0, "heavy": 24.0}
 const TRAIL_POINTS := 18
 
 var max_speed := 10.0
-var max_health := 100.0
 var body_scale := 1.6
 var gear_height := 1.0
-var velocity := Vector3.ZERO
-var health := 100.0
-var jammed := false
-var dead := false
-var net_timer := 0.0
-## Demo/autoplay only: hits still show effects but never kill the drone.
-var invulnerable := false
 ## Hangar preview: no flight, signature moves on a loop.
 var showcase := false
 
 # Battle state, driven by the raid.
-var kind := "courier"
 var dps := 20.0
 var prefers := "any"
-var target := -1
 var orbit := randf() * TAU
 var hover_radius := 4.5
 var hover_height := 6.5
@@ -65,7 +53,7 @@ var _trail_points := PackedVector3Array()
 
 ## Apply a drone type's stats (from Catalog.drone_stats). Call before adding to the tree.
 func configure(stats: Dictionary) -> void:
-	kind = stats.get("kind", kind)
+	kind = stats.get("kind", "courier")
 	max_speed = float(stats["speed"])
 	max_health = float(stats["health"])
 	health = max_health
@@ -113,21 +101,6 @@ func steer(target_velocity: Vector3, delta: float) -> void:
 	position += velocity * delta
 	var accel := (velocity - previous) / maxf(delta, 0.0001)
 	_accel = _accel.lerp(accel, 1.0 - exp(-delta * 6.0))
-
-
-func damage(amount: float) -> void:
-	if dead:
-		return
-	health = maxf(1.0 if invulnerable else 0.0, health - amount)
-	if health <= 0.0:
-		dead = true
-		crashed.emit()
-
-
-func hit_net() -> void:
-	Audio.play("net", -4.0)
-	net_timer = 2.0
-	damage(8.0)
 
 
 ## True once the drone is ready to attack (the courier waits until its arms are open).

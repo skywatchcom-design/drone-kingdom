@@ -79,7 +79,7 @@ static func generate(seed_value: int, hq: int) -> Dictionary:
 	var hq_cell := [rng.randi_range(0, 2), rng.randi_range(0, 2)]
 	taken["%d,%d" % hq_cell] = true
 	structures.append({"type": "hq", "cell": hq_cell, "level": hq})
-	for type in ["generator", "storage", "pump", "tank", "laser", "net", "jammer", "birds"]:
+	for type in ["generator", "storage", "pump", "tank", "camp", "quarters", "laser", "net", "jammer", "birds"]:
 		for i in Catalog.max_count(type, hq):
 			var cell := _free_cell(rng, taken)
 			if cell.is_empty():

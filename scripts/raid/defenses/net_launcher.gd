@@ -19,7 +19,7 @@ func tick(delta: float, drones: Array) -> void:
 	if _life > 0.0:
 		_life -= delta
 		_net.global_position += _velocity * delta
-		for d: Drone in drones:
+		for d: Unit in drones:
 			if not d.dead and _net.global_position.distance_to(d.global_position) < 1.8:
 				d.hit_net()
 				_life = 0.0

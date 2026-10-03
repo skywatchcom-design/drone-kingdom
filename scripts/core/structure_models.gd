@@ -23,6 +23,12 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _pump(root, level)
 		"tank":
 			height = _tank(root, level)
+		"camp":
+			height = _camp(root, level)
+		"quarters":
+			height = _quarters(root, level)
+		"garage":
+			height = _garage(root, level)
 		"hangar":
 			height = _hangar(root, level)
 	level_label(root, level, height + 1.2)
@@ -99,6 +105,43 @@ static func _tank(root: Node3D, level: int) -> float:
 		var ang := TAU * a / 4.0 + PI / 4.0
 		MeshKit.add(root, MeshKit.box(Vector3(0.18, 0.4, 0.18)), MeshKit.mat(Color(0.3, 0.3, 0.32), 0.6, 0.5), Vector3(cos(ang) * 1.2, 0.2, sin(ang) * 1.2))
 	return h + 0.6
+
+
+## Gray-box until the sketch is approved: a sandy yard with a flagpole and a low shed.
+static func _camp(root: Node3D, level: int) -> float:
+	MeshKit.add(root, MeshKit.box(Vector3(3.6, 0.08, 3.6)), MeshKit.mat(Color(0.78, 0.7, 0.52), 0.95), Vector3(0, 0.04, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(1.6, 1.0 + level * 0.15, 1.2)), MeshKit.mat(UnitModels.OLIVE, 0.8), Vector3(-0.9, 0.5 + level * 0.075, -1.0))
+	for i in 3:
+		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.7, 0.12)), MeshKit.mat(Color(0.45, 0.33, 0.2), 0.9), Vector3(0.4 + i * 0.5, 0.35, 0.9))
+	MeshKit.add(root, MeshKit.box(Vector3(1.3, 0.1, 0.1)), MeshKit.mat(Color(0.45, 0.33, 0.2), 0.9), Vector3(0.9, 0.65, 0.9))
+	MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 2.8, 6), MeshKit.mat(Color(0.75, 0.75, 0.78), 0.4, 0.6), Vector3(1.4, 1.4, -1.2))
+	MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.42, 0.02)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(1.75, 2.5, -1.2))
+	MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.16, 0.021)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(1.75, 2.5, -1.2))
+	return 2.8
+
+
+## Gray-box until the sketch is approved: rows of olive tents, more with level.
+static func _quarters(root: Node3D, level: int) -> float:
+	var canvas := MeshKit.mat(UnitModels.OLIVE, 0.9)
+	var count := mini(1 + level, 4)
+	for i in count:
+		var x := -1.2 + (i % 2) * 2.4
+		var z := -0.9 + int(i / 2.0) * 1.9
+		var tent := MeshKit.add(root, MeshKit.cyl(0.0, 1.0, 1.2, 4), canvas, Vector3(x, 0.6, z))
+		tent.rotation.y = PI / 4.0
+		tent.scale = Vector3(1.0, 1.0, 0.75)
+	return 1.4
+
+
+## Gray-box until the sketch is approved: a wide workshop with a big roll-up door.
+static func _garage(root: Node3D, level: int) -> float:
+	var h := 1.6 + level * 0.2
+	MeshKit.add(root, MeshKit.box(Vector3(3.6, h, 2.8)), MeshKit.mat(UnitModels.SINAI_DARK, 0.8), Vector3(0, h / 2.0, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(3.7, 0.15, 2.9)), MeshKit.mat(Color(0.3, 0.32, 0.3), 0.7), Vector3(0, h + 0.07, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(2.4, h * 0.75, 0.05)), MeshKit.mat(Color(0.25, 0.26, 0.24), 0.6, 0.4), Vector3(0, h * 0.375, 1.41))
+	for i in 5:
+		MeshKit.add(root, MeshKit.box(Vector3(2.4, 0.03, 0.06)), MeshKit.mat(Color(0.35, 0.36, 0.34), 0.6, 0.4), Vector3(0, 0.2 + i * h * 0.13, 1.44))
+	return h + 0.3
 
 
 static func _hangar(root: Node3D, level: int) -> float:

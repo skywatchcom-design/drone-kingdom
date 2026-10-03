@@ -16,7 +16,7 @@ func tick(delta: float, drones: Array) -> void:
 	_t += delta
 	var s := 1.0 + sin(_t * 3.0) * 0.03
 	_field.scale = Vector3(s, 0.35, s)
-	for d: Drone in drones:
+	for d: Unit in drones:
 		if not d.dead and in_range(d.global_position):
 			d.jammed = true
 

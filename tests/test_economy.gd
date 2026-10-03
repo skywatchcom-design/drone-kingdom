@@ -5,6 +5,8 @@ const HQ := [4, 4]
 const GENERATOR := [3, 4]
 const PUMP := [4, 5]
 const HANGAR := [5, 4]
+const CAMP := [3, 5]
+const QUARTERS := [5, 5]
 
 
 func _fresh_state() -> Node:
@@ -108,24 +110,28 @@ func test_scout_needs_hangar_level_two() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 5000
 	gs.fuel = 2000
-	var first: String = gs.drone_block_reason("scout")
+	var first_reason: String = gs.unit_block_reason("scout")
 	gs.upgrade(HQ)
 	_skip_time(gs)
 	gs.upgrade(HANGAR)
 	_skip_time(gs)
-	var unlocked: bool = gs.upgrade_drone("scout")
+	var unlocked: bool = gs.upgrade_unit("scout")
+	var first: String = first_reason
 	gs.free()
 	return first == "Needs Hangar Lv 2" and unlocked
 
 
-func test_army_respects_hangar_space() -> bool:
+func test_training_respects_army_space() -> bool:
 	var gs := _fresh_state()
+	gs.fuel = 5000
+	gs.army = {}
 	var cap: int = gs.army_capacity()
-	var fits: bool = gs.set_army_count("courier", cap / 2)
-	var too_many: bool = gs.set_army_count("courier", cap / 2 + 1)
-	var locked: bool = gs.set_army_count("scout", 1)
+	var queued := 0
+	while gs.train("infantry"):
+		queued += 1
+	var locked: bool = gs.train("scout") == false
 	gs.free()
-	return fits and not too_many and not locked
+	return queued == cap / 3 and locked
 
 
 func test_generator_collect_keeps_overflow() -> bool:
@@ -255,9 +261,9 @@ func test_drones_cost_fuel_not_coins() -> bool:
 	_skip_time(gs)
 	gs.upgrade(HANGAR)
 	_skip_time(gs)
-	var reason: String = gs.drone_block_reason("scout")
+	var reason: String = gs.unit_block_reason("scout")
 	gs.fuel = 400
-	var unlocked: bool = gs.upgrade_drone("scout") and gs.fuel == 0
+	var unlocked: bool = gs.upgrade_unit("scout") and gs.fuel == 0
 	gs.free()
 	return reason == "Need 400 more fuel" and unlocked
 
@@ -287,3 +293,128 @@ func test_raid_loot_banks_coins_and_fuel() -> bool:
 	var practice: Dictionary = gs.record_raid(3, 100, 80)
 	gs.free()
 	return got["coins"] == 100 and got["fuel"] == 80 and practice["coins"] == 0
+
+
+## Pretends the training queue started long ago.
+func _skip_training(gs: Node) -> void:
+	gs.train_started -= 100000.0
+	gs.process_training()
+
+
+func test_training_takes_fuel_and_time() -> bool:
+	var gs := _fresh_state()
+	gs.army = {}
+	gs.fuel = 100
+	var ok: bool = gs.train("infantry")
+	var paid: bool = gs.fuel == 100 - Catalog.train_fuel("infantry")
+	var not_yet: bool = gs.process_training() == 0 and gs.army.is_empty()
+	_skip_training(gs)
+	var done: bool = int(gs.army.get("infantry", 0)) == 1 and gs.training.is_empty()
+	gs.free()
+	return ok and paid and not_yet and done
+
+
+func test_training_queue_runs_in_order() -> bool:
+	var gs := _fresh_state()
+	gs.army = {}
+	gs.fuel = 1000
+	gs.train("infantry")
+	gs.train("courier")
+	# Just enough time for the infantry squad, not the courier after it.
+	gs.train_started = gs.now() - Catalog.train_seconds("infantry", 1) - 1.0
+	gs.process_training()
+	var first: bool = int(gs.army.get("infantry", 0)) == 1 and not gs.army.has("courier")
+	_skip_training(gs)
+	var second: bool = int(gs.army.get("courier", 0)) == 1
+	gs.free()
+	return first and second
+
+
+func test_cancel_training_refunds_fuel() -> bool:
+	var gs := _fresh_state()
+	gs.army = {}
+	gs.fuel = 100
+	gs.train("infantry")
+	var cancelled: bool = gs.cancel_training("infantry") and gs.fuel == 100 and gs.training.is_empty()
+	gs.free()
+	return cancelled
+
+
+func test_full_quarters_hold_the_queue() -> bool:
+	var gs := _fresh_state()
+	gs.army = {}
+	# Room for one more squad: the first finished squad moves in, the second waits.
+	gs.army = {"infantry": 3}
+	gs.training = ["infantry", "infantry"]
+	gs.train_started = gs.now() - 1000.0
+	gs.process_training()
+	var held: bool = int(gs.army["infantry"]) == 4 and gs.training.size() == 1
+	gs.use_army({"infantry": 2})
+	var moved: bool = int(gs.army["infantry"]) == 3 and gs.training.is_empty()
+	gs.free()
+	return held and moved
+
+
+func test_no_training_without_camp() -> bool:
+	var gs := _fresh_state()
+	gs.fuel = 1000
+	gs.army = {}
+	gs.remove(CAMP)
+	var reason: String = gs.train_block_reason("infantry")
+	gs.free()
+	return reason == "Build a Training Camp first"
+
+
+func test_speed_up_training_finishes_queue() -> bool:
+	var gs := _fresh_state()
+	gs.army = {}
+	gs.fuel = 1000
+	gs.train("infantry")
+	gs.train("courier")
+	var cost: int = gs.training_speedup_cost()
+	var before: int = gs.gems
+	var ok: bool = gs.speed_up_training()
+	var result: bool = ok and cost > 0 and gs.gems == before - cost \
+		and int(gs.army.get("infantry", 0)) == 1 and int(gs.army.get("courier", 0)) == 1
+	gs.free()
+	return result
+
+
+func test_attack_uses_deployed_units() -> bool:
+	var gs := _fresh_state()
+	gs.army = {"infantry": 3, "courier": 1}
+	gs.use_army({"infantry": 2, "courier": 1})
+	var left: bool = int(gs.army.get("infantry", 0)) == 1 and not gs.army.has("courier")
+	gs.free()
+	return left
+
+
+func test_garage_unlocks_ground_units() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 99999
+	gs.fuel = 99999
+	var no_garage: String = gs.unit_block_reason("engineers")
+	gs.build("garage", [0, 0])
+	_skip_time(gs)
+	var too_low: String = gs.unit_block_reason("engineers")
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.upgrade([0, 0])
+	_skip_time(gs)
+	var unlocked: bool = gs.upgrade_unit("engineers")
+	gs.free()
+	return no_garage == "Needs Garage Lv 2" and too_low == "Needs Garage Lv 2" and unlocked
+
+
+func test_quarters_add_army_space() -> bool:
+	var gs := _fresh_state()
+	var one: int = gs.army_capacity()
+	gs.coins = 99999
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.upgrade(QUARTERS)
+	var during: int = gs.army_capacity()
+	_skip_time(gs)
+	var after: int = gs.army_capacity()
+	gs.free()
+	return one == Catalog.quarters_space(1) and during == one and after == Catalog.quarters_space(2)

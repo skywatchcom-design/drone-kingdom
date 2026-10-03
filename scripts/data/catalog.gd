@@ -5,7 +5,7 @@ extends RefCounted
 
 const MAX_LEVEL := 5
 
-## Seconds in an attack once the first drone is deployed.
+## Seconds in an attack once the first unit is deployed.
 const BATTLE_SECONDS := 90.0
 ## Height of a defense's head above its roof.
 const DEFENSE_HEAD := 4.5
@@ -15,6 +15,7 @@ const DEFENSE_HEAD := 4.5
 ## Command Tower in a few, while a lone drone loses a duel with a laser.
 const HP := {
 	"hq": 600.0, "generator": 180.0, "storage": 260.0, "pump": 180.0, "tank": 260.0, "hangar": 220.0,
+	"camp": 260.0, "quarters": 220.0, "garage": 280.0,
 	"laser": 300.0, "net": 280.0, "jammer": 220.0, "birds": 200.0,
 }
 
@@ -25,7 +26,10 @@ const INFO := {
 	"storage": "Raises how many coins you can hold. Attackers loot it.",
 	"pump": "Pumps fuel over time. Tap the drop above it to collect.",
 	"tank": "Raises how much fuel you can hold. Attackers loot it.",
-	"hangar": "Houses your attack drones. Higher levels fit a bigger army and stronger drones.",
+	"hangar": "Unlocks and upgrades your attack drones. Its level caps drone levels.",
+	"camp": "Trains your army: soldiers, tanks and drones, one after another. Higher levels train faster.",
+	"quarters": "Where your trained army waits for the next attack. More quarters and levels fit a bigger army.",
+	"garage": "Unlocks and upgrades infantry, engineers and tanks. Its level caps their levels.",
 	"laser": "Turret that locks onto the nearest drone and burns it.",
 	"net": "Fires nets that slow drones to a crawl.",
 	"jammer": "Scrambles drones inside its field so they drift and slow down.",
@@ -46,10 +50,14 @@ const BUILDINGS := {
 	"pump": {"name": "Fuel Pump", "cost": 150},
 	"tank": {"name": "Fuel Tank", "cost": 200},
 	"hangar": {"name": "Drone Hangar", "cost": 250},
+	"camp": {"name": "Training Camp", "cost": 200},
+	"quarters": {"name": "Quarters", "cost": 150},
+	"garage": {"name": "Garage", "cost": 300},
 }
 
 ## Order of the build menu.
-const BUILD_ORDER := ["generator", "storage", "pump", "tank", "hangar", "laser", "net", "jammer", "birds"]
+const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar",
+	"laser", "net", "jammer", "birds"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
 const LIMITS := {
@@ -59,26 +67,50 @@ const LIMITS := {
 	"pump": [1, 2, 2, 3, 3],
 	"tank": [1, 1, 2, 2, 3],
 	"hangar": [1, 1, 1, 1, 1],
+	"camp": [1, 1, 1, 1, 1],
+	"quarters": [1, 1, 2, 2, 3],
+	"garage": [1, 1, 1, 1, 1],
 	"laser": [1, 2, 2, 3, 3],
 	"net": [0, 1, 1, 2, 2],
 	"jammer": [0, 0, 1, 1, 2],
 	"birds": [0, 0, 1, 1, 2],
 }
 
-## prefers: which structures a drone goes for first ("any", "loot" or "defense").
-## housing: how much hangar space one drone of this type takes in the army.
+## prefers: which structures a unit goes for first ("any", "loot", "defense", or "fence"
+## for engineers, who breach the fence first).
+## housing: how much army space one unit of this type takes.
+## train_fuel / train_seconds: the cost of training one, at Training Camp level 1.
+## hangar (drones) / garage (ground units): the lab level that unlocks it; unlock: fuel to unlock.
 const DRONES := {
 	"courier": {"name": "Courier", "role": "All-rounder. Goes for whatever is closest.",
 		"health": 140.0, "speed": 9.0, "dps": 42.0, "fire": 0.3, "burst": 1, "housing": 2, "prefers": "any", "scale": 1.6, "hover": [4.5, 6.5],
-		"color": Color(0.31, 0.7, 1.0), "hangar": 1, "unlock": 0},
+		"color": Color(0.31, 0.7, 1.0), "hangar": 1, "unlock": 0, "train_fuel": 30, "train_seconds": 20.0},
 	"scout": {"name": "Scout", "role": "Fast and fragile. Heads straight for generators, silos and the Command Tower.",
 		"health": 80.0, "speed": 12.5, "dps": 26.0, "fire": 0.55, "burst": 3, "housing": 1, "prefers": "loot", "scale": 1.5, "hover": [4.0, 5.5],
-		"color": Color(1.0, 0.48, 0.1), "hangar": 2, "unlock": 400},
+		"color": Color(1.0, 0.48, 0.1), "hangar": 2, "unlock": 400, "train_fuel": 25, "train_seconds": 15.0},
 	"heavy": {"name": "Heavy Lifter", "role": "Slow and tough. Takes out defenses first, so the others survive.",
 		"health": 380.0, "speed": 6.5, "dps": 72.0, "fire": 1.4, "burst": 1, "housing": 4, "prefers": "defense", "scale": 1.2, "hover": [1.0, 8.5],
-		"color": Color(0.95, 0.72, 0.02), "hangar": 3, "unlock": 900},
+		"color": Color(0.95, 0.72, 0.02), "hangar": 3, "unlock": 900, "train_fuel": 90, "train_seconds": 45.0},
 }
 const DRONE_ORDER := ["courier", "scout", "heavy"]
+
+## Ground units walk, and the fence stops them: they go in through the gate or a breach.
+## squad: soldiers released per card; health and dps are per soldier. range: firing distance
+## from the edge of a building. fire: seconds between shots.
+const GROUND := {
+	"infantry": {"name": "Infantry Squad", "role": "Cheap and quick, they come in numbers. Each soldier attacks the closest building.",
+		"squad": 4, "health": 70.0, "speed": 4.5, "dps": 9.0, "fire": 0.4, "range": 6.0, "housing": 3, "prefers": "any",
+		"color": Color(0.61, 0.67, 0.42), "garage": 1, "unlock": 0, "train_fuel": 40, "train_seconds": 20.0},
+	"engineers": {"name": "Combat Engineers", "role": "Blow a hole in the fence, then plant charges on buildings. They open the way for everyone else.",
+		"squad": 2, "health": 80.0, "speed": 5.0, "dps": 22.0, "fire": 1.2, "range": 1.0, "housing": 2, "prefers": "fence",
+		"color": Color(0.88, 0.64, 0.23), "garage": 2, "unlock": 300, "train_fuel": 50, "train_seconds": 25.0},
+	"armor": {"name": "Heavy Tank", "role": "Slow and very tough, fires heavy shells. Soaks up fire and takes out defenses first.",
+		"squad": 1, "health": 900.0, "speed": 3.2, "dps": 48.0, "fire": 2.5, "range": 12.0, "housing": 8, "prefers": "defense",
+		"color": Color(0.79, 0.76, 0.64), "garage": 3, "unlock": 800, "train_fuel": 220, "train_seconds": 90.0},
+}
+const GROUND_ORDER := ["infantry", "engineers", "armor"]
+## Every unit, in the order cards and menus show them.
+const UNIT_ORDER := ["infantry", "engineers", "armor", "courier", "scout", "heavy"]
 
 
 static func is_defense(type: String) -> bool:
@@ -106,7 +138,49 @@ static func display_name(type: String) -> String:
 		return I18n.t(BUILDINGS[type]["name"])
 	if DRONES.has(type):
 		return I18n.t(DRONES[type]["name"])
+	if GROUND.has(type):
+		return I18n.t(GROUND[type]["name"])
 	return type
+
+
+static func is_ground(type: String) -> bool:
+	return GROUND.has(type)
+
+
+static func unit_def(type: String) -> Dictionary:
+	return GROUND[type] if GROUND.has(type) else DRONES[type]
+
+
+## The building that unlocks and upgrades this unit: "garage" or "hangar".
+static func unit_lab(type: String) -> String:
+	return "garage" if GROUND.has(type) else "hangar"
+
+
+## The lab level needed to unlock this unit.
+static func unit_lab_level(type: String) -> int:
+	return int(unit_def(type)[unit_lab(type)])
+
+
+static func unit_stats(type: String, level: int) -> Dictionary:
+	if DRONES.has(type):
+		return drone_stats(type, level)
+	var s: Dictionary = GROUND[type].duplicate()
+	var step := float(level - 1)
+	s["level"] = level
+	s["kind"] = type
+	s["health"] = float(s["health"]) * (1.0 + 0.2 * step)
+	s["dps"] = float(s["dps"]) * (1.0 + 0.2 * step)
+	s["speed"] = float(s["speed"]) * (1.0 + 0.03 * step)
+	return s
+
+
+## Seconds to train one unit; each Training Camp level trains a quarter faster.
+static func train_seconds(type: String, camp_level: int) -> float:
+	return float(unit_def(type)["train_seconds"]) / (1.0 + 0.25 * maxi(camp_level - 1, 0))
+
+
+static func train_fuel(type: String) -> int:
+	return int(unit_def(type)["train_fuel"])
 
 
 static func build_cost(type: String) -> int:
@@ -206,13 +280,22 @@ static func drone_stats(type: String, level: int) -> Dictionary:
 	return s
 
 
-## Total housing space for the attack army, from the hangar's level.
-static func army_capacity(hangar_level: int) -> int:
-	return 0 if hangar_level <= 0 else 8 + 4 * (hangar_level - 1)
+## Army space from one Quarters building.
+static func quarters_space(level: int) -> int:
+	return 12 + 6 * (level - 1)
 
 
-static func drone_upgrade_cost(type: String, level: int) -> int:
-	var base := maxi(int(DRONES[type]["unlock"]), 200)
+## Total army space from all Quarters.
+static func army_capacity(quarters_levels: Array) -> int:
+	var total := 0
+	for l in quarters_levels:
+		total += quarters_space(int(l))
+	return total
+
+
+## Fuel to upgrade a unit from `level` to `level + 1`.
+static func unit_upgrade_cost(type: String, level: int) -> int:
+	var base := maxi(int(unit_def(type)["unlock"]), 200)
 	return _round10(base * 0.75 * pow(1.9, level))
 
 

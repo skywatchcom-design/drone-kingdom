@@ -2,12 +2,12 @@ class_name HomeHud
 extends CanvasLayer
 ## UI for the home base, held sideways (approved sketch, layout B): the player badge and
 ## Command Tower level in one top corner, free workers in the middle, coins / fuel / gems in
-## the other corner; a round Attack button in one bottom corner and Hangar / Build / Settings
+## the other corner; a round Attack button in one bottom corner and Army / Build / Settings
 ## in the other. Info sheets open as a card at the bottom middle, over the bottom buttons.
 ## Hebrew mirrors everything. Also hosts the small UI helpers the raid screen reuses.
 
 signal attack_pressed
-signal hangar_pressed
+signal army_pressed
 signal build_pressed
 signal settings_pressed
 signal workers_pressed
@@ -115,12 +115,12 @@ func _ready() -> void:
 		attack_pressed.emit())
 	_pin(corners, _attack, false, true)
 
-	# Hangar / Build / Settings, other bottom corner.
+	# Army / Build / Settings, other bottom corner.
 	_dock = HBoxContainer.new()
 	_dock.add_theme_constant_override("separation", 12)
 	_dock.layout_direction = dir
 	_pin(corners, _dock, true, true)
-	_dock_button(I18n.t("Hangar"), false).pressed.connect(func() -> void: hangar_pressed.emit())
+	_dock_button(I18n.t("Army"), false).pressed.connect(func() -> void: army_pressed.emit())
 	_dock_button(I18n.t("Build"), true).pressed.connect(func() -> void: build_pressed.emit())
 	_dock_button(I18n.t("Settings"), false).pressed.connect(func() -> void: settings_pressed.emit())
 

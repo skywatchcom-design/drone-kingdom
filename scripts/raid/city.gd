@@ -5,6 +5,7 @@ extends Node3D
 ## meadows with trees, bushes and rocks, a winding stream, striped farm fields, wind
 ## turbines and low hills fading into the haze. Everything sits on the ground, so every
 ## structure and every defense range is visible at a glance.
+## The fence stops ground units: they come in through the gate or a breach (breach()).
 ## Repeated details use MultiMesh so the scene stays cheap enough for phones.
 
 const GRID := 9
@@ -15,6 +16,9 @@ const ALT := 12.0
 ## Half the width of the fenced compound.
 const YARD := GRID * SPACING / 2.0 + 2.0
 const TURBINES := 3
+## Half the width of the gate gap on the near (+Z) side.
+const GATE := 4.0
+const FENCE_STEP := 2.5
 
 var heights := {}
 var _rng := RandomNumberGenerator.new()
@@ -27,6 +31,31 @@ var _pine_colors: Array = []
 var _bushes: Array = []
 var _rocks: Array = []
 var _stream: Array = []
+var _posts_mm: MultiMeshInstance3D
+var _rails_mm: MultiMeshInstance3D
+## Ground position of every fence post and rail segment, by instance index.
+var _post_points: Array[Vector3] = []
+var _rail_points: Array[Vector3] = []
+
+
+static func inside_yard(p: Vector3) -> bool:
+	return absf(p.x) < YARD and absf(p.z) < YARD
+
+
+## The point on the fence line closest to `p` (for a point outside the fence).
+static func fence_point(p: Vector3) -> Vector3:
+	var q := Vector3(clampf(p.x, -YARD, YARD), 0.0, clampf(p.z, -YARD, YARD))
+	if inside_yard(q):
+		# Inside: push out to the nearest side.
+		if YARD - absf(q.x) < YARD - absf(q.z):
+			q.x = signf(q.x) * YARD
+		else:
+			q.z = signf(q.z) * YARD
+	return q
+
+
+static func gate_point() -> Vector3:
+	return Vector3(0, 0, YARD)
 
 
 static func cell_pos(cell: Array) -> Vector3:
@@ -82,31 +111,58 @@ func _add_compound(pad_cells: Array) -> void:
 		borders.append(Transform3D(Basis(), t.origin + Vector3(0, -0.02, 0)))
 	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.mat(Color(0.52, 0.56, 0.42), 0.9), borders)
 
-	# Wooden fence: posts every 2.5 m and two rails, with a gate gap on the near (+Z) side.
+	# Wooden fence: posts and two rails in short segments (so a breach can knock out a few),
+	# with a gate gap on the near (+Z) side.
 	var posts := []
 	var rails := []
-	var gate := 4.0
-	var p := -YARD
-	while p <= YARD + 0.01:
-		for side in [Vector3(p, 0, -YARD), Vector3(-YARD, 0, p), Vector3(YARD, 0, p)]:
-			posts.append(Transform3D(Basis(), side + Vector3(0, 0.6, 0)))
-		if absf(p) > gate:
-			posts.append(Transform3D(Basis(), Vector3(p, 0.6, YARD)))
-		p += 2.5
-	for h in [0.45, 0.95]:
-		rails.append(Transform3D(Basis(), Vector3(0, h, -YARD)))
-		rails.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-YARD, h, 0)))
-		rails.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(YARD, h, 0)))
-		var piece := (YARD - gate) / 2.0
-		rails.append(Transform3D(Basis().scaled(Vector3(piece / (YARD * 2.0), 1, 1)), Vector3(-(gate + piece), h, YARD)))
-		rails.append(Transform3D(Basis().scaled(Vector3(piece / (YARD * 2.0), 1, 1)), Vector3(gate + piece, h, YARD)))
+	var n := ceili(YARD * 2.0 / FENCE_STEP)
+	var step := YARD * 2.0 / n
+	var sides := [[Vector3(1, 0, 0), Vector3(0, 0, -YARD)], [Vector3(1, 0, 0), Vector3(0, 0, YARD)],
+		[Vector3(0, 0, 1), Vector3(-YARD, 0, 0)], [Vector3(0, 0, 1), Vector3(YARD, 0, 0)]]
+	for side: Array in sides:
+		var along: Vector3 = side[0]
+		var origin: Vector3 = side[1]
+		var turn := Basis() if along.x > 0.0 else Basis(Vector3.UP, PI / 2.0)
+		for i in n + 1:
+			var at := origin + along * (-YARD + i * step)
+			if _in_gate(at):
+				continue
+			posts.append(Transform3D(Basis(), at + Vector3(0, 0.6, 0)))
+			_post_points.append(at)
+		for i in n:
+			var mid := origin + along * (-YARD + (i + 0.5) * step)
+			if _in_gate(mid):
+				continue
+			for h in [0.45, 0.95]:
+				rails.append(Transform3D(turn * Basis().scaled(Vector3(step / FENCE_STEP, 1, 1)), mid + Vector3(0, h, 0)))
+				_rail_points.append(mid)
 	var wood := MeshKit.mat(Color(0.5, 0.36, 0.22), 0.9)
-	MeshKit.multi(self, MeshKit.box(Vector3(0.18, 1.2, 0.18)), wood, posts)
-	MeshKit.multi(self, MeshKit.box(Vector3(YARD * 2.0, 0.1, 0.08)), wood, rails)
+	_posts_mm = MeshKit.multi(self, MeshKit.box(Vector3(0.18, 1.2, 0.18)), wood, posts)
+	_rails_mm = MeshKit.multi(self, MeshKit.box(Vector3(FENCE_STEP, 0.1, 0.08)), wood, rails)
 	# Gate pillars and a gravel apron.
-	for x in [-gate, gate]:
+	for x in [-GATE, GATE]:
 		MeshKit.add(self, MeshKit.box(Vector3(0.5, 1.8, 0.5)), MeshKit.mat(Color(0.62, 0.6, 0.55), 0.85), Vector3(x, 0.9, YARD))
 		MeshKit.add(self, MeshKit.sphere(0.18, 10), MeshKit.glow(Color(1.0, 0.85, 0.5)), Vector3(x, 1.95, YARD))
+
+
+static func _in_gate(p: Vector3) -> bool:
+	return p.z > YARD - 0.1 and absf(p.x) < GATE
+
+
+## Knocks out the fence within `width` meters of `point`: posts and rails there vanish.
+## Returns the pieces' positions, for the raid's flying-debris effect.
+func breach(point: Vector3, width: float) -> Array:
+	var gone := []
+	var hidden := Transform3D(Basis().scaled(Vector3.ONE * 0.001), Vector3(0, -5, 0))
+	for i in _post_points.size():
+		if PathUtils.flat_distance(_post_points[i], point) < width / 2.0:
+			_posts_mm.multimesh.set_instance_transform(i, hidden)
+			gone.append(_post_points[i])
+	for i in _rail_points.size():
+		if PathUtils.flat_distance(_rail_points[i], point) < width / 2.0:
+			_rails_mm.multimesh.set_instance_transform(i, hidden)
+			gone.append(_rail_points[i])
+	return gone
 
 
 func _add_road() -> void:
