@@ -43,8 +43,9 @@ Read the GDD before changing gameplay: it records every product decision made wi
 Working today: flat world, base building/upgrades, coins from generators, hangar with 3 drones,
 autonomous Clash-style raids with health bars and effects, sound, Hebrew/English toggle.
 
-Next (GDD week 1): landscape orientation, 9x9 base, two resources (coins + fuel) plus gems,
-build timers with workers. Then ground units, new defenses (MG, AT, AA), support abilities,
+Week 1 rules done (save v4): 9x9 base, coins + fuel + gems, Fuel Pump and Fuel Tank (gray-box),
+build timers with 2 workers (3rd for gems), gem speed-ups. Landscape orientation waits on the
+owner's pick in the layout sketch (https://claude.ai/artifact/1wkMTctCpsPu4sa8wBtP6r). Then ground units, new defenses (MG, AT, AA), support abilities,
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
