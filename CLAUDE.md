@@ -68,4 +68,8 @@ mortar (in launch, HQ 3), military jammer, camp, quarters, garage, fuel pump, fu
 Approved 5.10.2026: support abilities sketch (https://claude.ai/artifact/QeVxT8PzJLE2KijtoK89GN):
 energy bar (+15 per building, +40 HQ, max 100), air strike 60, direction flare 20 (6 s), red ring
 under defending soldiers.
+Approved 5.10.2026: walls/support/build-menu/level-looks sketch (https://claude.ai/artifact/Th5mNJUuSD5d77XEMeRnqE):
+player-built walls on the paths between pads (outer fence removed), Support Base with prepared air
+strikes and flares (no energy), build menu cards with pictures, and dramatic 5-level looks for units,
+drones, air strike and flare (level colors none/silver/blue/red/gold).
 Still waiting on the owner: Apple Developer and Google Play accounts.
