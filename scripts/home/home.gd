@@ -32,6 +32,13 @@ var open_cell: Array = []
 var open_sheet := ""
 ## Structure type picked from the Build menu, waiting for a free pad to be tapped.
 var placing := ""
+## Wall mode: tapping or dragging along the paths between pads builds wall pieces.
+var wall_mode := false
+## Small markers on the empty paths, shown in wall mode.
+var edge_markers: MultiMeshInstance3D
+## Instance index of each empty path's marker, so building a wall can hide just that one.
+var edge_marker_index := {}
+const EDGE_PICK := 60.0
 var marker: MeshInstance3D
 var press_pos := Vector2.ZERO
 var header_timer := 0.0
@@ -50,6 +57,7 @@ func _ready() -> void:
 	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
 	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
+	hud.mode_done.connect(_end_wall_mode)
 	GameState.finish_ready()
 	GameState.process_training()
 	_rebuild()
@@ -85,6 +93,16 @@ func _rebuild() -> void:
 	city.build(GameState.city_seed, all_cells)
 	for s in GameState.structures:
 		_spawn(s)
+	for w in GameState.walls:
+		StructureModels.wall(level, w["edge"], int(w["level"]))
+	var free_edges := []
+	edge_marker_index.clear()
+	for e in _all_edges():
+		if GameState.wall_at(e).is_empty():
+			edge_marker_index[Walls.key(e)] = free_edges.size()
+			free_edges.append(Transform3D(Basis(Vector3.UP, PI / 2.0 if int(e[2]) == 0 else 0.0), Walls.center(e) + Vector3(0, 0.15, 0)))
+	edge_markers = MeshKit.multi(level, MeshKit.box(Vector3(5.6, 0.12, 0.5)), MeshKit.glow(Color(1.0, 0.85, 0.35), 0.45), free_edges)
+	edge_markers.visible = wall_mode
 	marker = MeshKit.add(level, MeshKit.ring(3.4, 0.3), MeshKit.glow(Color(1, 1, 1), 0.9))
 	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	marker.visible = false
@@ -191,7 +209,11 @@ func _refresh_header() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
-		_pan((event as InputEventScreenDrag).relative)
+		var drag := event as InputEventScreenDrag
+		if wall_mode and not hud.blocks(drag.position):
+			_paint_wall(drag.position)
+		else:
+			_pan(drag.relative)
 		return
 	if event is InputEventMouseButton and event.pressed:
 		var wheel := event as InputEventMouseButton
@@ -208,9 +230,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
 		return
+	if wall_mode:
+		_paint_wall(touch.position)
+		return
 	if _try_collect(touch.position):
 		return
 	var cell := _pick_cell(touch.position)
+	var edge := _pick_edge(touch.position, EDGE_PICK * 0.6)
+	if not edge.is_empty() and not GameState.wall_at(edge).is_empty() and (cell.is_empty() \
+			or cam.unproject_position(Walls.center(edge)).distance_to(touch.position) < cam.unproject_position(city.roof_top(cell)).distance_to(touch.position)):
+		_open_wall(edge)
+		return
 	if placing != "" and not cell.is_empty() and GameState.structure_at(cell).is_empty():
 		var type := placing
 		placing = ""
@@ -295,6 +325,20 @@ func _open_cell(cell: Array) -> void:
 func _build_menu(cell: Array) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
+	var wall_card := _card(true)
+	box.add_child(wall_card)
+	var wall_row := HBoxContainer.new()
+	wall_card.add_child(wall_row)
+	var wall_info := VBoxContainer.new()
+	wall_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wall_row.add_child(wall_info)
+	HomeHud.make_label(wall_info, Catalog.display_name("wall"), 28)
+	_wrap(HomeHud.make_label(wall_info, I18n.t(Catalog.INFO["wall"]), 20, SOFT))
+	var wall_btn := HomeHud.make_button(wall_row, I18n.t("Build walls  ·  %d each") % Catalog.WALL_COST, 22, 80)
+	wall_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	wall_btn.custom_minimum_size.x = 200
+	_gold(wall_btn, true)
+	wall_btn.pressed.connect(_start_wall_mode)
 	for option in Catalog.BUILD_ORDER:
 		var why := GameState.build_block_reason(option)
 		var card := _card(why == "")
@@ -320,6 +364,112 @@ func _build_menu(cell: Array) -> Control:
 			else:
 				_do_build(option, cell))
 	return box
+
+
+# ---------------------------------------------------------------- walls
+
+static func _all_edges() -> Array:
+	var out := []
+	for c in range(-1, City.GRID):
+		for r in range(-1, City.GRID):
+			for d in 2:
+				if Walls.valid([c, r, d]):
+					out.append([c, r, d])
+	return out
+
+
+## The path closest to a screen point, within `reach` pixels, or [].
+func _pick_edge(screen_pos: Vector2, reach: float) -> Array:
+	var best := []
+	var best_d := reach
+	for e in _all_edges():
+		var d := cam.unproject_position(Walls.center(e)).distance_to(screen_pos)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
+func _start_wall_mode() -> void:
+	wall_mode = true
+	placing = ""
+	hud.hide_panel()
+	edge_markers.visible = true
+	_update_wall_banner()
+
+
+func _update_wall_banner() -> void:
+	var text := I18n.t("Tap or drag along the paths to build walls  ·  %d / %d") % [GameState.walls.size(), Catalog.wall_limit(GameState.hq_level())]
+	hud.show_mode(text)
+
+
+func _end_wall_mode() -> void:
+	wall_mode = false
+	edge_markers.visible = false
+	hud.show_mode("")
+
+
+## Wall mode: builds a wall piece on the path under the finger, if there is room for one.
+func _paint_wall(screen_pos: Vector2) -> void:
+	var edge := _pick_edge(screen_pos, EDGE_PICK)
+	if edge.is_empty() or not GameState.wall_at(edge).is_empty():
+		return
+	var why := GameState.wall_block_reason()
+	if why != "":
+		hud.toast(why)
+		return
+	if GameState.build_wall(edge):
+		Audio.play("click", -4.0)
+		StructureModels.wall(level, edge, 1)
+		var i: int = edge_marker_index.get(Walls.key(edge), -1)
+		if i >= 0:
+			edge_markers.multimesh.set_instance_transform(i, Transform3D(Basis().scaled(Vector3.ONE * 0.001), Vector3(0, -5, 0)))
+		_update_wall_banner()
+
+
+## A wall piece's sheet: its health, upgrade it alone or every piece of its level, or remove it.
+func _open_wall(edge: Array) -> void:
+	open_cell = []
+	open_sheet = ""
+	marker.visible = false
+	var w := GameState.wall_at(edge)
+	var lvl := int(w["level"])
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	_wrap(HomeHud.make_label(box, I18n.t(Catalog.INFO["wall"]), 22, SOFT))
+	var hp := Catalog.wall_hp(lvl)
+	HomeHud.stat_bar(box, I18n.t("Health %d") % int(hp), hp, Catalog.wall_hp(Catalog.MAX_LEVEL), Color(0.35, 0.85, 0.45))
+	if lvl >= Catalog.MAX_LEVEL:
+		HomeHud.make_label(box, I18n.t("Max level reached"), 26, GOLD)
+	else:
+		var reason := GameState.wall_upgrade_reason(edge)
+		var cost := Catalog.wall_upgrade_cost(lvl)
+		var up := HomeHud.make_button(box, I18n.t("Upgrade to Lv %d  ·  %d coins") % [lvl + 1, cost], 26, 84)
+		up.disabled = reason != ""
+		_gold(up, reason == "")
+		up.pressed.connect(func() -> void:
+			if GameState.upgrade_wall(edge):
+				Audio.play("build")
+				_rebuild()
+				_open_wall(edge))
+		var same := GameState.walls.filter(func(o: Dictionary) -> bool: return int(o["level"]) == lvl).size()
+		if same > 1:
+			var all := HomeHud.make_button(box, I18n.t("Upgrade all %d Lv %d walls  ·  %d coins") % [same, lvl, cost * same], 22, 72)
+			all.disabled = reason != ""
+			all.pressed.connect(func() -> void:
+				var n := GameState.upgrade_walls_at_level(lvl)
+				if n > 0:
+					Audio.play("build")
+					hud.toast(I18n.t("%d walls upgraded") % n)
+					_rebuild()
+					_open_wall(edge))
+		if reason != "":
+			_wrap(HomeHud.make_label(box, reason, 22, BAD))
+	HomeHud.make_button(box, I18n.t("Remove (no refund)"), 22, 64).pressed.connect(func() -> void:
+		GameState.remove_wall(edge)
+		_rebuild()
+		hud.hide_panel())
+	hud.show_content("%s  ·  %s" % [Catalog.display_name("wall"), I18n.t("Lv %d") % lvl], box)
 
 
 ## The Build button: pick something, then tap a free pad for it.

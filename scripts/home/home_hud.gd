@@ -12,6 +12,7 @@ signal build_pressed
 signal settings_pressed
 signal workers_pressed
 signal gems_pressed
+signal mode_done
 
 const COIN := Color(0.95, 0.79, 0.3)
 const FUEL := Color(0.93, 0.35, 0.55)
@@ -28,6 +29,9 @@ var _panel: PanelContainer
 var _panel_title: Label
 var _panel_body: VBoxContainer
 var _toast: Label
+## A banner under the top bar for building modes (walls), with a Done button.
+var _mode: PanelContainer
+var _mode_label: Label
 
 
 func _ready() -> void:
@@ -154,6 +158,27 @@ func _ready() -> void:
 	_panel_body.add_theme_constant_override("separation", 14)
 	scroll.add_child(_panel_body)
 	_panel.visible = false
+
+	_mode = PanelContainer.new()
+	_mode.anchor_left = 0.5
+	_mode.anchor_right = 0.5
+	_mode.offset_left = -330
+	_mode.offset_right = 330
+	_mode.offset_top = 86
+	_mode.add_theme_stylebox_override("panel", flat(Color(0.06, 0.08, 0.06, 0.9)))
+	root.add_child(_mode)
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 14)
+	_mode.add_child(mode_row)
+	_mode_label = make_label(mode_row, "", 22)
+	_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var done := make_button(mode_row, I18n.t("Done"), 24, 64)
+	done.size_flags_horizontal = Control.SIZE_SHRINK_END
+	done.custom_minimum_size.x = 130
+	done.pressed.connect(func() -> void: mode_done.emit())
+	_mode.visible = false
 
 	_toast = make_label(root, "", 34)
 	_toast.anchor_right = 1.0
@@ -327,8 +352,17 @@ func toast(text: String) -> void:
 	_toast.modulate.a = 1.6
 
 
+## Shows the building-mode banner with `text`, or hides it when `text` is empty. The bottom
+## buttons hide while a mode is on.
+func show_mode(text: String) -> void:
+	_mode.visible = text != ""
+	_mode_label.text = text
+	_attack.visible = text == "" and not _panel.visible
+	_dock.visible = text == "" and not _panel.visible
+
+
 func blocks(pos: Vector2) -> bool:
-	for c: Control in [_panel, _attack, _dock, _workers, _bars["gems"]["bar"]]:
+	for c: Control in [_mode, _panel, _attack, _dock, _workers, _bars["gems"]["bar"]]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false

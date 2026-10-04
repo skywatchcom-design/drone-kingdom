@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 6
+const SAVE_VERSION := 7
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -30,6 +30,8 @@ var army := {}
 ## Unit types waiting to be trained, in order. The first one started at train_started.
 var training: Array = []
 var train_started := 0.0
+## Wall pieces: each {edge: [c, r, d], level} (see Walls).
+var walls: Array = []
 var enemy_index := 0
 var raid_target := "enemy"
 var city_seed := 7
@@ -125,6 +127,7 @@ func new_player() -> void:
 		{"type": "quarters", "cell": [5, 5], "level": 1},
 	]
 	units = {"infantry": 1, "courier": 1}
+	walls = []
 	army = {"infantry": 2, "courier": 2}
 	training = []
 	train_started = 0.0
@@ -353,7 +356,7 @@ func player_base() -> Dictionary:
 			pad = [c, City.GRID - 1]
 			break
 	var built := structures.filter(func(s: Dictionary) -> bool: return not s.get("fresh", false))
-	return {"name": I18n.t("Your Base (practice)"), "seed": city_seed, "pad": pad, "structures": built}
+	return {"name": I18n.t("Your Base (practice)"), "seed": city_seed, "pad": pad, "structures": built, "walls": walls}
 
 
 # ---------------------------------------------------------------- actions
@@ -476,6 +479,76 @@ func remove(cell: Array) -> bool:
 	if s.is_empty() or s["type"] == "hq" or is_busy(s):
 		return false
 	structures.erase(s)
+	save_game()
+	return true
+
+
+# ---------------------------------------------------------------- walls
+
+func wall_at(edge: Array) -> Dictionary:
+	var k := Walls.key(edge)
+	for w in walls:
+		if Walls.key(w["edge"]) == k:
+			return w
+	return {}
+
+
+func wall_block_reason() -> String:
+	if walls.size() >= Catalog.wall_limit(hq_level()):
+		return I18n.t("Wall limit reached (%d)") % Catalog.wall_limit(hq_level())
+	return _coins_reason(Catalog.WALL_COST)
+
+
+## Puts a level 1 wall piece on an empty path. Instant, no worker.
+func build_wall(edge: Array) -> bool:
+	if not Walls.valid(edge) or not wall_at(edge).is_empty() or wall_block_reason() != "":
+		return false
+	_spend(Catalog.WALL_COST)
+	walls.append({"edge": [int(edge[0]), int(edge[1]), int(edge[2])], "level": 1})
+	save_game()
+	return true
+
+
+func wall_upgrade_reason(edge: Array) -> String:
+	var w := wall_at(edge)
+	if w.is_empty():
+		return I18n.t("Nothing here")
+	var level := int(w["level"])
+	if level >= Catalog.MAX_LEVEL:
+		return I18n.t("Max level")
+	if level >= hq_level():
+		return I18n.t("Upgrade the Command Tower first")
+	return _coins_reason(Catalog.wall_upgrade_cost(level))
+
+
+func upgrade_wall(edge: Array) -> bool:
+	if wall_upgrade_reason(edge) != "":
+		return false
+	var w := wall_at(edge)
+	_spend(Catalog.wall_upgrade_cost(int(w["level"])))
+	w["level"] = int(w["level"]) + 1
+	save_game()
+	return true
+
+
+## Upgrades every wall piece at `level`, as far as the coins go. Returns how many.
+func upgrade_walls_at_level(level: int) -> int:
+	var done := 0
+	for w in walls:
+		if int(w["level"]) == level and wall_upgrade_reason(w["edge"]) == "":
+			_spend(Catalog.wall_upgrade_cost(level))
+			w["level"] = level + 1
+			done += 1
+	if done > 0:
+		save_game()
+	return done
+
+
+func remove_wall(edge: Array) -> bool:
+	var w := wall_at(edge)
+	if w.is_empty():
+		return false
+	walls.erase(w)
 	save_game()
 	return true
 
@@ -615,7 +688,7 @@ func save_game() -> void:
 		return
 	file.store_string(JSON.stringify({
 		"version": SAVE_VERSION, "coins": coins, "fuel": fuel, "gems": gems, "workers": workers,
-		"structures": structures, "units": units, "army": army, "training": training,
+		"structures": structures, "units": units, "army": army, "training": training, "walls": walls,
 		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 	}))
 
@@ -625,7 +698,7 @@ func load_game() -> bool:
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -651,6 +724,9 @@ func load_game() -> bool:
 	for k in data.get("training", []):
 		training.append(str(k))
 	train_started = float(data.get("train_started", now()))
+	walls = []
+	for w in data.get("walls", []):
+		walls.append({"edge": [int(w["edge"][0]), int(w["edge"][1]), int(w["edge"][2])], "level": int(w["level"])})
 	if int(data["version"]) == 4:
 		_add_army_buildings()
 	enemy_index = int(data.get("enemy_index", 0))

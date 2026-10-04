@@ -1,8 +1,9 @@
 extends Node3D
 ## A Clash-style attack. Pick a unit card, tap outside the base to send it in, and the units
 ## take it from there: each goes for the structure its role prefers while the defenses
-## fight back. Drones fly over everything; soldiers and tanks walk, and the fence stops them:
-## they come in through the gate or through a hole the engineers blow. Stars for 50%, the
+## fight back. Drones fly over everything; soldiers and tanks walk:
+## they go round the base's walls, attack them when there is no way round, and the engineers
+## blow holes in them. Stars for 50%, the
 ## Command Tower, and 100%. Loot comes out of every generator, pump, store and Command Tower.
 ## Deployed units are used up (practice runs on your own base are free).
 ## Each Quarters sends out an infantry squad to defend when attackers come close; attacking
@@ -24,8 +25,7 @@ const TAP_SLOP := 24.0
 const PAN_LIMIT := 30.0
 ## Half the footprint of a structure, for ground units' firing range and avoidance.
 const STRUCTURE_RADIUS := 2.7
-## How wide a hole the engineers' charge blows in the fence.
-const BREACH_WIDTH := 6.0
+
 const BOLT_COLORS := {
 	"courier": Color(0.4, 0.95, 1.0),
 	"scout": Color(1.0, 0.75, 0.25),
@@ -59,10 +59,14 @@ var army := {}
 ## Units sent in, by type; they are used up when the battle ends.
 var deployed := {}
 var drone_names := {}
-## Points on the fence line where ground units can cross: the gate, then any breaches.
-var openings: Array = [City.gate_point()]
-## Breaches an engineer is on the way to blow, so the other engineers don't double up.
-var pending_breaches: Array = []
+## Wall pieces by key: {edge, level, hp, max_hp, node, destroyed, a, b, center}.
+var wall_index := {}
+## Keys of the walls still standing; ground units route around them.
+var standing_walls := {}
+## Goes up whenever a wall falls, so cached routes get worked out again.
+var walls_version := 0
+## Walls an engineer is on the way to blow, so the others don't double up.
+var pending_walls := {}
 var selected := ""
 var started := false
 var time_left := Catalog.BATTLE_SECONDS
@@ -124,6 +128,15 @@ func _start() -> void:
 			"loot": Catalog.loot_value(type, lvl) + Catalog.loot_fuel(type, lvl),
 			"loot_coins": Catalog.loot_value(type, lvl), "loot_fuel": Catalog.loot_fuel(type, lvl), "destroyed": false,
 		})
+
+	for w in base.get("walls", []):
+		var edge: Array = w["edge"]
+		var k := Walls.key(edge)
+		var hp := Catalog.wall_hp(int(w["level"]))
+		var ends: Array = Walls.ends(edge)
+		wall_index[k] = {"edge": edge, "level": int(w["level"]), "hp": hp, "max_hp": hp, "destroyed": false,
+			"node": StructureModels.wall(level, edge, int(w["level"])), "a": ends[0], "b": ends[1], "center": Walls.center(edge)}
+		standing_walls[k] = true
 
 	var plan: Dictionary = GameState.army
 	if autoplay:
@@ -409,7 +422,10 @@ func _drop_bomb(from: Vector3, spot: Vector3, stats: Dictionary) -> void:
 				_damage_target(i, float(stats["damage"]))
 		for u in defenders:
 			if not u.dead and PathUtils.flat_distance(u.position, spot) <= reach:
-				u.damage(float(stats["damage"])))
+				u.damage(float(stats["damage"]))
+		for k in standing_walls.keys():
+			if PathUtils.flat_distance(wall_index[k]["center"], spot) <= reach + 2.0:
+				_damage_wall(k, float(stats["damage"])))
 
 
 ## The fighter from the approved sketch: grey fuselage, swept wings, twin tails' worth of fin,
@@ -562,14 +578,14 @@ func _defender_ai(u: GroundUnit, delta: float, attackers: Array, alive_defenders
 			best = a
 	if best == null:
 		if PathUtils.flat_distance(u.position, home) > 3.0:
-			_move_ground(u, home, delta, alive_defenders)
+			_move_ground(u, _route(u, home, NEVER_CROSS).get("point", u.position), delta, alive_defenders)
 		else:
 			u.walk(Vector3.ZERO, delta)
 		return
 	if PathUtils.flat_distance(u.position, best.position) <= u.attack_range + 0.5:
 		_shoot_unit(u, best, delta)
 	else:
-		_move_ground(u, best.position, delta, alive_defenders)
+		_move_ground(u, _route(u, best.position, NEVER_CROSS).get("point", u.position), delta, alive_defenders)
 
 
 ## The closest living unit to `p` within `reach`, or null.
@@ -614,9 +630,16 @@ func _shoot_unit(u: GroundUnit, victim: Unit, delta: float) -> void:
 
 # ---------------------------------------------------------------- ground units
 
+## How much a wall on the way counts against a route, in cells: soldiers and tanks walk up to
+## this much further to go round; engineers would rather blow it; defenders never cross.
+const WALL_DETOUR := 8.0
+const ENGINEER_DETOUR := 1.0
+const NEVER_CROSS := 1000.0
+
+
 func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array, alive_defenders: Array) -> void:
 	if u.kind == "engineers" and u.breach_state != "done":
-		_engineer_breach(u, delta, alive_ground)
+		_engineer_walls(u, delta, alive_ground)
 		return
 	# Enemy soldiers in range come first (engineers keep to their charges).
 	if u.kind != "engineers":
@@ -632,9 +655,8 @@ func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array, alive_defender
 		return
 	var t := targets[u.target]
 	var top: Vector3 = t["top"]
-	var reach := STRUCTURE_RADIUS + u.attack_range
-	# Soldiers outside the fence can shoot over it; engineers have to get right up to a building.
-	if PathUtils.flat_distance(u.position, top) <= reach:
+	# Soldiers and tanks shoot over walls; engineers have to get right up to a building.
+	if PathUtils.flat_distance(u.position, top) <= STRUCTURE_RADIUS + u.attack_range:
 		u.walk(Vector3.ZERO, delta)
 		u.aim_at(top, delta)
 		u.fire_cooldown -= delta
@@ -642,12 +664,40 @@ func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array, alive_defender
 			u.fire_cooldown = u.fire_interval * randf_range(0.85, 1.15)
 			_ground_fire(u, u.target)
 		return
-	var waypoint := RaidRules.ground_waypoint(u.position, top, City.YARD, openings)
-	_move_ground(u, waypoint, delta, alive_ground)
+	var step := _route(u, top, ENGINEER_DETOUR if u.kind == "engineers" else WALL_DETOUR)
+	if step.has("wall"):
+		if u.kind == "engineers":
+			u.breach_state = ""
+		else:
+			_attack_wall(u, step["wall"], delta, alive_ground)
+		return
+	_move_ground(u, step["point"], delta, alive_ground)
 
 
-## Walks toward `goal`, steering around standing buildings and other units, and never
-## through the fence except at an opening.
+## The next point toward `goal` along the cheapest route round the walls, as {point}; or, if
+## that route goes through a standing wall right here, {wall: key}. Routes are cached per unit
+## until it changes cell or a wall falls.
+func _route(u: GroundUnit, goal: Vector3, wall_cost: float) -> Dictionary:
+	var from := Walls.cell_of(u.position)
+	var to := Walls.cell_of(goal)
+	var cache := "%s|%s|%d|%d" % [from, to, walls_version, int(wall_cost)]
+	if u.get_meta("route_key", "") != cache:
+		u.set_meta("route_key", cache)
+		u.set_meta("route", Walls.find_path(from, to, standing_walls, wall_cost))
+	var path: Array = u.get_meta("route")
+	if path.is_empty():
+		return {"point": goal}
+	var next: Vector2i = path[0]
+	var k := Walls.key(Walls.between(from, next))
+	if standing_walls.has(k):
+		return {"wall": k}
+	if path.size() == 1:
+		return {"point": goal}
+	return {"point": Walls.cell_center(next)}
+
+
+## Walks toward `goal`, steering around standing buildings, walls and other units, and never
+## through a standing wall.
 func _move_ground(u: GroundUnit, goal: Vector3, delta: float, alive_ground: Array) -> void:
 	var to := goal - u.position
 	to.y = 0.0
@@ -662,6 +712,14 @@ func _move_ground(u: GroundUnit, goal: Vector3, delta: float, alive_ground: Arra
 		var keep := STRUCTURE_RADIUS + r + 0.4
 		if d < keep and d > 0.01:
 			desired += away / d * (keep - d) * 4.0
+	for k in standing_walls:
+		var w: Dictionary = wall_index[k]
+		var closest := Geometry3D.get_closest_point_to_segment(u.position, w["a"], w["b"])
+		var away := u.position - closest
+		away.y = 0.0
+		var d := away.length()
+		if d < r + 0.8 and d > 0.01:
+			desired += away / d * (r + 0.8 - d) * 3.0
 	for other: GroundUnit in alive_ground:
 		if other == u:
 			continue
@@ -673,46 +731,123 @@ func _move_ground(u: GroundUnit, goal: Vector3, delta: float, alive_ground: Arra
 			desired += away / d * (keep - d) * 3.0
 	var before := u.position
 	u.walk(desired, delta)
-	if City.inside_yard(before) != City.inside_yard(u.position) and not _near_opening(u.position):
+	if _blocked(before, u.position):
 		u.position = before
 		u.velocity = Vector3.ZERO
 
 
-func _near_opening(p: Vector3) -> bool:
-	for o: Vector3 in openings:
-		if PathUtils.flat_distance(p, o) < BREACH_WIDTH / 2.0 - 0.6:
+## True if walking from `a` to `b` would pass through a standing wall.
+func _blocked(a: Vector3, b: Vector3) -> bool:
+	for k in standing_walls:
+		var w: Dictionary = wall_index[k]
+		if Walls.segments_cross(a, b, w["a"], w["b"]):
 			return true
 	return false
 
 
-## Engineers: run to the nearest stretch of fence, kneel and plant a charge, fall back, and
-## blow a hole in it. If another engineer is already on it, wait for the hole.
-func _engineer_breach(u: GroundUnit, delta: float, alive_ground: Array) -> void:
+## Walks up to a wall on this side and works it down: rifle fire, tank shells.
+func _attack_wall(u: GroundUnit, k: String, delta: float, alive_ground: Array) -> void:
+	var w: Dictionary = wall_index[k]
+	var c: Vector3 = w["center"]
+	var side := _side_of(w, u.position)
+	var stand := c + side * minf(u.attack_range, 4.0)
+	var aim := c + Vector3(0, 1.2, 0)
+	if PathUtils.flat_distance(u.position, c) > u.attack_range + 1.0:
+		_move_ground(u, stand, delta, alive_ground)
+		return
+	u.walk(Vector3.ZERO, delta)
+	u.aim_at(aim, delta)
+	u.fire_cooldown -= delta
+	if u.fire_cooldown > 0.0 or not u.aimed_at(aim):
+		return
+	u.fire_cooldown = u.fire_interval * randf_range(0.85, 1.15)
+	u.on_fire()
+	var damage := u.dps * u.fire_interval
+	var from := u.fire_origin()
+	if u.is_tank():
+		Audio.play("cannon", -4.0)
+		_muzzle_flash(from, 0.9)
+		Fx.shell(level, from, aim, 0.15, func() -> void:
+			Fx.boom(level, aim, 0.7)
+			_damage_wall(k, damage))
+	else:
+		Audio.play("rifle", -12.0, 0.04)
+		_muzzle_flash(from, 0.25)
+		_thin_tracer(from, aim + Vector3(randf_range(-1.5, 1.5), randf_range(-0.4, 0.4), randf_range(-1.5, 1.5)))
+		_damage_wall(k, damage)
+
+
+## Unit vector from a wall toward the side `p` is on.
+func _side_of(w: Dictionary, p: Vector3) -> Vector3:
+	var n := Vector3(1, 0, 0) if int(w["edge"][2]) == 0 else Vector3(0, 0, 1)
+	return n if (p - (w["center"] as Vector3)).dot(n) >= 0.0 else -n
+
+
+func _damage_wall(k: String, amount: float) -> void:
+	var w: Dictionary = wall_index.get(k, {})
+	if w.is_empty() or w["destroyed"]:
+		return
+	w["hp"] = maxf(0.0, float(w["hp"]) - amount)
+	if w["hp"] <= 0.0:
+		_destroy_wall(k)
+
+
+func _destroy_wall(k: String) -> void:
+	var w: Dictionary = wall_index[k]
+	w["destroyed"] = true
+	(w["node"] as Node3D).visible = false
+	standing_walls.erase(k)
+	walls_version += 1
+	Audio.play("collapse", -6.0)
+	var c: Vector3 = w["center"]
+	for i in 5:
+		var bit := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.5, 1.2), 0.25, randf_range(0.4, 0.8))), MeshKit.mat(Color(0.45, 0.42, 0.36), 0.95),
+			Walls.ends(w["edge"])[0].lerp(Walls.ends(w["edge"])[1], (i + 0.5) / 5.0) + Vector3(randf_range(-0.6, 0.6), 0.12, randf_range(-0.6, 0.6)))
+		bit.rotation.y = randf() * TAU
+	_dust_ring(c + Vector3(0, 0.1, 0), 5.0, 0.8)
+
+
+## Engineers: find the first wall on the route to their target, run up to it, kneel and plant a
+## charge, fall back, and blow it. Then look for the next. With no wall in the way they plant
+## charges on buildings instead. If another engineer is already on that wall, they wait.
+func _engineer_walls(u: GroundUnit, delta: float, alive_ground: Array) -> void:
 	match u.breach_state:
 		"":
-			var spot := City.fence_point(u.position)
-			if City.inside_yard(u.position) or _opening_near(spot, openings):
+			if u.target < 0 or targets[u.target]["destroyed"]:
+				u.target = RaidRules.pick_target("any", _seek_from(u.position), targets)
+			if u.target < 0:
 				u.breach_state = "done"
 				return
-			if _opening_near(spot, pending_breaches):
+			var k := _first_wall_on_route(u, targets[u.target]["top"])
+			if k == "":
+				u.breach_state = "done"
+				return
+			u.set_meta("wall", k)
+			if pending_walls.has(k):
 				u.breach_state = "waiting"
 				return
-			u.breach_point = spot
-			pending_breaches.append(spot)
+			pending_walls[k] = true
 			u.breach_state = "going"
 		"waiting":
 			u.walk(Vector3.ZERO, delta)
-			if _opening_near(City.fence_point(u.position), openings):
-				u.breach_state = "done"
+			if not pending_walls.has(u.get_meta("wall")):
+				u.breach_state = ""
 		"going":
-			var stand := u.breach_point + RaidRules.fence_normal(u.breach_point) * 1.0
-			if PathUtils.flat_distance(u.position, stand) < 0.5:
+			var w: Dictionary = wall_index[u.get_meta("wall")]
+			if w["destroyed"]:
+				pending_walls.erase(u.get_meta("wall"))
+				u.breach_state = ""
+				return
+			var stand: Vector3 = (w["center"] as Vector3) + _side_of(w, u.position) * 1.6
+			u.breach_point = w["center"]
+			if PathUtils.flat_distance(u.position, stand) < 0.6:
 				u.breach_state = "planting"
 				u.breach_timer = 2.0
 				u.walk(Vector3.ZERO, delta)
 				_plant_charge(u)
 			else:
-				_move_ground(u, stand, delta, alive_ground)
+				var step := _route(u, stand, NEVER_CROSS)
+				_move_ground(u, step.get("point", stand), delta, alive_ground)
 		"planting":
 			u.walk(Vector3.ZERO, delta)
 			u.aim_at(u.breach_point, delta)
@@ -721,25 +856,30 @@ func _engineer_breach(u: GroundUnit, delta: float, alive_ground: Array) -> void:
 				u.breach_state = "clear"
 				u.breach_timer = 1.6
 		"clear":
-			_move_ground(u, u.breach_point + RaidRules.fence_normal(u.breach_point) * 6.0, delta, alive_ground)
+			var w: Dictionary = wall_index[u.get_meta("wall")]
+			_move_ground(u, u.breach_point + _side_of(w, u.position) * 6.0, delta, alive_ground)
 			u.breach_timer -= delta
 			if u.breach_timer <= 0.0:
-				_blow_breach(u.breach_point)
-				u.breach_state = "done"
+				_blow_wall(u.get_meta("wall"))
+				u.breach_state = ""
 
 
-func _opening_near(p: Vector3, list: Array) -> bool:
-	for o: Vector3 in list:
-		if PathUtils.flat_distance(p, o) < BREACH_WIDTH:
-			return true
-	return false
+## The first standing wall the engineer's cheap-breach route to `goal` goes through, or "".
+func _first_wall_on_route(u: GroundUnit, goal: Vector3) -> String:
+	var at := Walls.cell_of(u.position)
+	for next: Vector2i in Walls.find_path(at, Walls.cell_of(goal), standing_walls, ENGINEER_DETOUR):
+		var k := Walls.key(Walls.between(at, next))
+		if standing_walls.has(k):
+			return k
+		at = next
+	return ""
 
 
-## A satchel on the fence with a blinking red light, until it goes off.
+## A satchel on the wall with a blinking red light, until it goes off.
 func _plant_charge(u: GroundUnit) -> void:
 	var charge := Node3D.new()
 	level.add_child(charge)
-	charge.position = u.breach_point + Vector3(0, 0.6, 0)
+	charge.position = u.breach_point + _side_of(wall_index[u.get_meta("wall")], u.position) * 0.6 + Vector3(0, 0.6, 0)
 	MeshKit.add(charge, MeshKit.box(Vector3(0.6, 0.45, 0.35)), MeshKit.mat(Color(0.23, 0.23, 0.18), 0.7))
 	var lamp := MeshKit.add(charge, MeshKit.sphere(0.12, 8), MeshKit.glow(Color(1.0, 0.16, 0.16)), Vector3(0, 0.32, 0))
 	var tween := create_tween().set_loops(12)
@@ -747,40 +887,33 @@ func _plant_charge(u: GroundUnit) -> void:
 		lamp.visible = not lamp.visible
 		Audio.play("charge", -14.0))
 	tween.tween_interval(0.15)
-	charge.set_meta("point", u.breach_point)
+	charge.set_meta("wall", u.get_meta("wall"))
 	charge.add_to_group("charges")
 
 
-func _blow_breach(point: Vector3) -> void:
+## The charge goes off: the wall is gone, and the pieces touching it take a beating too.
+func _blow_wall(k: String) -> void:
 	for charge in get_tree().get_nodes_in_group("charges"):
-		if (charge.get_meta("point") as Vector3).is_equal_approx(point):
+		if charge.get_meta("wall") == k:
 			charge.queue_free()
+	pending_walls.erase(k)
+	var w: Dictionary = wall_index[k]
+	var point: Vector3 = w["center"]
 	Audio.play("breach")
 	Audio.buzz(80)
-	var pieces := city.breach(point, BREACH_WIDTH)
-	openings.append(point)
-	pending_breaches.erase(point)
+	Fx.boom(level, point, 1.4)
 	_impact(point + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2))
-	_impact(point + Vector3(0, 1.6, 0), Color(1.0, 1.0, 0.9))
-	_dust_ring(point + Vector3(0, 0.1, 0), 7.0, 1.0)
-	var smoke := MeshKit.add(level, MeshKit.sphere(1.2, 10), MeshKit.glow(Color(0.35, 0.33, 0.3), 0.7), point + Vector3(0, 1.5, 0))
-	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var st := create_tween()
-	st.set_parallel(true)
-	st.tween_property(smoke, "scale", Vector3.ONE * 4.0, 1.4)
-	st.tween_property(smoke, "position:y", point.y + 5.0, 1.4)
-	st.tween_property(smoke.material_override, "albedo_color:a", 0.0, 1.4)
-	st.chain().tween_callback(smoke.queue_free)
-	# Bits of fence fly off and land inside.
-	var wood := MeshKit.mat(Color(0.5, 0.36, 0.22), 0.9)
-	var n := RaidRules.fence_normal(point)
-	for p: Vector3 in pieces:
-		var bit := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.5, 1.6), 0.12, 0.12)), wood, p + Vector3(0, 0.7, 0))
-		var land := p - n * randf_range(2.0, 5.0) + Vector3(randf_range(-1.5, 1.5), 0.08, randf_range(-1.5, 1.5))
-		var bt := create_tween()
-		bt.set_parallel(true)
-		bt.tween_property(bit, "position", Vector3(land.x, 0.08, land.z), 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		bt.tween_property(bit, "rotation", Vector3(randf() * 6.0, randf() * 6.0, randf() * 6.0), 0.7)
+	if not w["destroyed"]:
+		_destroy_wall(k)
+	for other in wall_index.values():
+		if other["destroyed"]:
+			continue
+		var ends: Array = Walls.ends(other["edge"])
+		var mine: Array = Walls.ends(w["edge"])
+		for e: Vector3 in ends:
+			if e.distance_to(mine[0]) < 0.5 or e.distance_to(mine[1]) < 0.5:
+				_damage_wall(Walls.key(other["edge"]), float(other["max_hp"]) * 0.5)
+				break
 
 
 ## One shot from a soldier or the tank, or an engineer's demolition charge.
@@ -1147,6 +1280,12 @@ func _update_bars() -> void:
 			continue
 		entries.append({"key": "g%d" % i, "friendly": true, "ratio": u.health / u.max_health,
 			"pos": cam.unproject_position(u.global_position + Vector3(0, 4.2 if u.is_tank() else 3.4, 0))})
+	for k in wall_index:
+		var w: Dictionary = wall_index[k]
+		if w["destroyed"] or w["hp"] >= w["max_hp"]:
+			continue
+		entries.append({"key": "w" + k, "friendly": false, "ratio": w["hp"] / w["max_hp"],
+			"pos": cam.unproject_position((w["center"] as Vector3) + Vector3(0, 3.0, 0))})
 	for i in defenders.size():
 		var u := defenders[i]
 		if u.dead or u.health >= u.max_health:

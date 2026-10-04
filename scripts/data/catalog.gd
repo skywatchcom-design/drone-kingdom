@@ -27,6 +27,7 @@ const INFO := {
 	"pump": "Pumps fuel over time. Tap the drop above it to collect.",
 	"tank": "Raises how much fuel you can hold. Attackers loot it.",
 	"hangar": "Unlocks and upgrades your attack drones. Its level caps drone levels.",
+	"wall": "Stands on the paths between pads. Soldiers and tanks can't pass; engineers blow holes in it.",
 	"camp": "Trains your army: soldiers, tanks and drones, one after another. Higher levels train faster.",
 	"quarters": "Where your trained army waits for the next attack. More quarters and levels fit a bigger army.",
 	"garage": "Unlocks and upgrades infantry, engineers and tanks. Its level caps their levels.",
@@ -142,6 +143,8 @@ static func make_defense(type: String) -> Defense:
 
 
 static func display_name(type: String) -> String:
+	if type == "wall":
+		return I18n.t("Wall")
 	if DEFENSES.has(type):
 		return I18n.t(DEFENSES[type]["name"])
 	if BUILDINGS.has(type):
@@ -287,6 +290,27 @@ static func drone_stats(type: String, level: int) -> Dictionary:
 	s["dps"] = float(s["dps"]) * (1.0 + 0.2 * step)
 	s["speed"] = float(s["speed"]) * (1.0 + 0.04 * step)
 	return s
+
+
+# ---------------------------------------------------------------- walls
+
+## Wall pieces stand on the paths between pads. They are built and upgraded at once, with
+## no worker, like Clash walls. The Command Tower caps how many and how high their level.
+const WALL_COST := 25
+const WALL_LIMITS := [20, 35, 50, 65, 80]
+
+
+static func wall_limit(hq_level: int) -> int:
+	return int(WALL_LIMITS[clampi(hq_level, 1, MAX_LEVEL) - 1])
+
+
+## Coins to raise one wall piece from `level` to `level + 1`.
+static func wall_upgrade_cost(level: int) -> int:
+	return _round10(WALL_COST * pow(3.0, level))
+
+
+static func wall_hp(level: int) -> float:
+	return 500.0 * (1.0 + 0.7 * (level - 1))
 
 
 ## Battle energy: filled by knocking out buildings, spent on support abilities.

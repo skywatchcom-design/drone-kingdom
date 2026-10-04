@@ -2,7 +2,8 @@ class_name Bases
 extends RefCounted
 ## Enemy bases. The first few are handcrafted as a gentle start; after that they are
 ## generated to match the player's Command Tower level, so there is always a next target.
-## Format: {name, seed, pad: [c, r] attacker launch pad, structures: [{type, cell, level}]}.
+## Format: {name, seed, pad: [c, r] attacker launch pad, structures: [{type, cell, level}],
+## walls: [{edge: [c, r, d], level}]}. Starter bases lay their walls out with wall_box().
 ## Later these become snapshots of real players' bases.
 
 const STARTERS := [
@@ -64,7 +65,9 @@ const NAMES := ["Rust Alley", "Pigeon Heights", "Neon Corner", "Old Port", "Sate
 
 static func enemy(index: int, player_hq: int) -> Dictionary:
 	if index < STARTERS.size():
-		return STARTERS[index]
+		var b: Dictionary = STARTERS[index].duplicate(true)
+		b["walls"] = _starter_walls(index)
+		return b
 	return generate(1000 + index, clampi(player_hq, 1, Catalog.MAX_LEVEL))
 
 
@@ -91,7 +94,43 @@ static func generate(seed_value: int, hq: int) -> Dictionary:
 		"seed": seed_value,
 		"pad": pad,
 		"structures": structures,
+		"walls": _generated_walls(rng, hq_cell, hq),
 	}
+
+
+## The first base has no walls; the second boxes in its Command Tower; the third adds an
+## outer ring with one way in.
+static func _starter_walls(index: int) -> Array:
+	match index:
+		1:
+			return wall_box(1, 2, 1, 2, 1)
+		2:
+			return wall_box(2, 1, 2, 1, 2) + wall_box(1, 0, 4, 3, 1, [5])
+	return []
+
+
+## Wall pieces of `level` around the rectangle of cells c0..c1, r0..r1, minus `gaps`.
+static func wall_box(c0: int, r0: int, c1: int, r1: int, level: int, gaps: Array = []) -> Array:
+	var out := []
+	for e in Walls.ring(c0, r0, c1, r1, gaps):
+		out.append({"edge": e, "level": level})
+	return out
+
+
+## A box round the Command Tower, then (with walls to spare) a wider ring with a gap or two.
+static func _generated_walls(rng: RandomNumberGenerator, hq_cell: Array, hq: int) -> Array:
+	var limit := Catalog.wall_limit(hq)
+	var c := int(hq_cell[0])
+	var r := int(hq_cell[1])
+	var walls := wall_box(c, r, c, r, hq)
+	var outer := Walls.ring(maxi(c - 2, 0), maxi(r - 2, 0), mini(c + 2, City.GRID - 1), mini(r + 2, City.GRID - 1))
+	var gaps := [rng.randi_range(0, outer.size() - 1), rng.randi_range(0, outer.size() - 1)]
+	for i in outer.size():
+		if walls.size() >= limit:
+			break
+		if i not in gaps:
+			walls.append({"edge": outer[i], "level": maxi(1, hq - 1)})
+	return walls
 
 
 static func _free_cell(rng: RandomNumberGenerator, taken: Dictionary) -> Array:

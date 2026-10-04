@@ -343,3 +343,58 @@ static func chevrons(parent: Node3D, level: int, pos: Vector3) -> void:
 		for side in [-1.0, 1.0]:
 			var bar := MeshKit.add(c, MeshKit.box(Vector3(0.24, 0.04, 0.06)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(side * 0.09, 0, 0))
 			bar.rotation.y = side * 0.6
+
+
+# ---------------------------------------------------------------- walls
+
+## Model units per meter for walls (the sketch's wall is drawn 1.4 times smaller).
+const WALL_SCALE := 1.4
+
+
+## One wall piece on a path between pads (approved sketch): Lv1 a wooden fence; Lv2 barbed
+## wire on top; Lv3 two rows of sandbags; Lv4 three rows with a post and wire; Lv5 tall
+## concrete blast panels with a rust band and wire. Built along X, turned for paths along Z.
+static func wall(parent: Node3D, edge: Array, level: int) -> Node3D:
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.position = Walls.center(edge)
+	root.scale = Vector3.ONE * WALL_SCALE
+	if int(edge[2]) == 0:
+		root.rotation.y = PI / 2.0
+	var length := City.SPACING / WALL_SCALE
+	var segs := 3
+	var seg := length / segs
+	var wood := MeshKit.mat(WOOD, 0.9)
+	var wire := MeshKit.mat(Color(0.6, 0.6, 0.6), 0.4, 0.7)
+	for i in segs:
+		var x := (i - (segs - 1) / 2.0) * seg
+		if level <= 2:
+			for dx in [-seg / 2.0 + 0.07, seg / 2.0 - 0.07]:
+				MeshKit.add(root, MeshKit.box(Vector3(0.14, 1.0, 0.14)), wood, Vector3(x + dx, 0.5, 0))
+			for h in [0.35, 0.75]:
+				MeshKit.add(root, MeshKit.box(Vector3(seg, 0.1, 0.08)), wood, Vector3(x, h, 0))
+			for k in 5:
+				MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.85, 0.05)), MeshKit.mat(Color(0.54, 0.42, 0.27), 0.9), Vector3(x - seg * 0.38 + k * seg * 0.19, 0.45, 0.06))
+			if level == 2:
+				_wire_coil(root, wire, x, 1.15, seg)
+		elif level <= 4:
+			var rows := 2 if level == 3 else 3
+			for r in rows:
+				for k in 3:
+					MeshKit.add(root, MeshKit.box(Vector3(seg / 3.0 - 0.02, 0.28, 0.42)), MeshKit.mat(BAG, 0.95), Vector3(x - seg / 3.0 + k * seg / 3.0 + (r % 2) * 0.12, 0.15 + r * 0.27, 0))
+			if level == 4:
+				MeshKit.add(root, MeshKit.box(Vector3(0.08, 1.4, 0.08)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(x - seg / 2.0 + 0.05, 0.7, 0))
+				_wire_coil(root, wire, x, 1.05, seg)
+		else:
+			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.3, 1.0)), MeshKit.mat(CONCRETE, 0.85), Vector3(x, 0.15, 0))
+			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 1.9, 0.3)), MeshKit.mat(Color(0.72, 0.71, 0.68), 0.85), Vector3(x, 1.25, 0))
+			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.12, 0.31)), MeshKit.mat(RUST, 0.6), Vector3(x, 1.7, 0))
+			_wire_coil(root, wire, x, 2.35, seg)
+	return root
+
+
+## A coil of barbed wire along a wall segment.
+static func _wire_coil(parent: Node3D, mat: Material, x: float, y: float, seg: float) -> void:
+	var coil := MeshKit.add(parent, _torus(0.18, 0.025), mat, Vector3(x, y, 0))
+	coil.rotation.z = PI / 2.0
+	coil.scale = Vector3(1, seg / 0.4, 1)
