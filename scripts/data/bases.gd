@@ -17,8 +17,7 @@ const STARTERS := [
 			{"type": "generator", "cell": [4, 2], "level": 1},
 			{"type": "pump", "cell": [6, 2], "level": 1},
 			{"type": "tank", "cell": [3, 6], "level": 1},
-			{"type": "laser", "cell": [4, 4], "level": 1},
-			{"type": "birds", "cell": [3, 3], "level": 1},
+			{"type": "mg", "cell": [4, 4], "level": 1},
 		],
 	},
 	{
@@ -32,8 +31,8 @@ const STARTERS := [
 			{"type": "generator", "cell": [2, 4], "level": 1},
 			{"type": "pump", "cell": [7, 4], "level": 1},
 			{"type": "tank", "cell": [5, 7], "level": 1},
-			{"type": "laser", "cell": [5, 5], "level": 1},
-			{"type": "net", "cell": [3, 4], "level": 1},
+			{"type": "mg", "cell": [5, 5], "level": 1},
+			{"type": "aa", "cell": [3, 4], "level": 1},
 			{"type": "jammer", "cell": [4, 2], "level": 1},
 		],
 	},
@@ -48,11 +47,11 @@ const STARTERS := [
 			{"type": "generator", "cell": [4, 4], "level": 2},
 			{"type": "pump", "cell": [6, 5], "level": 2},
 			{"type": "tank", "cell": [1, 3], "level": 2},
-			{"type": "laser", "cell": [3, 2], "level": 2},
-			{"type": "laser", "cell": [5, 4], "level": 1},
-			{"type": "net", "cell": [2, 4], "level": 1},
+			{"type": "mg", "cell": [3, 2], "level": 2},
+			{"type": "aa", "cell": [5, 4], "level": 1},
+			{"type": "at", "cell": [2, 4], "level": 1},
 			{"type": "jammer", "cell": [3, 5], "level": 1},
-			{"type": "birds", "cell": [5, 2], "level": 1},
+			{"type": "mortar", "cell": [5, 2], "level": 1},
 		],
 	},
 ]
@@ -79,7 +78,7 @@ static func generate(seed_value: int, hq: int) -> Dictionary:
 	var hq_cell := [rng.randi_range(0, 2), rng.randi_range(0, 2)]
 	taken["%d,%d" % hq_cell] = true
 	structures.append({"type": "hq", "cell": hq_cell, "level": hq})
-	for type in ["generator", "storage", "pump", "tank", "camp", "quarters", "laser", "net", "jammer", "birds"]:
+	for type in ["generator", "storage", "pump", "tank", "camp", "quarters", "mg", "at", "aa", "mortar", "jammer"]:
 		for i in Catalog.max_count(type, hq):
 			var cell := _free_cell(rng, taken)
 			if cell.is_empty():

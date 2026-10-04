@@ -16,7 +16,7 @@ const DEFENSE_HEAD := 4.5
 const HP := {
 	"hq": 600.0, "generator": 180.0, "storage": 260.0, "pump": 180.0, "tank": 260.0, "hangar": 220.0,
 	"camp": 260.0, "quarters": 220.0, "garage": 280.0,
-	"laser": 300.0, "net": 280.0, "jammer": 220.0, "birds": 200.0,
+	"mg": 460.0, "at": 500.0, "aa": 440.0, "mortar": 420.0, "jammer": 300.0,
 }
 
 ## One line on what each structure is for, shown in its info sheet.
@@ -30,17 +30,24 @@ const INFO := {
 	"camp": "Trains your army: soldiers, tanks and drones, one after another. Higher levels train faster.",
 	"quarters": "Where your trained army waits for the next attack. More quarters and levels fit a bigger army.",
 	"garage": "Unlocks and upgrades infantry, engineers and tanks. Its level caps their levels.",
-	"laser": "Turret that locks onto the nearest drone and burns it.",
-	"net": "Fires nets that slow drones to a crawl.",
+	"mg": "Fires bursts at soldiers. Weak against tanks and drones.",
+	"at": "Slow, heavy shells that crack tanks open. Weak against soldiers, can't hit drones well.",
+	"aa": "Shoots drones out of the sky. Weak against anything on the ground.",
+	"mortar": "Lobs rounds that burst among groups of soldiers. Can't hit anything close or in the air.",
 	"jammer": "Scrambles drones inside its field so they drift and slow down.",
-	"birds": "Gulls circle the nest and slam into passing drones.",
 }
 
+## vs: damage multiplier against soldiers, tanks and drones. Each defense is best against one.
 const DEFENSES := {
-	"laser": {"name": "Laser Tower", "cost": 200, "radius": 10.0, "dps": 35.0},
-	"net": {"name": "Net Launcher", "cost": 250, "radius": 11.0, "speed": 16.0, "cooldown": 3.5},
+	"mg": {"name": "MG Nest", "cost": 200, "radius": 11.0, "dps": 65.0,
+		"vs": {"soldier": 1.0, "tank": 0.2, "air": 0.3}},
+	"at": {"name": "Anti-Tank Gun", "cost": 300, "radius": 13.0, "damage": 260.0, "cooldown": 2.2,
+		"vs": {"soldier": 0.35, "tank": 1.0, "air": 0.15}},
+	"aa": {"name": "AA Battery", "cost": 250, "radius": 12.0, "dps": 60.0,
+		"vs": {"soldier": 0.25, "tank": 0.1, "air": 1.0}},
+	"mortar": {"name": "Mortar", "cost": 350, "radius": 16.0, "min_radius": 5.0, "damage": 85.0, "cooldown": 3.2, "splash": 3.6,
+		"vs": {"soldier": 1.0, "tank": 0.3}},
 	"jammer": {"name": "Jammer", "cost": 300, "radius": 7.5},
-	"birds": {"name": "Gull Nest", "cost": 350, "radius": 7.5, "count": 6, "speed": 1.3, "damage": 15.0},
 }
 
 const BUILDINGS := {
@@ -57,7 +64,7 @@ const BUILDINGS := {
 
 ## Order of the build menu.
 const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar",
-	"laser", "net", "jammer", "birds"]
+	"mg", "at", "aa", "mortar", "jammer"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
 const LIMITS := {
@@ -70,10 +77,11 @@ const LIMITS := {
 	"camp": [1, 1, 1, 1, 1],
 	"quarters": [1, 1, 2, 2, 3],
 	"garage": [1, 1, 1, 1, 1],
-	"laser": [1, 2, 2, 3, 3],
-	"net": [0, 1, 1, 2, 2],
+	"mg": [1, 2, 2, 3, 3],
+	"at": [0, 1, 1, 2, 2],
+	"aa": [1, 1, 2, 2, 3],
+	"mortar": [0, 0, 1, 1, 2],
 	"jammer": [0, 0, 1, 1, 2],
-	"birds": [0, 0, 1, 1, 2],
 }
 
 ## prefers: which structures a unit goes for first ("any", "loot", "defense", or "fence"
@@ -119,14 +127,16 @@ static func is_defense(type: String) -> bool:
 
 static func make_defense(type: String) -> Defense:
 	match type:
-		"laser":
-			return LaserTower.new()
-		"net":
-			return NetLauncher.new()
+		"mg":
+			return MgNest.new()
+		"at":
+			return AtGun.new()
+		"aa":
+			return AaBattery.new()
+		"mortar":
+			return MortarPit.new()
 		"jammer":
 			return Jammer.new()
-		"birds":
-			return BirdFlock.new()
 	push_error("Unknown defense type: %s" % type)
 	return Defense.new()
 
@@ -196,20 +206,19 @@ static func max_count(type: String, hq_level: int) -> int:
 	return int(LIMITS[type][clampi(hq_level, 1, MAX_LEVEL) - 1])
 
 
-## Defense stats grow with level: wider range, more damage, faster reload.
+## Defense stats grow with level: wider range, more damage, faster reload, bigger blasts.
 static func defense_stats(type: String, level: int) -> Dictionary:
 	var s: Dictionary = DEFENSES[type].duplicate()
 	var step := float(level - 1)
 	s["level"] = level
 	s["radius"] = float(s["radius"]) + 0.6 * step
-	if s.has("dps"):
-		s["dps"] = float(s["dps"]) * (1.0 + 0.25 * step)
+	for key in ["dps", "damage"]:
+		if s.has(key):
+			s[key] = float(s[key]) * (1.0 + 0.25 * step)
 	if s.has("cooldown"):
-		s["cooldown"] = float(s["cooldown"]) * (1.0 - 0.08 * step)
-	if s.has("damage"):
-		s["damage"] = float(s["damage"]) * (1.0 + 0.25 * step)
-	if s.has("count"):
-		s["count"] = int(s["count"]) + int(step / 2.0)
+		s["cooldown"] = float(s["cooldown"]) * (1.0 - 0.06 * step)
+	if s.has("splash"):
+		s["splash"] = float(s["splash"]) + 0.2 * step
 	return s
 
 

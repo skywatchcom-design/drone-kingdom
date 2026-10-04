@@ -5,7 +5,8 @@ extends Node3D
 ## they come in through the gate or through a hole the engineers blow. Stars for 50%, the
 ## Command Tower, and 100%. Loot comes out of every generator, pump, store and Command Tower.
 ## Deployed units are used up (practice runs on your own base are free).
-## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots).
+## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots), and
+## `--enemy N` to pick which enemy base, `--army infantry:2,courier:2` to pick the army.
 
 enum Phase { BATTLE, RESULT }
 
@@ -71,7 +72,11 @@ func _ready() -> void:
 
 
 func _start() -> void:
-	base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(GameState.enemy_index, GameState.hq_level())
+	var enemy_index := GameState.enemy_index
+	var args := OS.get_cmdline_user_args()
+	if args.has("--enemy"):
+		enemy_index = int(args[args.find("--enemy") + 1])
+	base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(enemy_index, GameState.hq_level())
 	level = Node3D.new()
 	add_child(level)
 	var reserved: Array = []
@@ -106,6 +111,10 @@ func _start() -> void:
 	var plan: Dictionary = GameState.army
 	if autoplay:
 		plan = {"infantry": 3, "engineers": 1, "armor": 1, "courier": 2, "scout": 2, "heavy": 1}
+		if args.has("--army"):
+			plan = {}
+			for part: String in args[args.find("--army") + 1].split(","):
+				plan[part.get_slice(":", 0)] = int(part.get_slice(":", 1))
 	for type in Catalog.UNIT_ORDER:
 		var n := int(plan.get(type, 0))
 		if n > 0:
@@ -276,9 +285,7 @@ func _process(delta: float) -> void:
 	for t in targets:
 		if t["destroyed"] or t["defense"] == null:
 			continue
-		var defense: Defense = t["defense"]
-		var in_reach: Array = everyone if defense.hits_ground else alive
-		defense.tick(delta, in_reach if phase == Phase.BATTLE else [])
+		(t["defense"] as Defense).tick(delta, everyone if phase == Phase.BATTLE else [])
 	if phase == Phase.BATTLE:
 		if started:
 			time_left -= delta

@@ -25,7 +25,7 @@ func _skip_time(gs: Node) -> void:
 
 
 func test_upgrade_costs_grow() -> bool:
-	for type in ["hq", "generator", "laser", "birds"]:
+	for type in ["hq", "generator", "mg", "mortar"]:
 		for lvl in range(1, Catalog.MAX_LEVEL):
 			if Catalog.upgrade_cost(type, lvl + 1) <= Catalog.upgrade_cost(type, lvl):
 				return false
@@ -33,15 +33,15 @@ func test_upgrade_costs_grow() -> bool:
 
 
 func test_defense_stats_scale_with_level() -> bool:
-	var l1 := Catalog.defense_stats("laser", 1)
-	var l3 := Catalog.defense_stats("laser", 3)
-	var n1 := Catalog.defense_stats("net", 1)
-	var n3 := Catalog.defense_stats("net", 3)
+	var l1 := Catalog.defense_stats("mg", 1)
+	var l3 := Catalog.defense_stats("mg", 3)
+	var n1 := Catalog.defense_stats("at", 1)
+	var n3 := Catalog.defense_stats("at", 3)
 	return l3["radius"] > l1["radius"] and l3["dps"] > l1["dps"] and n3["cooldown"] < n1["cooldown"]
 
 
 func test_limits_follow_command_tower() -> bool:
-	return Catalog.max_count("jammer", 1) == 0 and Catalog.max_count("jammer", 3) == 1 and Catalog.max_count("laser", 2) == 2
+	return Catalog.max_count("jammer", 1) == 0 and Catalog.max_count("jammer", 3) == 1 and Catalog.max_count("mg", 2) == 2
 
 
 func test_generated_bases_are_valid() -> bool:
@@ -99,9 +99,9 @@ func test_building_costs_coins_and_occupies_roof() -> bool:
 	_skip_time(gs)
 	gs.coins = 1000
 	var before: int = gs.coins
-	var ok: bool = gs.build("net", [0, 0])
-	var paid: bool = gs.coins == before - Catalog.build_cost("net")
-	var twice: bool = gs.build("laser", [0, 0])
+	var ok: bool = gs.build("at", [0, 0])
+	var paid: bool = gs.coins == before - Catalog.build_cost("at")
+	var twice: bool = gs.build("mg", [0, 0])
 	gs.free()
 	return ok and paid and not twice
 
@@ -151,7 +151,7 @@ func test_infinite_coins_make_everything_free() -> bool:
 	gs.infinite_coins = true
 	var upgraded: bool = gs.upgrade(HQ)
 	_skip_time(gs)
-	var built: bool = gs.build("net", [0, 0])
+	var built: bool = gs.build("at", [0, 0])
 	var unchanged: bool = gs.coins == 0
 	gs.free()
 	return upgraded and built and unchanged
@@ -223,9 +223,9 @@ func test_speedup_gems_grow_with_time() -> bool:
 
 func test_build_times_grow_with_level() -> bool:
 	for lvl in range(1, Catalog.MAX_LEVEL):
-		if Catalog.build_seconds("laser", lvl + 1) <= Catalog.build_seconds("laser", lvl):
+		if Catalog.build_seconds("mg", lvl + 1) <= Catalog.build_seconds("mg", lvl):
 			return false
-	return Catalog.build_seconds("hq", 2) > Catalog.build_seconds("laser", 2)
+	return Catalog.build_seconds("hq", 2) > Catalog.build_seconds("mg", 2)
 
 
 func test_hire_worker_costs_gems() -> bool:
@@ -418,3 +418,11 @@ func test_quarters_add_army_space() -> bool:
 	var after: int = gs.army_capacity()
 	gs.free()
 	return one == Catalog.quarters_space(1) and during == one and after == Catalog.quarters_space(2)
+
+
+func test_old_defenses_migrate() -> bool:
+	var retired: Dictionary = load("res://scripts/autoload/game_state.gd").RETIRED
+	for old in retired:
+		if Catalog.DEFENSES.has(old) or not Catalog.DEFENSES.has(retired[old]):
+			return false
+	return retired.size() == 3

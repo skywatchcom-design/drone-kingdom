@@ -9,7 +9,9 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
+## Defenses that left the game, and what replaces them in older saves.
+const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
 ## Turned off by unit tests so they never touch the real save file.
 var persist := true
@@ -117,7 +119,8 @@ func new_player() -> void:
 		{"type": "generator", "cell": [3, 4], "level": 1, "collected_at": t - 20.0 * 60.0},
 		{"type": "pump", "cell": [4, 5], "level": 1, "collected_at": t - 20.0 * 60.0},
 		{"type": "hangar", "cell": [5, 4], "level": 1},
-		{"type": "laser", "cell": [4, 3], "level": 1},
+		{"type": "mg", "cell": [4, 3], "level": 1},
+		{"type": "aa", "cell": [3, 3], "level": 1},
 		{"type": "camp", "cell": [3, 5], "level": 1},
 		{"type": "quarters", "cell": [5, 5], "level": 1},
 	]
@@ -622,7 +625,7 @@ func load_game() -> bool:
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -632,6 +635,7 @@ func load_game() -> bool:
 	for s in structures:
 		s["level"] = int(s["level"])
 		s["cell"] = [int(s["cell"][0]), int(s["cell"][1])]
+		s["type"] = RETIRED.get(s["type"], s["type"])
 		for k: String in ["collected_at", "busy_until"]:
 			if s.has(k):
 				s[k] = float(s[k])

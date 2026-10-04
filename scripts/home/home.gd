@@ -460,14 +460,14 @@ func _stat_lines(type: String, lvl: int) -> Array:
 			return [[I18n.t("Training speed"), "x%.2f" % (1.0 + 0.25 * (lvl - 1))]]
 	var st := Catalog.defense_stats(type, lvl)
 	var lines := [[I18n.t("Range"), I18n.t("%.1f m") % st["radius"]]]
-	match type:
-		"laser":
-			lines.append([I18n.t("Damage per second"), str(int(st["dps"]))])
-		"net":
-			lines.append([I18n.t("Reload"), I18n.t("%.1f s") % st["cooldown"]])
-		"birds":
-			lines.append([I18n.t("Gulls"), str(int(st["count"]))])
-			lines.append([I18n.t("Damage per bump"), str(int(st["damage"]))])
+	if st.has("dps"):
+		lines.append([I18n.t("Damage per second"), str(int(st["dps"]))])
+	if st.has("damage"):
+		lines.append([I18n.t("Damage per shot"), str(int(st["damage"]))])
+	if st.has("cooldown"):
+		lines.append([I18n.t("Reload"), I18n.t("%.1f s") % st["cooldown"]])
+	if st.has("splash"):
+		lines.append([I18n.t("Blast radius"), I18n.t("%.1f m") % st["splash"]])
 	return lines
 
 

@@ -1,30 +1,39 @@
 class_name Defense
 extends Node3D
-## Base for rooftop defenses. The node sits at street level under its building; its mast
-## rises a few meters above the roof to the head, where the range ring is drawn.
+## Base for defenses (approved sketch MTz3BL4Yz9u3mj78fV3NZr). Each stands on its pad and
+## builds its model for its level: big steps at levels 3 and 5, a bit bigger every level, and
+## one chevron per level on its plate. Stats["vs"] says how hard it hits soldiers, tanks and
+## drones; it aims at what it is best against, then whatever is closest.
+
+const MODEL_SCALE := 1.6
 
 var radius := 10.0
 var roof_y := 0.0
-var head_y := 0.0
+## Height of the weapon above the ground, where shots leave from.
+var head_y := 1.5
 var stats := {}
+var level := 1
 var disabled := false
-## Whether this defense can hit soldiers and tanks; most only hit drones.
-var hits_ground := false
 var _ring: MeshInstance3D
-var _mast: MeshInstance3D
+## Everything visible, scaled; subclasses build into it.
+var model: Node3D
 
 
 func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 	stats = p_stats
 	radius = float(stats.get("radius", 10.0))
+	level = int(stats.get("level", 1))
 	roof_y = p_roof_y
-	head_y = roof_y + Catalog.DEFENSE_HEAD
-	_build_mast()
+	model = Node3D.new()
+	model.position.y = roof_y
+	model.scale = Vector3.ONE * MODEL_SCALE * (1.0 + 0.03 * (level - 1))
+	add_child(model)
 	_build()
-	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.25), MeshKit.glow(_ring_color(), 0.5), Vector3(0, head_y, 0))
+	head_y = roof_y + _head_height() * model.scale.y
+	StructureModels.chevrons(model, level, Vector3(1.85, 0, 1.85))
+	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.22), MeshKit.glow(_ring_color(), 0.45), Vector3(0, roof_y + 0.15, 0))
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if stats.has("level"):
-		StructureModels.level_label(self, int(stats["level"]), head_y + 1.6).position.x = 1.6
+	StructureModels.level_label(self, level, head_y + 2.6)
 
 
 func show_range(on: bool) -> void:
@@ -43,44 +52,79 @@ func head_position() -> Vector3:
 	return global_position + Vector3(0, head_y, 0)
 
 
-## Closest living unit in range, or null.
-func nearest_drone(drones: Array) -> Unit:
+## Damage multiplier against this unit: soldiers, tanks and drones each have their own.
+func factor(u: Unit) -> float:
+	var vs: Dictionary = stats.get("vs", {})
+	if u.flying:
+		return float(vs.get("air", 0.0))
+	if u is GroundUnit and (u as GroundUnit).is_tank():
+		return float(vs.get("tank", 0.0))
+	return float(vs.get("soldier", 0.0))
+
+
+## The unit to shoot: in range (and beyond the minimum range, for the mortar), the kind this
+## defense is best against first, then the closest. Null if there is none.
+func pick_target(units: Array) -> Unit:
 	var best: Unit = null
+	var best_f := 0.0
 	var best_d := INF
-	for d: Unit in drones:
-		if d.dead:
+	var min_r := float(stats.get("min_radius", 0.0))
+	for u: Unit in units:
+		if u.dead:
 			continue
-		var dist := flat_distance(d.global_position)
-		if dist <= radius and dist < best_d:
-			best_d = dist
-			best = d
+		var f := factor(u)
+		if f <= 0.0:
+			continue
+		var d := flat_distance(u.global_position)
+		if d > radius or d < min_r:
+			continue
+		if f > best_f + 0.01 or (absf(f - best_f) <= 0.01 and d < best_d):
+			best = u
+			best_f = f
+			best_d = d
 	return best
 
 
-## Called every frame with the units it can hit (empty at home): drones in the air, plus
-## ground units when hits_ground is on.
-func tick(_delta: float, _drones: Array) -> void:
+## Turns `pivot` toward `point` at `speed` radians a second. True once it is lined up.
+func turn_toward(pivot: Node3D, point: Vector3, speed: float, delta: float) -> bool:
+	var to := point - global_position
+	var want := atan2(to.x, to.z)
+	pivot.rotation.y = rotate_toward(pivot.rotation.y, want, speed * delta)
+	return absf(angle_difference(pivot.rotation.y, want)) < 0.12
+
+
+## Where a shot at `u` lands: its body, not its feet.
+static func aim_point(u: Unit) -> Vector3:
+	if u.flying:
+		return u.global_position
+	return u.global_position + Vector3(0, 2.0 if (u is GroundUnit and (u as GroundUnit).is_tank()) else 1.4, 0)
+
+
+## Called every frame with every unit in the battle (empty at home).
+func tick(_delta: float, _units: Array) -> void:
 	pass
 
 
-## Knocked out in battle: everything but a leaning mast disappears.
+## Knocked out in battle: the model disappears (the raid leaves rubble).
 func disable() -> void:
 	disabled = true
-	for child in get_children():
-		if child is Node3D and child != _mast:
-			child.visible = false
-	if _mast != null:
-		_mast.rotation.z = 0.35
-
-
-func _build_mast() -> void:
-	var h := head_y - 0.5 - roof_y
-	_mast = MeshKit.add(self, MeshKit.cyl(0.3, 0.5, h, 10), MeshKit.mat(Color(0.35, 0.38, 0.42), 0.5, 0.5), Vector3(0, roof_y + h / 2.0, 0))
+	model.visible = false
+	_ring.visible = false
 
 
 func _build() -> void:
 	pass
 
 
+func _head_height() -> float:
+	return 1.0
+
+
 func _ring_color() -> Color:
-	return Color(1.0, 0.35, 0.3)
+	return Color(1.0, 0.45, 0.3)
+
+
+## Battle effects go into the level, beside the defense.
+func _fx_parent() -> Node3D:
+	var p := get_parent() as Node3D
+	return p if p != null else self
