@@ -87,6 +87,8 @@ func _build_library() -> void:
 	_streams["charge"] = _concat([_tone(1800.0, 1800.0, 0.05, "square", 0.15), _tone(1, 1, 0.05, "sine", 0.0), _tone(1800.0, 1800.0, 0.05, "square", 0.15)])
 	_streams["breach"] = _mix([_noise(1.1, 0.9, 0.06), _tone(60.0, 25.0, 0.9, "sine", 0.9)])
 	_streams["soldier_down"] = _tone(520.0, 260.0, 0.22, "sine", 0.3)
+	_streams["jet"] = _mix([_noise(1.6, 0.5, 0.05), _tone(420.0, 160.0, 1.6, "saw", 0.12)])
+	_streams["flare"] = _mix([_noise(0.5, 0.35, 0.4), _tone(900.0, 2400.0, 0.4, "sine", 0.15)])
 	_streams["tank_down"] = _mix([_noise(0.8, 0.7, 0.1), _tone(110.0, 40.0, 0.7, "saw", 0.4)])
 	_streams["coin"] = _concat([_tone(1320.0, 1320.0, 0.07, "sine", 0.4), _tone(1760.0, 1760.0, 0.16, "sine", 0.4)])
 	_streams["build"] = _concat([_tone(523.0, 523.0, 0.08, "square", 0.2), _tone(784.0, 784.0, 0.14, "square", 0.2)])

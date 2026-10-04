@@ -7,6 +7,9 @@ extends Node3D
 ## Deployed units are used up (practice runs on your own base are free).
 ## Each Quarters sends out an infantry squad to defend when attackers come close; attacking
 ## soldiers and tanks fight them when they are in range.
+## Knocking out buildings fills the energy bar, which pays for support abilities: an air
+## strike (a jet drops a line of three bombs) and a direction flare (every attacking unit
+## heads for it and attacks what is near it).
 ## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots), and
 ## `--enemy N` to pick which enemy base, `--army infantry:2,courier:2` to pick the army.
 
@@ -45,6 +48,13 @@ var ground: Array[GroundUnit] = []
 var defenders: Array[GroundUnit] = []
 ## Target indexes of Quarters that have already sent out their squad.
 var quarters_called := {}
+var energy := 0.0
+## The ability waiting for a tap on the map ("strike", "flare" or "").
+var armed := ""
+var flare_pos := Vector3.ZERO
+var flare_left := 0.0
+var flare_node: Node3D
+var _flare_smoke := 0.0
 var army := {}
 ## Units sent in, by type; they are used up when the battle ends.
 var deployed := {}
@@ -74,6 +84,7 @@ func _ready() -> void:
 	hud.end_pressed.connect(_finish)
 	hud.retry_pressed.connect(func() -> void: get_tree().reload_current_scene())
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(HOME_SCENE))
+	hud.ability_pressed.connect(_on_ability)
 	_start()
 
 
@@ -131,6 +142,7 @@ func _start() -> void:
 	hud.set_army(army, drone_names, selected)
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
+	hud.set_energy(energy, armed)
 	_update_progress()
 	hud.set_status(I18n.t("Tap outside the fence to send in your army"))
 	if autoplay:
@@ -175,6 +187,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _try_deploy(screen_pos: Vector2) -> void:
 	if phase != Phase.BATTLE:
+		return
+	if armed != "":
+		var aim_hit = Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(screen_pos), cam.project_ray_normal(screen_pos))
+		if aim_hit != null and absf((aim_hit as Vector3).x) < MAP_LIMIT and absf((aim_hit as Vector3).z) < MAP_LIMIT:
+			_use_ability(armed, aim_hit)
 		return
 	if selected == "" or int(army.get(selected, 0)) <= 0:
 		hud.set_status(I18n.t("No units left to send"))
@@ -296,10 +313,13 @@ func _process(delta: float) -> void:
 		if t["destroyed"] or t["defense"] == null:
 			continue
 		(t["defense"] as Defense).tick(delta, everyone if phase == Phase.BATTLE else [])
+	_tick_flare(delta)
 	if phase == Phase.BATTLE:
 		if started:
 			time_left -= delta
 			hud.set_timer(time_left)
+		if autoplay:
+			_autoplay_abilities()
 		Audio.hum(minf(1.0, alive.size() / 5.0))
 		for d: Drone in alive:
 			_drone_ai(d, delta)
@@ -315,6 +335,183 @@ func _process(delta: float) -> void:
 		for u: GroundUnit in alive_ground + alive_defenders:
 			u.walk(Vector3.ZERO, delta)
 	_update_bars()
+
+
+# ---------------------------------------------------------------- support abilities
+
+## Pressing an ability arms it (the next tap on the map uses it); pressing it again disarms.
+func _on_ability(kind: String) -> void:
+	if phase != Phase.BATTLE:
+		return
+	if armed == kind:
+		armed = ""
+		hud.set_status("")
+	elif energy >= float(Catalog.ABILITIES[kind]["energy"]):
+		armed = kind
+		hud.set_status(I18n.t("Tap where the air strike should hit") if kind == "strike" else I18n.t("Tap where to fire the flare"))
+	hud.set_energy(energy, armed)
+
+
+func _use_ability(kind: String, p: Vector3) -> void:
+	energy -= float(Catalog.ABILITIES[kind]["energy"])
+	armed = ""
+	hud.set_status("")
+	hud.set_energy(energy, armed)
+	started = true
+	if kind == "strike":
+		_air_strike(Vector3(p.x, 0, p.z))
+	else:
+		_fire_flare(Vector3(p.x, 0, p.z))
+
+
+## Units pick targets near the flare while it burns, near themselves otherwise.
+func _seek_from(p: Vector3) -> Vector3:
+	return flare_pos if flare_left > 0.0 else p
+
+
+## A jet comes in low across the screen and drops three bombs in a line through `p`, then
+## banks away. Each bomb hits every building and defender within its radius.
+func _air_strike(p: Vector3) -> void:
+	var stats: Dictionary = Catalog.ABILITIES["strike"]
+	var dir := Vector3(1, 0, -1).normalized()
+	var jet := _jet_model()
+	level.add_child(jet)
+	var start := p - dir * 80.0 + Vector3(0, 20, 0)
+	var finish := p + dir * 80.0 + Vector3(0, 24, 0)
+	jet.position = start
+	jet.look_at(finish, Vector3.UP)
+	Audio.play("jet")
+	var flight := 2.6
+	var tween := create_tween()
+	tween.tween_property(jet, "position", finish, flight)
+	tween.tween_callback(jet.queue_free)
+	for i in 3:
+		var offset := (i - 1) * float(stats["spacing"])
+		var spot := p + dir * offset
+		var release := (80.0 + offset - 14.0) / 160.0 * flight
+		get_tree().create_timer(release).timeout.connect(func() -> void: _drop_bomb(jet.position if is_instance_valid(jet) else spot + Vector3(0, 20, 0), spot, stats))
+
+
+func _drop_bomb(from: Vector3, spot: Vector3, stats: Dictionary) -> void:
+	var bomb := MeshKit.add(level, MeshKit.cyl(0.25, 0.25, 1.4, 10), MeshKit.mat(Color(0.24, 0.26, 0.28), 0.5, 0.5), from)
+	bomb.rotation.x = PI / 2.0
+	var tween := create_tween()
+	tween.tween_property(bomb, "position", spot + Vector3(0, 0.5, 0), 0.75).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		bomb.queue_free()
+		Fx.boom(level, spot, 1.8)
+		Audio.play("breach", -2.0)
+		Audio.buzz(70)
+		var reach := float(stats["radius"])
+		for i in targets.size():
+			if not targets[i]["destroyed"] and PathUtils.flat_distance(targets[i]["top"], spot) <= reach + STRUCTURE_RADIUS * 0.5:
+				_shake(i)
+				_damage_target(i, float(stats["damage"]))
+		for u in defenders:
+			if not u.dead and PathUtils.flat_distance(u.position, spot) <= reach:
+				u.damage(float(stats["damage"])))
+
+
+## The fighter from the approved sketch: grey fuselage, swept wings, twin tails' worth of fin,
+## a glowing afterburner and a fictional blue-and-white roundel. Faces -Z (look_at forward).
+func _jet_model() -> Node3D:
+	var jet := Node3D.new()
+	var body := Node3D.new()
+	body.scale = Vector3.ONE * 1.6
+	body.rotation.y = PI
+	jet.add_child(body)
+	var grey := MeshKit.mat(Color(0.55, 0.59, 0.62), 0.45, 0.4)
+	MeshKit.add(body, MeshKit.cyl(0.22, 0.32, 4.2, 14), grey).rotation.x = PI / 2.0
+	MeshKit.add(body, MeshKit.cyl(0.0, 0.22, 1.1, 14), grey, Vector3(0, 0, 2.6)).rotation.x = PI / 2.0
+	MeshKit.add(body, MeshKit.sphere(0.24, 12), MeshKit.mat(Color(0.17, 0.23, 0.27), 0.1, 0.6), Vector3(0, 0.22, 1.3)).scale = Vector3(0.8, 0.7, 1.8)
+	var wing := MeshKit.add(body, MeshKit.box(Vector3(5.2, 0.06, 1.6)), grey, Vector3(0, -0.03, -0.3))
+	wing.scale = Vector3(1, 1, 1)
+	MeshKit.add(body, MeshKit.box(Vector3(0.06, 1.0, 0.9)), grey, Vector3(0, 0.55, -1.7)).rotation.x = -0.3
+	for s in [-1.0, 1.0]:
+		MeshKit.add(body, MeshKit.box(Vector3(1.0, 0.05, 0.6)), grey, Vector3(s * 0.6, 0, -1.8))
+		MeshKit.add(body, MeshKit.cyl(0.18, 0.18, 0.02, 20), MeshKit.mat(UnitModels.BLUE, 0.4), Vector3(s * 1.6, 0.04, -0.4))
+		MeshKit.add(body, MeshKit.cyl(0.1, 0.1, 0.025, 20), MeshKit.mat(UnitModels.WHITE, 0.4), Vector3(s * 1.6, 0.045, -0.4))
+	var burner := MeshKit.add(body, MeshKit.sphere(0.2, 10), MeshKit.glow(Color(1.0, 0.64, 0.29), 0.85), Vector3(0, 0, -2.3))
+	burner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return jet
+
+
+## A flare fired over `p`: an orange light that drifts down slowly on a smoke trail.
+## Every attacking unit drops what it is doing and goes for whatever is near it.
+func _fire_flare(p: Vector3) -> void:
+	var seconds := float(Catalog.ABILITIES["flare"]["seconds"])
+	if flare_node != null:
+		flare_node.queue_free()
+	flare_pos = p
+	flare_left = seconds
+	flare_node = Node3D.new()
+	level.add_child(flare_node)
+	flare_node.position = p + Vector3(0, 16, 0)
+	var core := MeshKit.add(flare_node, MeshKit.sphere(0.45, 10), MeshKit.glow(Color(1.0, 0.95, 0.75)))
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var halo := MeshKit.add(flare_node, MeshKit.sphere(1.3, 12), MeshKit.glow(Color(1.0, 0.35, 0.16), 0.45))
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.5, 0.25)
+	light.light_energy = 3.0
+	light.omni_range = 14.0
+	flare_node.add_child(light)
+	var ring := MeshKit.add(level, MeshKit.ring(3.4, 0.2), MeshKit.glow(Color(1.0, 0.48, 0.24), 0.8), p + Vector3(0, 0.1, 0))
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.reparent(flare_node)
+	var tween := create_tween()
+	tween.tween_property(flare_node, "position:y", 3.0, seconds)
+	Audio.play("flare")
+	for d in drones:
+		d.target = -1
+	for u in ground:
+		u.target = -1
+
+
+func _tick_flare(delta: float) -> void:
+	if flare_left <= 0.0:
+		return
+	flare_left -= delta
+	if flare_node != null:
+		var flicker := 1.0 + sin(Time.get_ticks_msec() * 0.03) * 0.12
+		(flare_node.get_child(1) as Node3D).scale = Vector3.ONE * flicker
+		# The ground ring stays on the ground while the flare comes down.
+		(flare_node.get_child(3) as Node3D).global_position = flare_pos + Vector3(0, 0.1, 0)
+		_flare_smoke -= delta
+		if _flare_smoke <= 0.0:
+			_flare_smoke = 0.12
+			var puff := MeshKit.add(level, MeshKit.sphere(0.5, 8), MeshKit.glow(Color(0.8, 0.8, 0.8), 0.4), flare_node.position + Vector3(randf_range(-0.2, 0.2), 0.6, randf_range(-0.2, 0.2)))
+			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var pt := create_tween()
+			pt.set_parallel(true)
+			pt.tween_property(puff, "scale", Vector3.ONE * 2.5, 2.0)
+			pt.tween_property(puff.material_override, "albedo_color:a", 0.0, 2.0)
+			pt.chain().tween_callback(puff.queue_free)
+	if flare_left <= 0.0:
+		if flare_node != null:
+			flare_node.queue_free()
+			flare_node = null
+		for d in drones:
+			d.target = -1
+		for u in ground:
+			u.target = -1
+
+
+## Demo runs use the abilities on their own: a strike on the Command Tower as soon as it is
+## affordable, then a flare on whatever is still standing.
+func _autoplay_abilities() -> void:
+	if energy >= float(Catalog.ABILITIES["strike"]["energy"]) and not has_meta("struck"):
+		set_meta("struck", true)
+		for t in targets:
+			if t["type"] == "hq" and not t["destroyed"]:
+				_use_ability("strike", t["top"])
+				return
+	if has_meta("struck") and not has_meta("flared") and energy >= float(Catalog.ABILITIES["flare"]["energy"]):
+		for t in targets:
+			if not t["destroyed"]:
+				set_meta("flared", true)
+				_use_ability("flare", t["top"])
+				return
 
 
 # ---------------------------------------------------------------- defenders
@@ -428,8 +625,8 @@ func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array, alive_defender
 			_shoot_unit(u, foe, delta)
 			return
 	if u.target < 0 or targets[u.target]["destroyed"]:
-		var prefers := "any" if u.prefers == "fence" else u.prefers
-		u.target = RaidRules.pick_target(prefers, u.position, targets)
+		var prefers := "any" if u.prefers == "fence" or flare_left > 0.0 else u.prefers
+		u.target = RaidRules.pick_target(prefers, _seek_from(u.position), targets)
 	if u.target < 0:
 		u.walk(Vector3.ZERO, delta)
 		return
@@ -660,7 +857,7 @@ func _thin_tracer(from: Vector3, to: Vector3) -> void:
 func _drone_ai(d: Drone, delta: float) -> void:
 	if d.target < 0 or targets[d.target]["destroyed"]:
 		var before := d.target
-		d.target = RaidRules.pick_target(d.prefers, d.position, targets)
+		d.target = RaidRules.pick_target("any" if flare_left > 0.0 else d.prefers, _seek_from(d.position), targets)
 		if d.target >= 0 and d.target != before:
 			d.on_new_target()
 	if d.target < 0:
@@ -848,6 +1045,8 @@ func _destroy(index: int) -> void:
 	else:
 		(t["node"] as Node3D).visible = false
 	_rubble(top)
+	energy = minf(Catalog.ENERGY_MAX, energy + (Catalog.ENERGY_PER_HQ if t["type"] == "hq" else Catalog.ENERGY_PER_BUILDING))
+	hud.set_energy(energy, armed)
 	var loot := int(t["loot_coins"])
 	var loot_fuel := int(t["loot_fuel"])
 	if loot > 0 or loot_fuel > 0:

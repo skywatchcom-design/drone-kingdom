@@ -289,6 +289,18 @@ static func drone_stats(type: String, level: int) -> Dictionary:
 	return s
 
 
+## Battle energy: filled by knocking out buildings, spent on support abilities.
+const ENERGY_MAX := 100.0
+const ENERGY_PER_BUILDING := 15.0
+const ENERGY_PER_HQ := 40.0
+## energy: cost. Air strike: three bombs `spacing` apart, each hitting everything within
+## `radius`. Flare: every attacking unit heads for it for `seconds`.
+const ABILITIES := {
+	"strike": {"energy": 60, "damage": 320.0, "radius": 4.5, "spacing": 6.0},
+	"flare": {"energy": 20, "seconds": 6.0},
+}
+
+
 ## Soldiers that run out of a Quarters building to defend it when attackers come close.
 static func defender_count(quarters_level: int) -> int:
 	return 2 + int((quarters_level - 1) / 2.0)

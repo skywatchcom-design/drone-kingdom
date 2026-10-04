@@ -54,7 +54,10 @@ Ground units (`ground_unit.gd`, `unit_models.gd`, shared `Unit` base with drones
 squads, engineers who breach the fence (`City.breach`), heavy tank (unit key `armor`; `tank` is
 the Fuel Tank). The fence stops ground units: `RaidRules.ground_waypoint` routes via the gate or
 breaches. Until week 3's defenses, only the Laser hits ground units. Camp/Quarters/Garage gray-box.
-Next: new defenses (MG, AT, AA), defending infantry squad, support abilities,
+Week 3 (5.10.2026): new defenses with a look per level, sketch-based buildings, defending squad
+from Quarters, energy + air strike + flare in battle. Dev: `res://scenes/dev/gallery.tscn -- --type mg`
+shows one structure at all levels; raid takes `--enemy N` and `--army infantry:2,courier:2`.
+Next: per-level looks for HQ/generator/silo/hangar/drones/soldiers/tank (sketch first),
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
@@ -62,4 +65,7 @@ style (hit soldier vanishes, a small helmet rolls on the ground). Next sketch: n
 Approved 4.10.2026: defenses and buildings sketch with a look per level
 (https://claude.ai/artifact/MTz3BL4Yz9u3mj78fV3NZr): MG nest, AT gun, AA battery (replaces laser),
 mortar (in launch, HQ 3), military jammer, camp, quarters, garage, fuel pump, fuel tank.
+Approved 5.10.2026: support abilities sketch (https://claude.ai/artifact/QeVxT8PzJLE2KijtoK89GN):
+energy bar (+15 per building, +40 HQ, max 100), air strike 60, direction flare 20 (6 s), red ring
+under defending soldiers.
 Still waiting on the owner: Apple Developer and Google Play accounts.

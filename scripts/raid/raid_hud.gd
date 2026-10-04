@@ -1,12 +1,14 @@
 class_name RaidHud
 extends CanvasLayer
-## Battle UI (landscape): timer and destruction at the top, drone cards for deploying at the bottom,
-## floating health bars over damaged structures and drones, and the result panel.
+## Battle UI (landscape): timer and destruction at the top; End and the unit cards in one
+## bottom corner, the energy bar and support abilities (air strike, flare) in the other;
+## floating health bars over damaged structures and units, and the result panel.
 
 signal unit_selected(type: String)
 signal end_pressed
 signal retry_pressed
 signal home_pressed
+signal ability_pressed(kind: String)
 
 var _title: Label
 var _timer: Label
@@ -16,6 +18,9 @@ var _status: Label
 var _cards: HBoxContainer
 var _card_buttons := {}
 var _end: Button
+var _energy: ProgressBar
+var _energy_label: Label
+var _abilities := {}
 var _bars_layer: Control
 var _bars := {}
 var _hit_tint: ColorRect
@@ -67,18 +72,21 @@ func _ready() -> void:
 	bottom.anchor_bottom = 1.0
 	bottom.offset_left = 16.0
 	bottom.offset_right = -16.0
-	bottom.offset_top = -120.0
+	bottom.offset_top = -150.0
 	bottom.offset_bottom = -20.0
 	bottom.add_theme_constant_override("separation", 10)
 	root.add_child(bottom)
+	_end = HomeHud.make_button(bottom, I18n.t("End"), 24, 96)
+	_end.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_end.size_flags_vertical = Control.SIZE_SHRINK_END
+	_end.custom_minimum_size.x = 100
+	_end.pressed.connect(func() -> void: end_pressed.emit())
 	_cards = HBoxContainer.new()
 	_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cards.size_flags_vertical = Control.SIZE_SHRINK_END
 	_cards.add_theme_constant_override("separation", 10)
 	bottom.add_child(_cards)
-	_end = HomeHud.make_button(bottom, I18n.t("End"), 26, 120)
-	_end.size_flags_horizontal = Control.SIZE_SHRINK_END
-	_end.custom_minimum_size.x = 120
-	_end.pressed.connect(func() -> void: end_pressed.emit())
+	bottom.add_child(_support_panel())
 
 	_result = PanelContainer.new()
 	_result.anchor_left = 0.5
@@ -127,6 +135,68 @@ func set_timer(seconds: float) -> void:
 
 func set_progress(percent: int, stars: int) -> void:
 	_progress.text = I18n.t("%d%%  ·  Stars %d/3") % [percent, stars]
+
+
+## Energy bar over two round ability buttons.
+func _support_panel() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.size_flags_vertical = Control.SIZE_SHRINK_END
+	_energy = ProgressBar.new()
+	_energy.show_percentage = false
+	_energy.max_value = Catalog.ENERGY_MAX
+	_energy.custom_minimum_size = Vector2(240, 26)
+	var bg := HomeHud.flat(Color(0.04, 0.06, 0.04, 0.8))
+	bg.set_corner_radius_all(13)
+	bg.set_content_margin_all(0)
+	var fill := HomeHud.flat(Color(1.0, 0.78, 0.2))
+	fill.set_corner_radius_all(13)
+	fill.set_content_margin_all(0)
+	_energy.add_theme_stylebox_override("background", bg)
+	_energy.add_theme_stylebox_override("fill", fill)
+	box.add_child(_energy)
+	_energy_label = HomeHud.make_label(_energy, "", 17, Color(0.12, 0.09, 0.0))
+	_energy_label.remove_theme_color_override("font_outline_color")
+	_energy_label.add_theme_constant_override("outline_size", 0)
+	_energy_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_energy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_energy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.alignment = BoxContainer.ALIGNMENT_END
+	box.add_child(row)
+	for kind in ["flare", "strike"]:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(110, 110)
+		b.add_theme_font_size_override("font_size", 18)
+		b.toggle_mode = true
+		var cost: int = Catalog.ABILITIES[kind]["energy"]
+		b.text = (I18n.t("Flare") if kind == "flare" else I18n.t("Air\nstrike")) + "\n" + I18n.t("%d energy") % cost
+		b.pressed.connect(func() -> void:
+			Audio.play("click", -6.0)
+			ability_pressed.emit(kind))
+		row.add_child(b)
+		_abilities[kind] = b
+	return box
+
+
+## Shows the energy, lights up the abilities the player can afford, and marks the armed one.
+func set_energy(energy: float, armed: String) -> void:
+	_energy.value = energy
+	_energy_label.text = I18n.t("Energy %d") % int(energy)
+	for kind in _abilities:
+		var b: Button = _abilities[kind]
+		var ready := energy >= float(Catalog.ABILITIES[kind]["energy"])
+		b.disabled = not ready and armed != kind
+		b.set_pressed_no_signal(armed == kind)
+		var base := Color(0.91, 0.33, 0.23) if kind == "strike" else Color(1.0, 0.48, 0.24)
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			var s := HomeHud.flat(base.lightened(0.15 if state == "hover" else 0.0).darkened(0.25 if state == "pressed" else 0.0) if state != "disabled" else Color(0.16, 0.17, 0.16, 0.8))
+			s.set_corner_radius_all(55)
+			s.border_color = Color(1, 1, 1, 0.9) if armed == kind else Color(1, 0.9, 0.85, 0.5)
+			s.set_border_width_all(5 if armed == kind else 3)
+			s.set_content_margin_all(4)
+			b.add_theme_stylebox_override(state, s)
 
 
 func set_loot(coins: int, fuel: int) -> void:
@@ -193,7 +263,7 @@ func show_result(stars: int, percent: int, gained: Dictionary, practice: bool) -
 
 
 func blocks(pos: Vector2) -> bool:
-	for c: Control in [_cards, _end, _result]:
+	for c: Control in [_cards, _end, _result, _energy.get_parent() as Control]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false
