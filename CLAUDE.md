@@ -59,4 +59,7 @@ Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, 
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
 style (hit soldier vanishes, a small helmet rolls on the ground). Next sketch: new defenses (MG, AT, AA, mortar).
+Approved 4.10.2026: defenses and buildings sketch with a look per level
+(https://claude.ai/artifact/MTz3BL4Yz9u3mj78fV3NZr): MG nest, AT gun, AA battery (replaces laser),
+mortar (in launch, HQ 3), military jammer, camp, quarters, garage, fuel pump, fuel tank.
 Still waiting on the owner: Apple Developer and Google Play accounts.
