@@ -5,6 +5,8 @@ extends Node3D
 ## they come in through the gate or through a hole the engineers blow. Stars for 50%, the
 ## Command Tower, and 100%. Loot comes out of every generator, pump, store and Command Tower.
 ## Deployed units are used up (practice runs on your own base are free).
+## Each Quarters sends out an infantry squad to defend when attackers come close; attacking
+## soldiers and tanks fight them when they are in range.
 ## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots), and
 ## `--enemy N` to pick which enemy base, `--army infantry:2,courier:2` to pick the army.
 
@@ -39,6 +41,10 @@ var hud: RaidHud
 var targets: Array[Dictionary] = []
 var drones: Array[Drone] = []
 var ground: Array[GroundUnit] = []
+## The base's own soldiers, out of its Quarters.
+var defenders: Array[GroundUnit] = []
+## Target indexes of Quarters that have already sent out their squad.
+var quarters_called := {}
 var army := {}
 ## Units sent in, by type; they are used up when the battle ends.
 var deployed := {}
@@ -282,6 +288,10 @@ func _process(delta: float) -> void:
 		if not u.dead:
 			alive_ground.append(u)
 	var everyone := alive + alive_ground
+	var alive_defenders: Array = []
+	for u in defenders:
+		if not u.dead:
+			alive_defenders.append(u)
 	for t in targets:
 		if t["destroyed"] or t["defense"] == null:
 			continue
@@ -294,22 +304,129 @@ func _process(delta: float) -> void:
 		for d: Drone in alive:
 			_drone_ai(d, delta)
 		for u: GroundUnit in alive_ground:
-			_ground_ai(u, delta, alive_ground)
+			_ground_ai(u, delta, alive_ground, alive_defenders)
+		_call_defenders(everyone)
+		for u: GroundUnit in alive_defenders:
+			_defender_ai(u, delta, everyone, alive_defenders)
 		_check_end(delta)
 	else:
 		for d: Drone in alive:
 			d.steer(Vector3.ZERO, delta)
-		for u: GroundUnit in alive_ground:
+		for u: GroundUnit in alive_ground + alive_defenders:
 			u.walk(Vector3.ZERO, delta)
 	_update_bars()
 
 
+# ---------------------------------------------------------------- defenders
+
+## Each standing Quarters sends out its squad the first time an attacker comes close.
+func _call_defenders(attackers: Array) -> void:
+	for i in targets.size():
+		var t := targets[i]
+		if t["type"] != "quarters" or t["destroyed"] or quarters_called.has(i):
+			continue
+		var top: Vector3 = t["top"]
+		if _nearest(top, attackers, Catalog.DEFENDER_ALERT) == null:
+			continue
+		quarters_called[i] = true
+		var stats := Catalog.unit_stats("infantry", int(t["level"]))
+		var count := Catalog.defender_count(int(t["level"]))
+		for k in count:
+			var u := GroundUnit.new()
+			u.configure(stats)
+			u.kneels = k % 2 == 0
+			u.position = top + Vector3(cos(k * 1.7) * 2.0, 0, sin(k * 1.7) * 2.0)
+			u.position.y = 0.0
+			u.set_meta("home", top)
+			level.add_child(u)
+			# A red ring underfoot marks the base's own soldiers.
+			var ring := MeshKit.add(u, MeshKit.ring(0.9, 0.12), MeshKit.glow(Color(1.0, 0.3, 0.25), 0.8), Vector3(0, 0.08, 0))
+			ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			defenders.append(u)
+			u.crashed.connect(func() -> void:
+				Audio.play("soldier_down", -4.0)
+				ring.visible = false
+				u.knock_out(level))
+		Audio.play("deploy", -8.0, 0.0)
+
+
+## Defenders go for the closest attacker near their Quarters (soldiers and tanks before
+## drones), and walk back home when there is none.
+func _defender_ai(u: GroundUnit, delta: float, attackers: Array, alive_defenders: Array) -> void:
+	var home: Vector3 = u.get_meta("home")
+	var best: Unit = null
+	var best_d := INF
+	for a: Unit in attackers:
+		if a.dead or PathUtils.flat_distance(a.position, home) > Catalog.DEFENDER_LEASH:
+			continue
+		var d := PathUtils.flat_distance(a.position, u.position) * (2.5 if a.flying else 1.0)
+		if d < best_d:
+			best_d = d
+			best = a
+	if best == null:
+		if PathUtils.flat_distance(u.position, home) > 3.0:
+			_move_ground(u, home, delta, alive_defenders)
+		else:
+			u.walk(Vector3.ZERO, delta)
+		return
+	if PathUtils.flat_distance(u.position, best.position) <= u.attack_range + 0.5:
+		_shoot_unit(u, best, delta)
+	else:
+		_move_ground(u, best.position, delta, alive_defenders)
+
+
+## The closest living unit to `p` within `reach`, or null.
+func _nearest(p: Vector3, units: Array, reach: float) -> Unit:
+	var best: Unit = null
+	var best_d := reach
+	for u: Unit in units:
+		if u.dead:
+			continue
+		var d := PathUtils.flat_distance(p, u.position)
+		if d <= best_d:
+			best_d = d
+			best = u
+	return best
+
+
+## A soldier or tank firing at another unit: rifle tracers, or a tank shell.
+func _shoot_unit(u: GroundUnit, victim: Unit, delta: float) -> void:
+	u.walk(Vector3.ZERO, delta)
+	var aim := Defense.aim_point(victim)
+	u.aim_at(aim, delta)
+	u.fire_cooldown -= delta
+	if u.fire_cooldown > 0.0 or not u.aimed_at(aim):
+		return
+	u.fire_cooldown = u.fire_interval * randf_range(0.85, 1.15)
+	u.on_fire()
+	var damage := u.dps * u.fire_interval * (0.5 if victim.flying else 1.0)
+	var from := u.fire_origin()
+	if u.is_tank():
+		Audio.play("cannon", -4.0)
+		_muzzle_flash(from, 0.9)
+		Fx.shell(level, from, aim, 0.15, func() -> void:
+			Fx.boom(level, aim, 0.8)
+			if is_instance_valid(victim):
+				victim.damage(damage))
+	else:
+		Audio.play("rifle", -12.0, 0.04)
+		_muzzle_flash(from, 0.25)
+		_thin_tracer(from, aim + Vector3(randf_range(-0.4, 0.4), randf_range(-0.3, 0.3), randf_range(-0.4, 0.4)))
+		victim.damage(damage)
+
+
 # ---------------------------------------------------------------- ground units
 
-func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array) -> void:
+func _ground_ai(u: GroundUnit, delta: float, alive_ground: Array, alive_defenders: Array) -> void:
 	if u.kind == "engineers" and u.breach_state != "done":
 		_engineer_breach(u, delta, alive_ground)
 		return
+	# Enemy soldiers in range come first (engineers keep to their charges).
+	if u.kind != "engineers":
+		var foe := _nearest(u.position, alive_defenders, u.attack_range + 1.0)
+		if foe != null:
+			_shoot_unit(u, foe, delta)
+			return
 	if u.target < 0 or targets[u.target]["destroyed"]:
 		var prefers := "any" if u.prefers == "fence" else u.prefers
 		u.target = RaidRules.pick_target(prefers, u.position, targets)
@@ -831,6 +948,12 @@ func _update_bars() -> void:
 			continue
 		entries.append({"key": "g%d" % i, "friendly": true, "ratio": u.health / u.max_health,
 			"pos": cam.unproject_position(u.global_position + Vector3(0, 4.2 if u.is_tank() else 3.4, 0))})
+	for i in defenders.size():
+		var u := defenders[i]
+		if u.dead or u.health >= u.max_health:
+			continue
+		entries.append({"key": "e%d" % i, "friendly": false, "ratio": u.health / u.max_health,
+			"pos": cam.unproject_position(u.global_position + Vector3(0, 3.4, 0))})
 	hud.update_bars(entries)
 
 

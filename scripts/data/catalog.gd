@@ -289,6 +289,17 @@ static func drone_stats(type: String, level: int) -> Dictionary:
 	return s
 
 
+## Soldiers that run out of a Quarters building to defend it when attackers come close.
+static func defender_count(quarters_level: int) -> int:
+	return 2 + int((quarters_level - 1) / 2.0)
+
+
+## How close an attacker has to come to a Quarters building to call out its defenders.
+const DEFENDER_ALERT := 16.0
+## How far defenders chase attackers from their Quarters.
+const DEFENDER_LEASH := 24.0
+
+
 ## Army space from one Quarters building.
 static func quarters_space(level: int) -> int:
 	return 12 + 6 * (level - 1)

@@ -26,6 +26,7 @@ const STARTERS := [
 		"pad": [7, 6],
 		"structures": [
 			{"type": "hq", "cell": [1, 2], "level": 2},
+			{"type": "quarters", "cell": [4, 4], "level": 1},
 			{"type": "generator", "cell": [6, 3], "level": 2},
 			{"type": "storage", "cell": [3, 6], "level": 1},
 			{"type": "generator", "cell": [2, 4], "level": 1},
@@ -42,6 +43,7 @@ const STARTERS := [
 		"pad": [6, 7],
 		"structures": [
 			{"type": "hq", "cell": [2, 1], "level": 3},
+			{"type": "quarters", "cell": [4, 6], "level": 3},
 			{"type": "generator", "cell": [7, 3], "level": 2},
 			{"type": "storage", "cell": [1, 5], "level": 2},
 			{"type": "generator", "cell": [4, 4], "level": 2},
