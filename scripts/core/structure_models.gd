@@ -7,7 +7,8 @@ extends RefCounted
 ## The older models are drawn in a small unit size and scaled up to fill their pad.
 const SCALE := 1.35
 ## Sketch-based models are drawn at pad size.
-const PAD_SIZED := ["pump", "tank", "camp", "quarters", "garage", "support"]
+## Every model is drawn at pad size now; the 1.35 scale only remains for safety.
+const PAD_SIZED := ["hq", "generator", "storage", "hangar", "pump", "tank", "camp", "quarters", "garage", "support"]
 const FUEL := Color(0.93, 0.35, 0.55)
 
 
@@ -57,37 +58,119 @@ static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 	return label
 
 
+## Command Tower (sketch Th5mNJUuSD5d77XEMeRnqE): navy block, glowing band, gold roof, red-tipped
+## antenna. Lv2 a flag; Lv3 taller and wider with three antennas; Lv4 a satellite dish; Lv5 a
+## radar dome and a gold band.
 static func _hq(root: Node3D, level: int) -> float:
-	var h := 2.5 + level * 0.9
-	MeshKit.add(root, MeshKit.box(Vector3(3.4, h, 3.4)), MeshKit.mat(Color(0.32, 0.36, 0.42), 0.4, 0.5), Vector3(0, h / 2.0, 0))
-	MeshKit.add(root, MeshKit.box(Vector3(3.5, 0.35, 3.5)), MeshKit.glow(Color(0.5, 0.9, 1.0)), Vector3(0, h * 0.62, 0))
-	MeshKit.add(root, MeshKit.box(Vector3(3.7, 0.4, 3.7)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h + 0.2, 0))
-	MeshKit.add(root, MeshKit.cyl(0.08, 0.08, 3.0, 6), MeshKit.mat(Color(0.2, 0.2, 0.22), 0.5, 0.6), Vector3(0, h + 1.9, 0))
-	MeshKit.add(root, MeshKit.sphere(0.18, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(0, h + 3.4, 0))
-	return h + 3.4
+	var h: float = [2.6, 3.2, 4.2, 4.8, 5.8][clampi(level, 1, 5) - 1]
+	var w := 4.0 if level >= 3 else 3.6
+	var metal := MeshKit.mat(Color(0.2, 0.2, 0.22), 0.5, 0.6)
+	MeshKit.add(root, MeshKit.box(Vector3(w, h, w)), MeshKit.mat(Color(0.2, 0.23, 0.28), 0.4, 0.5), Vector3(0, h / 2.0, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(w + 0.06, 0.3, w + 0.06)), MeshKit.glow(Color(0.5, 0.9, 1.0)), Vector3(0, h * 0.62, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.38, w + 0.3)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h + 0.19, 0))
+	if level >= 2:
+		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 3.0, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(w / 2.0 + 0.5, 1.5, w / 2.0 + 0.5))
+		MeshKit.add(root, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
+		MeshKit.add(root, MeshKit.box(Vector3(0.031, 0.2, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
+	var antennas := 3 if level >= 3 else 1
+	for i in antennas:
+		var ah := 2.2 + i * 0.5
+		MeshKit.add(root, MeshKit.cyl(0.06, 0.06, ah, 6), metal, Vector3(-0.8 + i * 0.8, h + 0.38 + ah / 2.0, -0.5))
+	MeshKit.add(root, MeshKit.sphere(0.16, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(-0.8, h + 2.7, -0.5))
+	if level >= 4:
+		MeshKit.add(root, MeshKit.cyl(0.6, 0.15, 0.25, 16), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3), Vector3(0.9, h + 0.75, 0.8)).rotation.x = -0.9
+	if level >= 5:
+		MeshKit.add(root, MeshKit.sphere(0.95, 16), MeshKit.mat(Color(0.91, 0.9, 0.87), 0.5, 0.2), Vector3(0, h + 1.3, 0.5))
+		MeshKit.add(root, MeshKit.box(Vector3(w + 0.5, 0.2, 0.4)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h * 0.3, w / 2.0 + 0.12))
+	chevrons(root, level, Vector3(2.3, 0, 2.3))
+	return h + 2.9
 
 
+## Solar generator: more panels with level. Lv1 two; Lv2 three; Lv3 four and a battery bank;
+## Lv4 a small wind turbine; Lv5 six tilted panels.
 static func _generator(root: Node3D, level: int) -> float:
 	var panel := MeshKit.mat(Color(0.1, 0.16, 0.3), 0.2, 0.4)
 	var frame := MeshKit.mat(Color(0.75, 0.77, 0.8), 0.4, 0.7)
-	var count := mini(level + 1, 4)
+	var count: int = [2, 3, 4, 4, 6][clampi(level, 1, 5) - 1]
 	for i in count:
-		var x := -1.5 + (i % 2) * 3.0
-		var z := -1.2 + int(i / 2.0) * 2.4
-		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.8, 0.12)), frame, Vector3(x, 0.4, z))
-		var p := MeshKit.add(root, MeshKit.box(Vector3(2.4, 0.08, 1.6)), panel, Vector3(x, 0.9, z))
-		p.rotation.x = -0.5
-	MeshKit.add(root, MeshKit.box(Vector3(0.8, 0.9, 0.6)), MeshKit.mat(Color(0.9, 0.9, 0.88), 0.6), Vector3(0, 0.45, 0))
-	return 1.6
+		var x := -1.6 + (i % 3) * 1.6
+		var z := -1.2 + int(i / 3.0) * 2.2
+		MeshKit.add(root, MeshKit.box(Vector3(0.1, 0.8, 0.1)), frame, Vector3(x, 0.4, z))
+		var p := MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.07, 1.0)), panel, Vector3(x, 0.85, z))
+		p.rotation.x = -0.7 if level >= 5 else -0.5
+	MeshKit.add(root, MeshKit.box(Vector3(0.6, 0.7, 0.5)), MeshKit.mat(Color(0.9, 0.9, 0.88), 0.6), Vector3(1.9, 0.35, 1.9))
+	if level >= 3:
+		for k in 3:
+			MeshKit.add(root, MeshKit.box(Vector3(0.35, 0.6, 0.5)), MeshKit.mat(Color(0.18, 0.44, 0.25), 0.6), Vector3(-2.0 + k * 0.4, 0.3, 2.0))
+	if level >= 4:
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.07, 2.6, 6), MeshKit.mat(Color(0.93, 0.93, 0.93), 0.4), Vector3(2.2, 1.3, -2.1))
+		var hub := Node3D.new()
+		hub.position = Vector3(2.2, 2.6, -1.95)
+		root.add_child(hub)
+		for b in 3:
+			var arm := Node3D.new()
+			arm.rotation.z = b * TAU / 3.0
+			hub.add_child(arm)
+			MeshKit.add(arm, MeshKit.box(Vector3(0.12, 1.0, 0.03)), MeshKit.mat(Color(0.93, 0.93, 0.93), 0.4), Vector3(0, 0.5, 0))
+		var spin := hub.create_tween().set_loops()
+		spin.tween_property(hub, "rotation:z", TAU, 2.0).as_relative()
+	chevrons(root, level, Vector3(2.3, 0, 0.4))
+	return 1.8
 
 
+## Coin silo: taller, then doubled. Lv1 a short silo; Lv2 a ladder; Lv3 tall with a second gold
+## band; Lv4 a coin chute; Lv5 twin silos with a bridge.
 static func _storage(root: Node3D, level: int) -> float:
-	var h := 1.6 + level * 0.5
-	MeshKit.add(root, MeshKit.cyl(1.4, 1.4, h, 24), MeshKit.mat(Color(0.85, 0.88, 0.92), 0.35, 0.5), Vector3(0, h / 2.0, 0))
-	MeshKit.add(root, MeshKit.cyl(1.45, 1.45, 0.3, 24), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h * 0.7, 0))
-	var dome := MeshKit.add(root, MeshKit.sphere(1.4, 20), MeshKit.mat(Color(0.85, 0.88, 0.92), 0.35, 0.5), Vector3(0, h, 0))
-	dome.scale = Vector3(1, 0.5, 1)
-	return h + 0.7
+	var shell := MeshKit.mat(Color(0.87, 0.89, 0.91), 0.35, 0.5)
+	var gold := MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8)
+	var count := 2 if level >= 5 else 1
+	var h: float = [1.9, 2.3, 3.0, 3.4, 3.4][clampi(level, 1, 5) - 1]
+	for i in count:
+		var x := 0.0 if count == 1 else (1.2 if i else -1.2)
+		var r := 1.05 if count == 2 else 1.5
+		MeshKit.add(root, MeshKit.cyl(r, r, h, 24), shell, Vector3(x, h / 2.0 + 0.1, 0))
+		MeshKit.add(root, MeshKit.cyl(r * 1.03, r * 1.03, 0.28, 24), gold, Vector3(x, h * 0.7, 0))
+		if level >= 3:
+			MeshKit.add(root, MeshKit.cyl(r * 1.03, r * 1.03, 0.16, 24), gold, Vector3(x, h * 0.35, 0))
+		MeshKit.add(root, MeshKit.sphere(r, 20), shell, Vector3(x, h + 0.1, 0)).scale = Vector3(1, 0.5, 1)
+		MeshKit.add(root, MeshKit.cyl(0.35, 0.35, 0.12, 16), gold, Vector3(x, h + 0.1 + r * 0.5, 0))
+	if level >= 2:
+		MeshKit.add(root, MeshKit.box(Vector3(0.28, h, 0.05)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3((-1.2 if count == 2 else 0.0) + 1.0, h / 2.0 + 0.1, 1.0)).rotation.y = -0.8
+	if level >= 4:
+		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.3, 1.8)), gold, Vector3(1.9, 0.6, 1.4)).rotation.x = 0.4
+	if level >= 5:
+		MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.2, 0.4)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(0, h - 0.2, 0))
+	chevrons(root, level, Vector3(2.3, 0, -1.8))
+	return h + 1.2
+
+
+## Drone hangar: an arched shed with a landing pad. Lv1 small; Lv2 a windsock; Lv3 longer, with
+## an H pad; Lv4 lights round the pad; Lv5 wider, an antenna and a drone parked on the pad.
+static func _hangar(root: Node3D, level: int) -> float:
+	var w: float = [3.2, 3.5, 3.9, 4.2, 4.8][clampi(level, 1, 5) - 1]
+	var d := 3.2 if level >= 3 else 2.6
+	MeshKit.add(root, MeshKit.box(Vector3(w, 1.4, d)), MeshKit.mat(Color(0.78, 0.8, 0.82), 0.5, 0.4), Vector3(0, 0.7, -0.6))
+	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, d, 16), MeshKit.mat(Color(0.35, 0.45, 0.55), 0.4, 0.5), Vector3(0, 1.4, -0.6))
+	roof.rotation.x = PI / 2.0
+	roof.scale = Vector3(1, 1, 0.42)
+	MeshKit.add(root, MeshKit.box(Vector3(w * 0.6, 1.1, 0.05)), MeshKit.mat(Color(0.12, 0.13, 0.15), 0.6), Vector3(0, 0.55, d / 2.0 - 0.58))
+	if level >= 2:
+		MeshKit.add(root, MeshKit.cyl(0.03, 0.03, 2.0, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(-2.2, 1.0, 2.2))
+		MeshKit.add(root, MeshKit.cyl(0.1, 0.17, 0.6, 10), MeshKit.mat(Color(1.0, 0.48, 0.16), 0.6), Vector3(-2.2, 1.9, 2.5)).rotation.x = PI / 2.0
+	if level >= 3:
+		MeshKit.add(root, MeshKit.cyl(0.9, 0.9, 0.04, 24), MeshKit.mat(Color(0.23, 0.24, 0.25), 0.7), Vector3(1.6, 0.1, 1.8))
+		var yellow := MeshKit.mat(Color(0.95, 0.76, 0.2), 0.6)
+		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.02, 0.9)), yellow, Vector3(1.4, 0.13, 1.8))
+		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.02, 0.9)), yellow, Vector3(1.8, 0.13, 1.8))
+		MeshKit.add(root, MeshKit.box(Vector3(0.4, 0.02, 0.12)), yellow, Vector3(1.6, 0.13, 1.8))
+	if level >= 4:
+		for k in 6:
+			MeshKit.add(root, MeshKit.sphere(0.07, 6), MeshKit.glow(Color(0.5, 0.9, 1.0) if k % 2 else Color(1, 1, 1)), Vector3(1.6 + cos(k) * 0.95, 0.14, 1.8 + sin(k) * 0.95))
+	if level >= 5:
+		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 1.5, 6), MeshKit.mat(UnitModels.METAL, 0.5, 0.6), Vector3(-w / 2.0 + 0.4, 2.2, -0.6))
+		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.15, 0.5)), MeshKit.mat(Color(0.93, 0.93, 0.93), 0.4), Vector3(1.6, 0.4, 1.8))
+	chevrons(root, level, Vector3(-2.3, 0, 1.0))
+	return 2.4
 
 
 ## Fuel pump (approved sketch): a pumpjack whose head nods. Lv1 one pumpjack; Lv2 a fence of
@@ -336,17 +419,6 @@ static func _torus(radius: float, thickness: float) -> TorusMesh:
 	t.rings = 16
 	t.ring_segments = 8
 	return t
-
-
-static func _hangar(root: Node3D, level: int) -> float:
-	var wall := MeshKit.mat(Color(0.78, 0.8, 0.82), 0.5, 0.4)
-	var w := 3.0 + level * 0.3
-	MeshKit.add(root, MeshKit.box(Vector3(w, 1.4, 2.6)), wall, Vector3(0, 0.7, 0))
-	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, 2.6, 16), MeshKit.mat(Color(0.35, 0.45, 0.55), 0.4, 0.5), Vector3(0, 1.4, 0))
-	roof.rotation.x = PI / 2.0
-	roof.scale = Vector3(1, 1, 0.45)
-	MeshKit.add(root, MeshKit.box(Vector3(w * 0.6, 1.1, 0.05)), MeshKit.mat(Color(0.12, 0.13, 0.15), 0.6), Vector3(0, 0.55, 1.31))
-	return 2.2
 
 
 # ---------------------------------------------------------------- shared parts

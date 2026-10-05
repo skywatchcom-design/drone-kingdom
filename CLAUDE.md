@@ -57,7 +57,10 @@ breaches. Until week 3's defenses, only the Laser hits ground units. Camp/Quarte
 Week 3 (5.10.2026): new defenses with a look per level, sketch-based buildings, defending squad
 from Quarters, energy + air strike + flare in battle. Dev: `res://scenes/dev/gallery.tscn -- --type mg`
 shows one structure at all levels; raid takes `--enemy N` and `--army infantry:2,courier:2`.
-Next: per-level looks for HQ/generator/silo/hangar/drones/soldiers/tank (sketch first),
+Week 3 extras (5.10.2026): player-built walls (`Walls`, wall mode, battle routing), Support Base with
+prepared air strikes/flares (no energy), build menu picture cards, five-level looks for every unit,
+drone, plane and building (level colors none/silver/blue/red/gold + ring under units). Save v8.
+Next:
 Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
