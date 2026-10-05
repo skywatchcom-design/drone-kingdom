@@ -84,4 +84,10 @@ Week 4 (6.10.2026): Syndicate campaign: `Syndicate` (10 missions, bases from spe
 swap), map scene `scenes/syndicate/map.tscn` (briefing, stars, locks), robot guards (`UnitModels._robot`),
 Attack opens a choice (campaign or raid). Each mission hands out a fixed task force at the mission's level (`Syndicate.FORCES`);
 the player's own army and support stay home. Raid flags: `--syndicate N`; map flag: `--mission N`.
+Approved 6.10.2026: battle cards and deploying (https://claude.ai/artifact/Fy11Uvx52E8AXFytERpDZa): Clash-style
+unit cards (picture at the unit's level, count, level badge, name strip) and deploying anywhere except a
+square around each standing building (red squares flash after a bad tap). Raid flag `--show-zones`.
+Approved 6.10.2026: art direction B+ "stylized-realistic, improved" (https://claude.ai/artifact/2CogN9cX5xuLj8cwdXBn67):
+sky lighting, soft contact shadows, grime low on walls and hulls, textured grass/dirt/concrete/camo,
+rolling ground with grass tufts, more parts per model. Free only: everything built in code.
 Still waiting on the owner: Apple Developer and Google Play accounts.

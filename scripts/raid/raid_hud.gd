@@ -17,6 +17,8 @@ var _loot: Label
 var _status: Label
 var _cards: HBoxContainer
 var _card_buttons := {}
+## Per card: the count label and the panel style.
+var _card_parts := {}
 var _end: Button
 var _support_row: HBoxContainer
 var _abilities := {}
@@ -74,6 +76,8 @@ func _ready() -> void:
 	bottom.offset_top = -150.0
 	bottom.offset_bottom = -20.0
 	bottom.add_theme_constant_override("separation", 10)
+	# Same layout in both languages: End on the left, abilities on the right.
+	bottom.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	root.add_child(bottom)
 	_end = HomeHud.make_button(bottom, I18n.t("End"), 24, 96)
 	_end.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -177,28 +181,104 @@ func set_loot(coins: int, fuel: int) -> void:
 	_loot.text = I18n.t("Loot %d coins · %d fuel") % [coins, fuel]
 
 
-## One card per drone type with how many are left to deploy. `names` maps type -> label.
-func set_army(army: Dictionary, names: Dictionary, selected: String) -> void:
+const CARD := Vector2(104, 130)
+
+
+## Clash-style unit cards (approved sketch Fy11Uvx52E8AXFytERpDZa): a picture of the unit at
+## its level, how many are left in the corner, a level badge in the level color and the name
+## in a strip at the bottom. The selected card lifts with a white frame; empty ones go grey.
+func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dictionary = {}) -> void:
 	for child in _cards.get_children():
 		child.queue_free()
 	_card_buttons.clear()
+	_card_parts.clear()
 	for type in army:
-		var b := HomeHud.make_button(_cards, "", 20, 96)
-		b.custom_minimum_size.x = 140
-		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		var lvl := clampi(int(levels.get(type, 1)), 1, 5)
+		var drone := Catalog.DRONES.has(type)
+		var holder := Control.new()
+		holder.custom_minimum_size = CARD + Vector2(0, 14)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_cards.add_child(holder)
+		var b := Button.new()
+		b.size = CARD
+		b.position = Vector2(0, 14)
 		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.clip_contents = true
+		holder.add_child(b)
+		var base := Color(0.3, 0.4, 0.5) if drone else Color(0.38, 0.42, 0.26)
+		var style := HomeHud.flat(base)
+		style.set_corner_radius_all(10)
+		style.border_color = Color(1, 1, 1, 0.25)
+		style.set_border_width_all(2)
+		style.shadow_color = Color(0, 0, 0, 0.45)
+		style.shadow_size = 3
+		style.shadow_offset = Vector2(0, 3)
+		for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+			b.add_theme_stylebox_override(state, style)
+		var pic := ShopUI.picture(type, lvl, base.lightened(0.12))
+		pic.position = Vector2(3, 3)
+		pic.size = Vector2(CARD.x - 6, CARD.y - 30)
+		b.add_child(pic)
+		var count := _card_label(b, "", 22, Vector2(8, 2))
+		count.add_theme_constant_override("outline_size", 6)
+		count.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.1))
+		var badge := PanelContainer.new()
+		var bs := HomeHud.flat(UnitModels.LEVEL_COLORS[lvl - 1].lightened(0.25))
+		bs.set_corner_radius_all(5)
+		bs.content_margin_left = 6
+		bs.content_margin_right = 6
+		badge.add_theme_stylebox_override("panel", bs)
+		badge.position = Vector2(6, CARD.y - 50)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(badge)
+		var bl := Label.new()
+		bl.text = str(lvl)
+		bl.add_theme_font_size_override("font_size", 15)
+		bl.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
+		badge.add_child(bl)
+		var strip := ColorRect.new()
+		strip.color = Color(0.04, 0.05, 0.04, 0.75)
+		strip.position = Vector2(0, CARD.y - 24)
+		strip.size = Vector2(CARD.x, 24)
+		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(strip)
+		var name_label := _card_label(strip, names[type], 13, Vector2.ZERO)
+		name_label.size = strip.size
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_label.clip_text = true
 		b.pressed.connect(func() -> void: unit_selected.emit(type))
 		_card_buttons[type] = b
+		_card_parts[type] = {"count": count, "style": style}
 	update_army(army, names, selected)
 
 
-func update_army(army: Dictionary, names: Dictionary, selected: String) -> void:
+func _card_label(parent: Control, text: String, size: int, pos: Vector2) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.position = pos
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", Color.WHITE)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(l)
+	return l
+
+
+func update_army(army: Dictionary, _names: Dictionary, selected: String) -> void:
 	for type in _card_buttons:
 		var b: Button = _card_buttons[type]
+		var parts: Dictionary = _card_parts[type]
 		var left := int(army.get(type, 0))
-		b.text = "%s\nx%d" % [names[type], left]
+		var on: bool = type == selected and left > 0
+		(parts["count"] as Label).text = "x%d" % left
 		b.disabled = left <= 0
-		b.set_pressed_no_signal(type == selected and left > 0)
+		b.set_pressed_no_signal(on)
+		b.position.y = 0.0 if on else 14.0
+		b.modulate = Color(0.55, 0.55, 0.55) if left <= 0 else Color.WHITE
+		var style: StyleBoxFlat = parts["style"]
+		style.border_color = Color.WHITE if on else Color(1, 1, 1, 0.25)
+		style.set_border_width_all(3 if on else 2)
 
 
 func flash_hit() -> void:

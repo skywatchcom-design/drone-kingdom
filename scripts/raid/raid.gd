@@ -21,7 +21,9 @@ const HOME_SCENE := "res://scenes/home/home.tscn"
 const MAP_SCENE := "res://scenes/syndicate/map.tscn"
 const VIEW_SIZE := 50.0
 const TRAVEL_ALT := 11.0
-const DEPLOY_CLEARANCE := 6.5
+## Half the side of the square around a standing building where nothing may be deployed
+## (Clash style); squares of neighbouring pads just touch.
+const NO_DEPLOY_HALF := City.SPACING / 2.0
 const MAP_LIMIT := 46.0
 const TAP_SLOP := 24.0
 const PAN_LIMIT := 30.0
@@ -61,8 +63,15 @@ var flare_left := 0.0
 var flare_node: Node3D
 var _flare_smoke := 0.0
 var army := {}
+## The red squares shown for a moment after a tap too close to a building.
+var _zones: Node3D
+var _zone_fill: StandardMaterial3D
+var _zone_edge: StandardMaterial3D
+var _zone_flash := 0.0
 ## Unit level forced by a Syndicate task force (0: each unit at the player's own level).
 var force_level := 0
+## Level of each unit type in the army, for the cards.
+var unit_levels := {}
 ## Units sent in, by type; they are used up when the battle ends.
 var deployed := {}
 var drone_names := {}
@@ -175,7 +184,9 @@ func _start() -> void:
 			drone_names[type] = Catalog.display_name(type)
 	selected = _first_available()
 	hud.set_title(base["name"])
-	hud.set_army(army, drone_names, selected)
+	for type in army:
+		unit_levels[type] = force_level if force_level > 0 else int(GameState.units.get(type, 1))
+	hud.set_army(army, drone_names, selected, unit_levels)
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
 	support = GameState.support_ready.duplicate()
@@ -191,7 +202,10 @@ func _start() -> void:
 		support_levels = {"strike": lvl, "flare": lvl}
 	hud.set_support(support, armed)
 	_update_progress()
-	hud.set_status(I18n.t("Tap outside the fence to send in your army"))
+	hud.set_status(I18n.t("Pick a card and tap anywhere away from the buildings"))
+	if args.has("--show-zones"):
+		_show_zones()
+		_zone_flash = 100.0
 	if autoplay:
 		_autoplay_deploy()
 
@@ -250,8 +264,7 @@ func _try_deploy(screen_pos: Vector2) -> void:
 		var g: Vector3 = ground_hit
 		if absf(g.x) > MAP_LIMIT or absf(g.z) > MAP_LIMIT:
 			return
-		if absf(g.x) < City.YARD + 1.5 and absf(g.z) < City.YARD + 1.5:
-			hud.set_status(I18n.t("Ground units start outside the fence."))
+		if _no_deploy(g):
 			return
 		_deploy_ground(selected, g)
 		return
@@ -261,11 +274,44 @@ func _try_deploy(screen_pos: Vector2) -> void:
 	var p: Vector3 = hit
 	if absf(p.x) > MAP_LIMIT or absf(p.z) > MAP_LIMIT:
 		return
-	for t in targets:
-		if PathUtils.flat_distance(t["top"], p) < DEPLOY_CLEARANCE:
-			hud.set_status(I18n.t("Too close to a building. Release drones outside the base."))
-			return
+	if _no_deploy(p):
+		return
 	_deploy(selected, p)
+
+
+## True (and flashes the forbidden squares) when `p` is right next to a standing building.
+func _no_deploy(p: Vector3) -> bool:
+	for t in targets:
+		if t["destroyed"]:
+			continue
+		var c: Vector3 = t["top"]
+		if absf(p.x - c.x) < NO_DEPLOY_HALF and absf(p.z - c.z) < NO_DEPLOY_HALF:
+			_show_zones()
+			hud.set_status(I18n.t("Too close to a building"))
+			Audio.play("click", -10.0)
+			return true
+	return false
+
+
+func _show_zones() -> void:
+	if _zones != null:
+		_zones.queue_free()
+	_zones = Node3D.new()
+	level.add_child(_zones)
+	_zone_fill = MeshKit.glow(Color(1.0, 0.23, 0.18), 0.0)
+	_zone_edge = MeshKit.glow(Color(1.0, 1.0, 1.0), 0.0)
+	var side := NO_DEPLOY_HALF * 2.0
+	for t in targets:
+		if t["destroyed"]:
+			continue
+		var c: Vector3 = t["top"]
+		var q := MeshKit.add(_zones, MeshKit.box(Vector3(side, 0.02, side)), _zone_fill, Vector3(c.x, 0.3, c.z))
+		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for e in [[Vector3(side, 0.04, 0.16), Vector3(0, 0, side / 2.0)], [Vector3(side, 0.04, 0.16), Vector3(0, 0, -side / 2.0)],
+				[Vector3(0.16, 0.04, side), Vector3(side / 2.0, 0, 0)], [Vector3(0.16, 0.04, side), Vector3(-side / 2.0, 0, 0)]]:
+			var b := MeshKit.add(_zones, MeshKit.box(e[0]), _zone_edge, Vector3(c.x, 0.33, c.z) + (e[1] as Vector3))
+			b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_zone_flash = 1.4
 
 
 func _deploy(type: String, p: Vector3) -> void:
@@ -346,6 +392,14 @@ func _autoplay_deploy() -> void:
 # ---------------------------------------------------------------- battle loop
 
 func _process(delta: float) -> void:
+	if _zones != null:
+		_zone_flash = maxf(0.0, _zone_flash - delta)
+		var a := minf(1.0, _zone_flash / 0.5)
+		_zone_fill.albedo_color.a = 0.38 * a
+		_zone_edge.albedo_color.a = 0.95 * a
+		if _zone_flash <= 0.0:
+			_zones.queue_free()
+			_zones = null
 	var alive: Array = []
 	for d in drones:
 		d.jammed = false

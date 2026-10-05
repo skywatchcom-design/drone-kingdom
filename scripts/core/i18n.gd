@@ -145,6 +145,8 @@ const HE := {
 	"Unlock  ·  %d fuel": "פתיחה  ·  %d דלק",
 	"Build here": "בנייה כאן",
 	"Wall": "קיר",
+	"Pick a card and tap anywhere away from the buildings": "בחרו כרטיס ולחצו בכל מקום שלא צמוד למבנה",
+	"Too close to a building": "אי אפשר להנחית צמוד למבנה",
 	"Your task force (level %d): %s": "כוח המשימה שלך (רמה %d): %s",
 	"Scrap Depot": "מחסן גרוטאות",
 	"Abandoned Fuel Station": "תחנת הדלק הנטושה",

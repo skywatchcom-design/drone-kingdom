@@ -304,7 +304,9 @@ static func info_window(title: String, type: String, level: int, rows: Array, de
 # ---------------------------------------------------------------- pictures
 
 ## A picture of a structure (or wall) at a level, rendered once into a small 3D stage.
-static func picture(type: String, level: int) -> Control:
+## A small 3D picture of a structure, wall or unit at `level`. Units stand alone on a
+## plain background of color `bg` (the battle cards); structures stand on their pad.
+static func picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33)) -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -315,7 +317,7 @@ static func picture(type: String, level: int) -> Control:
 	frame.add_child(vp)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.45, 0.58, 0.33)
+	env.background_color = bg
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.6, 0.65, 0.7)
 	env.ambient_light_energy = 0.9
@@ -330,8 +332,29 @@ static func picture(type: String, level: int) -> Control:
 	vp.add_child(light)
 	var stage := Node3D.new()
 	vp.add_child(stage)
-	MeshKit.add(stage, MeshKit.box(Vector3(5.4, 0.12, 5.4)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), Vector3(0, 0.06, 0))
-	if type == "wall":
+	var unit := Catalog.GROUND.has(type) or Catalog.DRONES.has(type)
+	if not unit:
+		MeshKit.add(stage, MeshKit.box(Vector3(5.4, 0.12, 5.4)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), Vector3(0, 0.06, 0))
+	var look := Vector3(0, 1.1, 0)
+	var eye := Vector3(5.6, 6.4, 7.4)
+	if Catalog.GROUND.has(type):
+		var g := GroundUnit.new()
+		g.configure(Catalog.unit_stats(type, level))
+		g.showcase = true
+		g.rotation.y = 0.45 if type != "armor" else -0.6
+		stage.add_child(g)
+		var tank := type == "armor"
+		look = Vector3(0, 0.9 if tank else 1.45, 0)
+		eye = Vector3(2.6, 3.0, 5.4) * (1.55 if tank else 0.75) * (0.85 + 0.05 * level)
+	elif Catalog.DRONES.has(type):
+		var d := Drone.new()
+		d.configure(Catalog.unit_stats(type, level))
+		d.showcase = true
+		d.rotation.y = 0.6
+		stage.add_child(d)
+		look = Vector3(0, 0, 0)
+		eye = Vector3(2.4, 2.6, 4.2) * (1.5 if type == "heavy" else 1.05) * (0.85 + 0.08 * level)
+	elif type == "wall":
 		StructureModels.wall(stage, [0, 0, 1], level).position = Vector3.ZERO
 	elif Catalog.is_defense(type):
 		var d := Catalog.make_defense(type)
@@ -346,5 +369,5 @@ static func picture(type: String, level: int) -> Control:
 	cam.fov = 40.0
 	vp.add_child(cam)
 	var far := 1.25 if type == "hq" else 1.0
-	cam.look_at_from_position(Vector3(5.6, 6.4, 7.4) * far, Vector3(0, 1.1, 0))
+	cam.look_at_from_position(eye * far, look)
 	return frame
