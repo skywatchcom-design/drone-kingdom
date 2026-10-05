@@ -1,6 +1,7 @@
 class_name UnitModels
 extends RefCounted
-## The approved ground-forces designs (sketch BD7VJUbaPSCevXsmgRoS2o), built from primitives.
+## The approved ground-forces designs (sketch BD7VJUbaPSCevXsmgRoS2o), built from primitives,
+## with a distinct look for every level (sketch Th5mNJUuSD5d77XEMeRnqE).
 ## Each build returns the moving parts GroundUnit animates. Forward is local +Z.
 ##   soldier:  olive uniform, covered helmet, vest with pouches, backpack, carbine, and a small
 ##             blue-and-white shoulder patch. Engineers wear a sand-orange vest and carry a shovel.
@@ -17,13 +18,146 @@ const BLUE := Color(0.18, 0.44, 0.88)
 const WHITE := Color(0.95, 0.95, 0.95)
 
 
-static func build(kind: String, root: Node3D) -> Dictionary:
+## Every level is readable from across the base: the unit grows (GroundUnit), its
+## silhouette changes, and it wears its level color on the shoulders or hull.
+static func build(kind: String, root: Node3D, level: int = 1) -> Dictionary:
+	var p: Dictionary
 	match kind:
 		"armor":
-			return _tank(root)
+			p = _tank(root)
+			_tank_level(root, p, level)
 		"engineers":
-			return _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
-	return _soldier(root, Color(0.333, 0.376, 0.235), Color(0.3, 0.325, 0.22), false)
+			p = _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
+			_engineer_level(root, p, level)
+		_:
+			p = _soldier(root, Color(0.333, 0.376, 0.235), Color(0.3, 0.325, 0.22), false)
+			_infantry_level(root, p, level)
+	return p
+
+
+## Swaps one exact color for another on every mesh under `node` (each mesh has its own material).
+static func recolor(node: Node, from: Color, to: Color) -> void:
+	for mi in node.find_children("*", "MeshInstance3D", true, false):
+		var m := (mi as MeshInstance3D).material_override as StandardMaterial3D
+		if m != null and absf(m.albedo_color.r - from.r) < 0.01 and absf(m.albedo_color.g - from.g) < 0.01 and absf(m.albedo_color.b - from.b) < 0.01:
+			var copy := m.duplicate() as StandardMaterial3D
+			copy.albedo_color = Color(to, m.albedo_color.a)
+			(mi as MeshInstance3D).material_override = copy
+
+
+static func _shoulder_patches(torso: Node3D, level: int) -> void:
+	for sx in [-1.0, 1.0]:
+		MeshKit.add(torso, MeshKit.box(Vector3(0.09, 0.04, 0.14)), level_material(level), Vector3(sx * 0.21, 0.42, 0))
+
+
+## Infantry by level: Lv2 level patches; Lv3 a heavy plate vest, shoulder pads, goggles and a
+## light machine gun with a drum; Lv4 dark armor and a tall radio antenna; Lv5 full armor, a
+## closed helmet with a glowing visor and a multi-barrel gun.
+static func _infantry_level(root: Node3D, p: Dictionary, level: int) -> void:
+	var torso: Node3D = p["torso"]
+	var rifle: Node3D = (p["muzzle"] as Node3D).get_parent()
+	var dark := MeshKit.mat(Color(0.17, 0.18, 0.16), 0.6)
+	_shoulder_patches(torso, level)
+	if level >= 3:
+		MeshKit.add(torso, MeshKit.box(Vector3(0.44, 0.33, 0.31)), MeshKit.mat(OLIVE_DARK, 0.8), Vector3(0, 0.24, 0))
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(torso, MeshKit.box(Vector3(0.15, 0.1, 0.21)), MeshKit.mat(OLIVE_DARK, 0.7), Vector3(sx * 0.26, 0.43, 0))
+		MeshKit.add(torso, MeshKit.box(Vector3(0.21, 0.05, 0.06)), dark, Vector3(0, 0.58, 0.12))
+		MeshKit.add(rifle, MeshKit.cyl(0.075, 0.075, 0.08, 14), dark, Vector3(0, -0.1, 0.12)).rotation.z = PI / 2.0
+		MeshKit.add(rifle, MeshKit.box(Vector3(0.06, 0.07, 0.3)), dark, Vector3(0, 0.0, 0.45))
+		(p["muzzle"] as Node3D).position.z = 0.62
+	if level >= 4:
+		recolor(root, OLIVE, Color(0.25, 0.27, 0.23))
+		recolor(root, OLIVE_DARK, Color(0.17, 0.18, 0.16))
+		MeshKit.add(torso, MeshKit.cyl(0.01, 0.01, 0.85, 4), dark, Vector3(-0.1, 0.72, -0.22))
+	if level >= 5:
+		var helm := MeshKit.add(torso, MeshKit.sphere(0.165, 14), MeshKit.mat(Color(0.12, 0.13, 0.14), 0.4, 0.4), Vector3(0, 0.58, 0))
+		helm.scale = Vector3(1, 0.95, 1.08)
+		var visor := MeshKit.add(torso, MeshKit.box(Vector3(0.21, 0.06, 0.04)), MeshKit.glow(Color(0.37, 0.88, 1.0)), Vector3(0, 0.57, 0.16))
+		visor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for i in 4:
+			var a := i * PI / 2.0
+			MeshKit.add(rifle, MeshKit.cyl(0.016, 0.016, 0.42, 6), dark, Vector3(cos(a) * 0.035, sin(a) * 0.035, 0.7)).rotation.x = PI / 2.0
+		(p["muzzle"] as Node3D).position.z = 0.9
+		MeshKit.add(torso, MeshKit.box(Vector3(0.45, 0.05, 0.32)), level_material(5), Vector3(0, 0.38, 0))
+
+
+## Engineers by level: Lv2 a tool belt; Lv3 a bulky protective suit and goggles; Lv4 a mine
+## detector and a satchel of charges; Lv5 a full bomb suit with an amber visor and a small
+## tracked robot at their side.
+static func _engineer_level(root: Node3D, p: Dictionary, level: int) -> void:
+	var torso: Node3D = p["torso"]
+	var dark := MeshKit.mat(Color(0.2, 0.2, 0.18), 0.7)
+	_shoulder_patches(torso, level)
+	if level >= 2:
+		MeshKit.add(torso, MeshKit.box(Vector3(0.42, 0.07, 0.25)), MeshKit.mat(Color(0.25, 0.2, 0.14), 0.8), Vector3(0, 0.02, 0))
+		for sx in [-0.14, 0.0, 0.14]:
+			MeshKit.add(torso, MeshKit.box(Vector3(0.06, 0.08, 0.05)), dark, Vector3(sx, 0.0, 0.14))
+	if level >= 3:
+		torso.scale = Vector3(1.2, 1.0, 1.2)
+		for hip: Node3D in p["hips"]:
+			hip.scale = Vector3(1.25, 1.0, 1.25)
+		MeshKit.add(torso, MeshKit.box(Vector3(0.21, 0.05, 0.06)), dark, Vector3(0, 0.58, 0.12))
+	if level >= 4:
+		var stick := MeshKit.add(torso, MeshKit.cyl(0.012, 0.012, 0.7, 4), dark, Vector3(-0.22, 0.05, 0.25))
+		stick.rotation.x = 0.9
+		MeshKit.add(torso, MeshKit.cyl(0.1, 0.1, 0.02, 12), MeshKit.mat(Color(0.3, 0.3, 0.3), 0.5), Vector3(-0.22, -0.2, 0.5))
+		MeshKit.add(torso, MeshKit.box(Vector3(0.3, 0.22, 0.18)), MeshKit.mat(Color(0.23, 0.23, 0.18), 0.7), Vector3(-0.2, 0.1, -0.24))
+	if level >= 5:
+		var suit := MeshKit.add(torso, MeshKit.sphere(0.3, 14), MeshKit.mat(Color(0.85, 0.53, 0.17), 0.8), Vector3(0, 0.22, 0))
+		suit.scale = Vector3(1, 0.9, 0.85)
+		var helm := MeshKit.add(torso, MeshKit.sphere(0.17, 14), MeshKit.mat(Color(0.8, 0.5, 0.16), 0.7), Vector3(0, 0.58, 0))
+		helm.scale = Vector3(1, 1, 1.05)
+		var visor := MeshKit.add(torso, MeshKit.box(Vector3(0.2, 0.08, 0.04)), MeshKit.glow(Color(1.0, 0.75, 0.29)), Vector3(0, 0.58, 0.16))
+		visor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var bot := Node3D.new()
+		bot.position = Vector3(0.55, 0, 0.3)
+		root.add_child(bot)
+		MeshKit.add(bot, MeshKit.box(Vector3(0.3, 0.1, 0.4)), MeshKit.mat(Color(0.13, 0.13, 0.13), 0.6), Vector3(0, 0.06, 0))
+		MeshKit.add(bot, MeshKit.box(Vector3(0.2, 0.12, 0.22)), MeshKit.mat(Color(0.85, 0.53, 0.17), 0.6), Vector3(0, 0.17, 0))
+		MeshKit.add(bot, MeshKit.cyl(0.012, 0.012, 0.25, 4), MeshKit.mat(METAL, 0.5, 0.6), Vector3(0, 0.32, 0.05))
+		MeshKit.add(torso, MeshKit.box(Vector3(0.45, 0.05, 0.32)), level_material(5), Vector3(0, 0.0, 0))
+
+
+## The tank by level: Lv2 level-color stripes down the hull and an antenna; Lv3 reactive armor
+## tiles, a longer gun with a muzzle brake and a roof machine gun; Lv4 dark camouflage and smoke
+## launchers; Lv5 a bigger turret with twin barrels and a glowing active protection system.
+static func _tank_level(root: Node3D, p: Dictionary, level: int) -> void:
+	var turret: Node3D = p["turret"]
+	var gun: Node3D = p["gun"]
+	var metal := MeshKit.mat(METAL, 0.6, 0.5)
+	var tile := MeshKit.mat(Color(0.6, 0.58, 0.47), 0.8)
+	if level >= 2:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.2, 0.12, 4.3)), level_material(level), Vector3(sx * 1.35, 0.95, 0))
+		MeshKit.add(turret, MeshKit.cyl(0.02, 0.02, 1.4, 6), metal, Vector3(0.7, 1.0, -0.9))
+	MeshKit.add(turret, MeshKit.box(Vector3(1.92, 0.08, 0.6)), level_material(level), Vector3(0, 0.42, -0.5))
+	if level >= 3:
+		for sx in [-1.0, 1.0]:
+			for i in 6:
+				MeshKit.add(root, MeshKit.box(Vector3(0.1, 0.32, 0.55)), tile, Vector3(sx * 1.4, 0.72, -1.6 + i * 0.66))
+		for i in 4:
+			MeshKit.add(turret, MeshKit.box(Vector3(0.4, 0.2, 0.08)), tile, Vector3(-0.7 + i * 0.45, 0.25, 1.85))
+		MeshKit.add(gun, MeshKit.cyl(0.09, 0.09, 0.7, 12), metal, Vector3(0, 0, 3.35)).rotation.x = PI / 2.0
+		MeshKit.add(gun, MeshKit.cyl(0.14, 0.14, 0.3, 12), metal, Vector3(0, 0, 3.75)).rotation.x = PI / 2.0
+		(p["muzzle"] as Node3D).position.z = 3.95
+		MeshKit.add(turret, MeshKit.box(Vector3(0.08, 0.25, 0.6)), metal, Vector3(0.55, 0.62, 0.2))
+		MeshKit.add(turret, MeshKit.cyl(0.03, 0.03, 0.5, 8), metal, Vector3(0.55, 0.68, 0.5)).rotation.x = PI / 2.0
+	if level >= 4:
+		recolor(root, SINAI, Color(0.49, 0.48, 0.38))
+		recolor(root, SINAI_DARK, Color(0.36, 0.36, 0.29))
+		for i in 5:
+			MeshKit.add(root, MeshKit.box(Vector3(2.32, 0.04, 0.35)), MeshKit.mat(Color(0.24, 0.25, 0.2), 0.8), Vector3(0, 1.03, -1.8 + i * 0.9))
+		for sx in [-1.0, 1.0]:
+			for k in 3:
+				MeshKit.add(turret, MeshKit.cyl(0.06, 0.06, 0.25, 8), metal, Vector3(sx * 0.9, 0.45, 0.6 + k * 0.15)).rotation.z = sx * 0.9
+	if level >= 5:
+		turret.scale = Vector3.ONE * 1.2
+		MeshKit.add(gun, MeshKit.cyl(0.08, 0.1, 3.4, 12), metal, Vector3(0.32, 0, 1.9)).rotation.x = PI / 2.0
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(turret, MeshKit.box(Vector3(0.35, 0.4, 0.35)), MeshKit.mat(Color(0.23, 0.25, 0.21), 0.6, 0.3), Vector3(sx * 1.15, 0.6, -0.3))
+			var aps := MeshKit.add(turret, MeshKit.box(Vector3(0.25, 0.28, 0.05)), MeshKit.glow(Color(0.37, 0.88, 1.0), 0.9), Vector3(sx * 1.15, 0.62, -0.11))
+			aps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 static func _soldier(root: Node3D, vest_color: Color, gear_color: Color, engineer: bool) -> Dictionary:

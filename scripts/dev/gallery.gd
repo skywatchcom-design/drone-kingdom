@@ -1,6 +1,6 @@
 extends Node3D
-## Dev tool: one structure at levels 1 to 5 side by side, to check that every level looks
-## different. Run: godot --path . res://scenes/dev/gallery.tscn -- --type mg
+## Dev tool: one structure, unit or drone at levels 1 to 5 side by side, to check that every
+## level looks different. Run: godot --path . res://scenes/dev/gallery.tscn -- --type mg
 ## Defenses fire at a few dummy soldiers, tanks and drones passing in front.
 
 var defenses: Array[Defense] = []
@@ -20,7 +20,9 @@ func _ready() -> void:
 	for lvl in range(1, Catalog.MAX_LEVEL + 1):
 		var at := Vector3((lvl - 3) * 7.5, 0, -(lvl - 3) * 7.5)
 		MeshKit.add(self, MeshKit.box(Vector3(5.4, 0.12, 5.4)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), at + Vector3(0, 0.06, 0))
-		if Catalog.is_defense(type):
+		if Catalog.DRONES.has(type) or Catalog.GROUND.has(type):
+			_unit_at(type, lvl, at)
+		elif Catalog.is_defense(type):
 			var d := Catalog.make_defense(type)
 			add_child(d)
 			d.position = at
@@ -44,6 +46,26 @@ func _ready() -> void:
 		u.invulnerable = true
 		add_child(u)
 		dummies.append(u)
+
+
+## A unit at `lvl` on its pad, looping its showcase moves (drones hover above it).
+func _unit_at(type: String, lvl: int, at: Vector3) -> void:
+	var stats := Catalog.unit_stats(type, lvl)
+	if Catalog.DRONES.has(type):
+		var d := Drone.new()
+		d.configure(stats)
+		d.showcase = true
+		d.position = at + Vector3(0, 2.4, 0)
+		add_child(d)
+		return
+	var count := mini(int(stats.get("squad", 1)), 2)
+	for i in count:
+		var u := GroundUnit.new()
+		u.configure(stats)
+		u.showcase = true
+		u.kneels = i % 2 == 1
+		u.position = at + Vector3((i - (count - 1) / 2.0) * 1.8, 0.12, 0)
+		add_child(u)
 
 
 func _process(delta: float) -> void:

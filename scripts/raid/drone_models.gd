@@ -170,3 +170,110 @@ static func _heavy(body: Node3D) -> Dictionary:
 	p["weight"] = weight
 	p["bottom"] = 1.1
 	return p
+
+
+# ---------------------------------------------------------------- levels
+
+## Adds what each level looks like on top of the approved model (sketch Th5mNJUuSD5d77XEMeRnqE),
+## so an enemy can read the level at a glance. The Drone also grows with level.
+##   courier: Lv2 a battery pack; Lv3 prop guards and a second camera; Lv4 a graphite shell and
+##            armor pods; Lv5 two extra rotors, a third camera, a red laser and a gold band.
+##   scout:   Lv2 tall antennas; Lv3 red plates, prop guards and a black canopy; Lv4 an extra
+##            battery and a brighter glow; Lv5 a black stealth wing with glowing ducted fans.
+##   heavy:   Lv2 a bigger weight; Lv3 two more rotor pods and an orange cargo box; Lv4 armor
+##            plates; Lv5 black and gold with a second winch.
+static func add_level(kind: String, body: Node3D, level: int, p: Dictionary) -> void:
+	var band := UnitModels.level_material(level)
+	match kind:
+		"courier":
+			_courier_level(body, level, p, band)
+		"scout":
+			_scout_level(body, level, p, band)
+		"heavy":
+			_heavy_level(body, level, p, band)
+
+
+static func _guard(parent: Node3D, pos: Vector3, radius: float, mat: Material) -> void:
+	var ring := MeshKit.add(parent, MeshKit.ring(radius, 0.04), mat, pos)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+static func _courier_level(body: Node3D, level: int, p: Dictionary, band: Material) -> void:
+	var graphite := MeshKit.mat(Color(0.23, 0.25, 0.28), 0.4, 0.5)
+	MeshKit.add(body, MeshKit.box(Vector3(0.42, 0.04, 0.6)), band, Vector3(0, 0.2, -0.05))
+	if level >= 2:
+		MeshKit.add(body, MeshKit.box(Vector3(0.34, 0.12, 0.3)), graphite, Vector3(0, 0.24, -0.25))
+	if level >= 3:
+		for hinge: Node3D in p["arms"]:
+			var sz: float = hinge.get_meta("sz")
+			_guard(hinge, Vector3(0, 0.13, sz * 0.62), 0.34, graphite)
+		var gimbal: Node3D = p["gimbal"]
+		MeshKit.add(gimbal, MeshKit.sphere(0.08, 16), MeshKit.mat(Color(0.08, 0.09, 0.11), 0.25, 0.4), Vector3(0.14, -0.05, 0.02))
+	if level >= 4:
+		UnitModels.recolor(body, Color(0.95, 0.96, 0.97), Color(0.2, 0.21, 0.24))
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(body, MeshKit.box(Vector3(0.1, 0.16, 0.5)), graphite, Vector3(sx * 0.32, -0.02, 0.05))
+	if level >= 5:
+		var blade := MeshKit.mat(Color(0.6, 0.63, 0.66), 0.45, 0.2)
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(body, MeshKit.box(Vector3(0.55, 0.05, 0.08)), graphite, Vector3(sx * 0.5, 0.05, 0))
+			_propeller(body, Vector3(sx * 0.8, 0.15, 0), 0.26, 2, blade, p)
+			_guard(body, Vector3(sx * 0.8, 0.15, 0), 0.3, band)
+		var gimbal: Node3D = p["gimbal"]
+		MeshKit.add(gimbal, MeshKit.sphere(0.08, 16), MeshKit.mat(Color(0.08, 0.09, 0.11), 0.25, 0.4), Vector3(-0.14, -0.05, 0.02))
+		var laser := MeshKit.add(gimbal, MeshKit.sphere(0.035, 8), MeshKit.glow(Color(1.0, 0.15, 0.15)), Vector3(0, -0.13, 0.12))
+		laser.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		MeshKit.add(body, MeshKit.box(Vector3(0.58, 0.04, 1.0)), band, Vector3(0, -0.05, 0))
+
+
+static func _scout_level(body: Node3D, level: int, p: Dictionary, band: Material) -> void:
+	var carbon := MeshKit.mat(Color(0.07, 0.075, 0.09), 0.55, 0.35)
+	MeshKit.add(body, MeshKit.box(Vector3(0.5, 0.04, 0.3)), band, Vector3(0, 0.33, -0.05))
+	if level >= 2:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(body, MeshKit.cyl(0.012, 0.012, 0.6, 6), carbon, Vector3(sx * 0.18, 0.62, -0.4))
+	if level >= 3:
+		UnitModels.recolor(body, Color(1.0, 0.42, 0.0), Color(0.84, 0.15, 0.12))
+		for corner in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
+			_guard(body, Vector3(corner.x * 0.7, 0.17, corner.y * 0.7), 0.4, carbon)
+		var canopy := MeshKit.add(body, MeshKit.sphere(0.2, 14), MeshKit.mat(Color(0.05, 0.05, 0.06), 0.15, 0.6), Vector3(0, 0.3, 0.3))
+		canopy.scale = Vector3(1, 0.6, 1.4)
+	if level >= 4:
+		MeshKit.add(body, MeshKit.box(Vector3(0.26, 0.12, 0.34)), MeshKit.mat(Color(0.2, 0.2, 0.22), 0.4), Vector3(0, -0.08, -0.2))
+		var glow: MeshInstance3D = p["glow"]
+		glow.scale = Vector3(1.5, 1, 1.4)
+	if level >= 5:
+		UnitModels.recolor(body, Color(0.84, 0.15, 0.12), Color(0.08, 0.08, 0.09))
+		var wing := CSGPolygon3D.new()
+		wing.polygon = PackedVector2Array([Vector2(0, 1.2), Vector2(1.1, -0.7), Vector2(0, -0.4), Vector2(-1.1, -0.7)])
+		wing.depth = 0.06
+		wing.material = MeshKit.mat(Color(0.06, 0.06, 0.07), 0.3, 0.5)
+		wing.rotation.x = PI / 2.0
+		wing.position.y = 0.05
+		body.add_child(wing)
+		for corner in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
+			_guard(body, Vector3(corner.x * 0.7, 0.17, corner.y * 0.7), 0.42, MeshKit.glow(Color(0.0, 1.0, 0.82), 0.9))
+
+
+static func _heavy_level(body: Node3D, level: int, p: Dictionary, band: Material) -> void:
+	var gun := MeshKit.mat(Color(0.17, 0.19, 0.22), 0.35, 0.75)
+	MeshKit.add(body, MeshKit.box(Vector3(0.82, 0.06, 0.97)), band, Vector3(0, 0.42, 0))
+	var weight: Node3D = p["weight"]
+	weight.scale = Vector3.ONE * [1.0, 1.35, 1.5, 1.6, 1.7][clampi(level, 1, 5) - 1]
+	if level >= 3:
+		var blade := MeshKit.mat(Color(0.13, 0.14, 0.17), 0.4, 0.2)
+		for a in [0.0, PI]:
+			var tip := Vector3(sin(a) * 1.7, 0.12, cos(a) * 1.7)
+			MeshKit.add(body, MeshKit.cyl(0.07, 0.07, 1.2, 12), gun, tip * 0.6).rotation = Vector3(0, a - PI / 2.0, PI / 2.0)
+			MeshKit.add(body, MeshKit.cyl(0.15, 0.15, 0.4, 20), gun, tip)
+			_propeller(body, tip + Vector3(0, 0.25, 0), 0.6, 2, blade, p)
+		UnitModels.recolor(body, Color(0.19, 0.21, 0.24), Color(0.55, 0.35, 0.16))
+	if level >= 4:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(body, MeshKit.box(Vector3(0.08, 0.42, 1.1)), gun, Vector3(sx * 0.56, 0.0, 0))
+	if level >= 5:
+		UnitModels.recolor(body, Color(0.95, 0.72, 0.02), Color(0.1, 0.1, 0.11))
+		for z in [-0.3, 0.3]:
+			MeshKit.add(body, MeshKit.box(Vector3(1.08, 0.05, 0.05)), UnitModels.level_material(5), Vector3(0, 0.26, z))
+		MeshKit.add(body, MeshKit.cyl(0.012, 0.012, 0.9, 6), MeshKit.mat(Color(0.05, 0.05, 0.05), 0.6), Vector3(0.3, -1.25, 0))
+		MeshKit.add(body, MeshKit.box(Vector3(0.4, 0.35, 0.4)), MeshKit.mat(Color(0.35, 0.39, 0.43), 0.35, 0.8), Vector3(0.3, -1.85, 0))

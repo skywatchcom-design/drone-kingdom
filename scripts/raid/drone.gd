@@ -13,6 +13,7 @@ const TRAIL_POINTS := 18
 
 var max_speed := 10.0
 var body_scale := 1.6
+var level := 1
 var gear_height := 1.0
 ## Hangar preview: no flight, signature moves on a loop.
 var showcase := false
@@ -57,7 +58,9 @@ func configure(stats: Dictionary) -> void:
 	max_speed = float(stats["speed"])
 	max_health = float(stats["health"])
 	health = max_health
-	body_scale = float(stats["scale"])
+	level = int(stats.get("level", 1))
+	# Higher levels are visibly bigger.
+	body_scale = float(stats["scale"]) * (0.85 + 0.1 * level)
 	dps = float(stats.get("dps", dps))
 	prefers = stats.get("prefers", prefers)
 	fire_interval = float(stats.get("fire", fire_interval))
@@ -72,6 +75,10 @@ func _ready() -> void:
 	_body.scale = Vector3.ONE * body_scale
 	add_child(_body)
 	_parts = DroneModels.build(kind, _body)
+	DroneModels.add_level(kind, _body, level, _parts)
+	# A ring in the level color around the drone.
+	var ring := MeshKit.add(_body, MeshKit.ring(0.95 if kind != "heavy" else 1.4, 0.05), MeshKit.glow(UnitModels.LEVEL_COLORS[clampi(level, 1, 5) - 1], 0.85), Vector3(0, -0.12, 0))
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	gear_height = float(_parts["bottom"]) * body_scale
 	_net = MeshKit.add(_body, MeshKit.sphere(1.0, 12), MeshKit.glow(Color(0.92, 0.96, 1.0), 0.35))
 	_net.visible = false

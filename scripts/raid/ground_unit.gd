@@ -18,6 +18,7 @@ var fire_interval := 0.4
 var attack_range := 6.0
 var prefers := "any"
 var model_scale := 2.2
+var level := 1
 var fire_cooldown := randf() * 0.4
 ## Whether this soldier kneels to fire (every other infantry soldier does).
 var kneels := false
@@ -53,14 +54,20 @@ func configure(stats: Dictionary) -> void:
 	fire_interval = float(stats.get("fire", fire_interval))
 	attack_range = float(stats.get("range", attack_range))
 	prefers = stats.get("prefers", prefers)
-	model_scale = 1.15 if kind == "armor" else 2.2
+	level = int(stats.get("level", 1))
+	# Higher levels are visibly bigger.
+	model_scale = (1.15 * (0.9 + 0.05 * level)) if kind == "armor" else (2.2 * (0.9 + 0.06 * level))
 
 
 func _ready() -> void:
 	_model = Node3D.new()
 	_model.scale = Vector3.ONE * model_scale
 	add_child(_model)
-	_parts = UnitModels.build(kind, _model)
+	_parts = UnitModels.build(kind, _model, level)
+	# A ring in the level color underfoot (defenders wear a red one instead).
+	if not has_meta("home") and not showcase:
+		var ring := MeshKit.add(self, MeshKit.ring(body_radius() + 0.35, 0.1), MeshKit.glow(UnitModels.LEVEL_COLORS[clampi(level, 1, 5) - 1], 0.85), Vector3(0, 0.07, 0))
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_yaw = rotation.y
 	rotation.y = 0.0
 
