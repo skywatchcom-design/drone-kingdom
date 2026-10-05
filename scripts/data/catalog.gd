@@ -39,6 +39,25 @@ const INFO := {
 	"jammer": "Scrambles drones inside its field so they drift and slow down.",
 }
 
+## One short line per structure for the build menu cards.
+const SHORT := {
+	"generator": "Makes coins over time.",
+	"storage": "Holds more coins.",
+	"pump": "Pumps fuel over time.",
+	"tank": "Holds more fuel.",
+	"camp": "Trains your army.",
+	"quarters": "Your army waits here.",
+	"garage": "Unlocks and upgrades soldiers and tanks.",
+	"hangar": "Unlocks and upgrades drones.",
+	"support": "Prepares air strikes and flares.",
+	"wall": "Blocks soldiers and tanks.",
+	"mg": "Fires bursts at soldiers.",
+	"at": "Heavy shells against tanks.",
+	"aa": "Shoots down drones.",
+	"mortar": "Hits groups of soldiers from afar.",
+	"jammer": "Scrambles drones in its field.",
+}
+
 ## vs: damage multiplier against soldiers, tanks and drones. Each defense is best against one.
 const DEFENSES := {
 	"mg": {"name": "MG Nest", "cost": 200, "radius": 11.0, "dps": 65.0,

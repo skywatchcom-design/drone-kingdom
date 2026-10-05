@@ -4,7 +4,8 @@ extends Node3D
 ## Camp), unlock and upgrade units in the Garage and the Hangar, then Attack. Settings holds
 ## language, sound, practice on your own base and dev tools.
 ## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` /
-## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-settings` to open a sheet on start.
+## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-build` / `--screenshot-settings` to open a
+## sheet on start.
 
 const RAID_SCENE := "res://scenes/raid/raid.tscn"
 ## Height of the view in meters (the screen is held sideways).
@@ -72,6 +73,8 @@ func _ready() -> void:
 		_open_lab("hangar")
 	elif args.has("--screenshot-garage"):
 		_open_lab("garage")
+	elif args.has("--screenshot-build"):
+		_open_build([])
 	elif args.has("--screenshot-settings"):
 		_open_settings()
 
@@ -329,47 +332,93 @@ func _open_cell(cell: Array) -> void:
 
 
 func _build_menu(cell: Array) -> Control:
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	for option in ["wall"] + Catalog.BUILD_ORDER:
+		grid.add_child(_build_card(option, cell))
+	return grid
+
+
+## A build menu card: a picture of the structure, its name, one short line on what it does,
+## and the price and time (or why it can't be built yet, in which case the card is faded).
+func _build_card(type: String, cell: Array) -> Control:
+	var wall := type == "wall"
+	var why := GameState.wall_block_reason() if wall else GameState.build_block_reason(type)
+	var card := _card(why == "")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if why != "":
+		card.modulate = Color(1, 1, 1, 0.6)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 12)
-	var wall_card := _card(true)
-	box.add_child(wall_card)
-	var wall_row := HBoxContainer.new()
-	wall_card.add_child(wall_row)
-	var wall_info := VBoxContainer.new()
-	wall_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wall_row.add_child(wall_info)
-	HomeHud.make_label(wall_info, Catalog.display_name("wall"), 28)
-	_wrap(HomeHud.make_label(wall_info, I18n.t(Catalog.INFO["wall"]), 20, SOFT))
-	var wall_btn := HomeHud.make_button(wall_row, I18n.t("Build walls  ·  %d each") % Catalog.WALL_COST, 22, 80)
-	wall_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	wall_btn.custom_minimum_size.x = 200
-	_gold(wall_btn, true)
-	wall_btn.pressed.connect(_start_wall_mode)
-	for option in Catalog.BUILD_ORDER:
-		var why := GameState.build_block_reason(option)
-		var card := _card(why == "")
-		box.add_child(card)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		card.add_child(row)
-		var info := VBoxContainer.new()
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(info)
-		HomeHud.make_label(info, Catalog.display_name(option), 28, Color.WHITE if why == "" else Color(0.65, 0.67, 0.7))
-		_wrap(HomeHud.make_label(info, I18n.t(Catalog.INFO[option]), 20, SOFT))
-		if why != "":
-			_wrap(HomeHud.make_label(info, why, 20, BAD))
-		var b := HomeHud.make_button(row, I18n.t("Build  ·  %d\n%s") % [Catalog.build_cost(option), HomeHud.clock(Catalog.build_seconds(option, 1))], 22, 80)
-		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		b.custom_minimum_size.x = 200
-		b.disabled = why != ""
-		_gold(b, why == "")
-		b.pressed.connect(func() -> void:
-			if cell.is_empty():
-				_start_placing(option)
-			else:
-				_do_build(option, cell))
-	return box
+	box.add_theme_constant_override("separation", 4)
+	card.add_child(box)
+	box.add_child(_thumbnail(type))
+	HomeHud.make_label(box, Catalog.display_name(type), 22)
+	var line := _wrap(HomeHud.make_label(box, I18n.t(Catalog.SHORT[type]), 16, SOFT))
+	line.custom_minimum_size.y = 42
+	var price := I18n.t("Build  ·  %d") % (Catalog.WALL_COST if wall else Catalog.build_cost(type))
+	if not wall:
+		price += "  ·  " + HomeHud.clock(Catalog.build_seconds(type, 1))
+	var b := HomeHud.make_button(box, price if why == "" else why, 16, 52)
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.disabled = why != ""
+	_gold(b, why == "")
+	b.pressed.connect(func() -> void:
+		if wall:
+			_start_wall_mode()
+		elif cell.is_empty():
+			_start_placing(type)
+		else:
+			_do_build(type, cell))
+	return card
+
+
+## A picture of a structure at level 1, rendered once into a small 3D stage.
+func _thumbnail(type: String) -> Control:
+	var frame := SubViewportContainer.new()
+	frame.stretch = true
+	frame.custom_minimum_size = Vector2(0, 118)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.msaa_3d = Viewport.MSAA_4X
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	frame.add_child(vp)
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.36, 0.48, 0.25)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.6, 0.65, 0.7)
+	env.ambient_light_energy = 0.9
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	var world_env := WorldEnvironment.new()
+	world_env.environment = env
+	vp.add_child(world_env)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-52, 28, 0)
+	light.light_energy = 1.4
+	light.shadow_enabled = true
+	vp.add_child(light)
+	var stage := Node3D.new()
+	vp.add_child(stage)
+	MeshKit.add(stage, MeshKit.box(Vector3(5.4, 0.12, 5.4)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), Vector3(0, 0.06, 0))
+	if type == "wall":
+		StructureModels.wall(stage, [0, 0, 1], 1).position = Vector3.ZERO
+	elif Catalog.is_defense(type):
+		var d := Catalog.make_defense(type)
+		stage.add_child(d)
+		d.setup(Catalog.defense_stats(type, 1), 0.12)
+		d.show_range(false)
+	else:
+		StructureModels.build(stage, type, 1, Vector3(0, 0.12, 0))
+	for label in stage.find_children("*", "Label3D", true, false):
+		(label as Node3D).visible = false
+	var cam := Camera3D.new()
+	cam.fov = 40.0
+	vp.add_child(cam)
+	cam.look_at_from_position(Vector3(5.6, 6.4, 7.4), Vector3(0, 1.1, 0))
+	return frame
 
 
 # ---------------------------------------------------------------- walls
