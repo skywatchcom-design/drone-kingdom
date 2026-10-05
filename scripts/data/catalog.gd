@@ -15,7 +15,7 @@ const DEFENSE_HEAD := 4.5
 ## Command Tower in a few, while a lone drone loses a duel with a laser.
 const HP := {
 	"hq": 600.0, "generator": 180.0, "storage": 260.0, "pump": 180.0, "tank": 260.0, "hangar": 220.0,
-	"camp": 260.0, "quarters": 220.0, "garage": 280.0,
+	"camp": 260.0, "quarters": 220.0, "garage": 280.0, "support": 300.0,
 	"mg": 460.0, "at": 500.0, "aa": 440.0, "mortar": 420.0, "jammer": 300.0,
 }
 
@@ -31,6 +31,7 @@ const INFO := {
 	"camp": "Trains your army: soldiers, tanks and drones, one after another. Higher levels train faster.",
 	"quarters": "Where your trained army waits for the next attack. More quarters and levels fit a bigger army.",
 	"garage": "Unlocks and upgrades infantry, engineers and tanks. Its level caps their levels.",
+	"support": "Prepares air strikes and flares ahead of the attack, and upgrades them. More levels, more slots.",
 	"mg": "Fires bursts at soldiers. Weak against tanks and drones.",
 	"at": "Slow, heavy shells that crack tanks open. Weak against soldiers, can't hit drones well.",
 	"aa": "Shoots drones out of the sky. Weak against anything on the ground.",
@@ -61,10 +62,11 @@ const BUILDINGS := {
 	"camp": {"name": "Training Camp", "cost": 200},
 	"quarters": {"name": "Quarters", "cost": 150},
 	"garage": {"name": "Garage", "cost": 300},
+	"support": {"name": "Support Base", "cost": 400},
 }
 
 ## Order of the build menu.
-const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar",
+const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar", "support",
 	"mg", "at", "aa", "mortar", "jammer"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
@@ -78,6 +80,7 @@ const LIMITS := {
 	"camp": [1, 1, 1, 1, 1],
 	"quarters": [1, 1, 2, 2, 3],
 	"garage": [1, 1, 1, 1, 1],
+	"support": [1, 1, 1, 1, 1],
 	"mg": [1, 2, 2, 3, 3],
 	"at": [0, 1, 1, 2, 2],
 	"aa": [1, 1, 2, 2, 3],
@@ -145,6 +148,8 @@ static func make_defense(type: String) -> Defense:
 static func display_name(type: String) -> String:
 	if type == "wall":
 		return I18n.t("Wall")
+	if ABILITIES.has(type):
+		return I18n.t(ABILITIES[type]["name"])
 	if DEFENSES.has(type):
 		return I18n.t(DEFENSES[type]["name"])
 	if BUILDINGS.has(type):
@@ -313,16 +318,37 @@ static func wall_hp(level: int) -> float:
 	return 500.0 * (1.0 + 0.7 * (level - 1))
 
 
-## Battle energy: filled by knocking out buildings, spent on support abilities.
-const ENERGY_MAX := 100.0
-const ENERGY_PER_BUILDING := 15.0
-const ENERGY_PER_HQ := 40.0
-## energy: cost. Air strike: three bombs `spacing` apart, each hitting everything within
-## `radius`. Flare: every attacking unit heads for it for `seconds`.
+# ---------------------------------------------------------------- support abilities
+
+## Prepared ahead in the Support Base, like training: fuel and time, one after another.
+## slots: room each takes; support: Support Base level that unlocks it; unlock: fuel to unlock.
 const ABILITIES := {
-	"strike": {"energy": 60, "damage": 320.0, "radius": 4.5, "spacing": 6.0},
-	"flare": {"energy": 20, "seconds": 6.0},
+	"flare": {"name": "Flare", "slots": 1, "fuel": 40, "seconds": 20.0, "support": 1, "unlock": 0,
+		"role": "Every attacking unit heads for the flare and attacks what is near it."},
+	"strike": {"name": "Air Strike", "slots": 2, "fuel": 150, "seconds": 60.0, "support": 2, "unlock": 500,
+		"role": "A plane drops a line of bombs on the spot you tap."},
 }
+const ABILITY_ORDER := ["flare", "strike"]
+
+
+## Slots in a Support Base of this level (0 without one).
+static func support_slots(level: int) -> int:
+	return 0 if level <= 0 else level + 1
+
+
+## What an ability does at a level. Air strike: bombs, damage per bomb, blast radius, spacing.
+## Flare: how long it burns. Each level changes the plane or the flare visibly too.
+static func ability_stats(kind: String, level: int) -> Dictionary:
+	var l := clampi(level, 1, MAX_LEVEL)
+	if kind == "strike":
+		return {"level": l, "bombs": [2, 4, 3, 3, 5][l - 1], "damage": [220.0, 180.0, 340.0, 400.0, 380.0][l - 1],
+			"radius": [4.0, 4.0, 4.5, 5.0, 5.5][l - 1], "spacing": 5.5}
+	return {"level": l, "seconds": [5.0, 6.0, 7.0, 8.0, 9.0][l - 1], "flares": [1, 1, 1, 2, 3][l - 1]}
+
+
+static func ability_upgrade_cost(kind: String, level: int) -> int:
+	var base := maxi(int(ABILITIES[kind]["unlock"]), 300)
+	return _round10(base * 0.8 * pow(1.9, level))
 
 
 ## Soldiers that run out of a Quarters building to defend it when attackers come close.

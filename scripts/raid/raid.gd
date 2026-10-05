@@ -8,10 +8,11 @@ extends Node3D
 ## Deployed units are used up (practice runs on your own base are free).
 ## Each Quarters sends out an infantry squad to defend when attackers come close; attacking
 ## soldiers and tanks fight them when they are in range.
-## Knocking out buildings fills the energy bar, which pays for support abilities: an air
-## strike (a jet drops a line of three bombs) and a direction flare (every attacking unit
-## heads for it and attacks what is near it).
-## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots), and
+## Support abilities prepared in the Support Base come along: an air strike (a plane drops a
+## line of bombs) and a direction flare (every attacking unit heads for it and attacks what is
+## near it). The plane and the flare look stronger at every level. Used ones are gone.
+## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots;
+## `--support-level N` sets the air strike and flare level), and
 ## `--enemy N` to pick which enemy base, `--army infantry:2,courier:2` to pick the army.
 
 enum Phase { BATTLE, RESULT }
@@ -48,7 +49,10 @@ var ground: Array[GroundUnit] = []
 var defenders: Array[GroundUnit] = []
 ## Target indexes of Quarters that have already sent out their squad.
 var quarters_called := {}
-var energy := 0.0
+## Prepared abilities still available in this battle, those used, and their levels.
+var support := {}
+var support_used := {}
+var support_levels := {}
 ## The ability waiting for a tap on the map ("strike", "flare" or "").
 var armed := ""
 var flare_pos := Vector3.ZERO
@@ -155,7 +159,15 @@ func _start() -> void:
 	hud.set_army(army, drone_names, selected)
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
-	hud.set_energy(energy, armed)
+	support = GameState.support_ready.duplicate()
+	support_levels = GameState.abilities.duplicate()
+	if autoplay:
+		var lvl := 3
+		if args.has("--support-level"):
+			lvl = int(args[args.find("--support-level") + 1])
+		support = {"strike": 1, "flare": 1}
+		support_levels = {"strike": lvl, "flare": lvl}
+	hud.set_support(support, armed)
 	_update_progress()
 	hud.set_status(I18n.t("Tap outside the fence to send in your army"))
 	if autoplay:
@@ -359,22 +371,24 @@ func _on_ability(kind: String) -> void:
 	if armed == kind:
 		armed = ""
 		hud.set_status("")
-	elif energy >= float(Catalog.ABILITIES[kind]["energy"]):
+	elif int(support.get(kind, 0)) > 0:
 		armed = kind
 		hud.set_status(I18n.t("Tap where the air strike should hit") if kind == "strike" else I18n.t("Tap where to fire the flare"))
-	hud.set_energy(energy, armed)
+	hud.set_support(support, armed)
 
 
 func _use_ability(kind: String, p: Vector3) -> void:
-	energy -= float(Catalog.ABILITIES[kind]["energy"])
+	support[kind] = int(support.get(kind, 0)) - 1
+	support_used[kind] = int(support_used.get(kind, 0)) + 1
 	armed = ""
 	hud.set_status("")
-	hud.set_energy(energy, armed)
+	hud.set_support(support, armed)
 	started = true
+	var stats := Catalog.ability_stats(kind, int(support_levels.get(kind, 1)))
 	if kind == "strike":
-		_air_strike(Vector3(p.x, 0, p.z))
+		_air_strike(Vector3(p.x, 0, p.z), stats)
 	else:
-		_fire_flare(Vector3(p.x, 0, p.z))
+		_fire_flare(Vector3(p.x, 0, p.z), stats)
 
 
 ## Units pick targets near the flare while it burns, near themselves otherwise.
@@ -382,80 +396,66 @@ func _seek_from(p: Vector3) -> Vector3:
 	return flare_pos if flare_left > 0.0 else p
 
 
-## A jet comes in low across the screen and drops three bombs in a line through `p`, then
-## banks away. Each bomb hits every building and defender within its radius.
-func _air_strike(p: Vector3) -> void:
-	var stats: Dictionary = Catalog.ABILITIES["strike"]
+## The plane for the ability's level comes in across the screen and drops its bombs in a
+## line through `p`, then flies off. Each bomb hits every building, defender and wall within
+## its radius.
+func _air_strike(p: Vector3, stats: Dictionary) -> void:
 	var dir := Vector3(1, 0, -1).normalized()
-	var jet := _jet_model()
-	level.add_child(jet)
-	var start := p - dir * 80.0 + Vector3(0, 20, 0)
-	var finish := p + dir * 80.0 + Vector3(0, 24, 0)
-	jet.position = start
-	jet.look_at(finish, Vector3.UP)
+	var plane := Node3D.new()
+	var body := Node3D.new()
+	body.rotation.y = PI
+	body.scale = Vector3.ONE * 1.6
+	plane.add_child(body)
+	UnitModels.aircraft(body, int(stats["level"]))
+	level.add_child(plane)
+	var start := p - dir * 80.0 + Vector3(0, 18, 0)
+	var finish := p + dir * 80.0 + Vector3(0, 22, 0)
+	plane.position = start
+	plane.look_at(finish, Vector3.UP)
 	Audio.play("jet")
-	var flight := 2.6
+	var flight := 3.2 if int(stats["level"]) <= 2 else 2.6
 	var tween := create_tween()
-	tween.tween_property(jet, "position", finish, flight)
-	tween.tween_callback(jet.queue_free)
-	for i in 3:
-		var offset := (i - 1) * float(stats["spacing"])
+	tween.tween_property(plane, "position", finish, flight)
+	tween.tween_callback(plane.queue_free)
+	var bombs := int(stats["bombs"])
+	for i in bombs:
+		var offset := (i - (bombs - 1) / 2.0) * float(stats["spacing"])
 		var spot := p + dir * offset
 		var release := (80.0 + offset - 14.0) / 160.0 * flight
-		get_tree().create_timer(release).timeout.connect(func() -> void: _drop_bomb(jet.position if is_instance_valid(jet) else spot + Vector3(0, 20, 0), spot, stats))
+		get_tree().create_timer(release).timeout.connect(func() -> void: _drop_bomb(plane.position if is_instance_valid(plane) else spot + Vector3(0, 18, 0), spot, stats))
 
 
 func _drop_bomb(from: Vector3, spot: Vector3, stats: Dictionary) -> void:
-	var bomb := MeshKit.add(level, MeshKit.cyl(0.25, 0.25, 1.4, 10), MeshKit.mat(Color(0.24, 0.26, 0.28), 0.5, 0.5), from)
+	var size := 0.8 + 0.12 * int(stats["level"])
+	var bomb := MeshKit.add(level, MeshKit.cyl(0.25 * size, 0.25 * size, 1.4 * size, 10), MeshKit.mat(Color(0.24, 0.26, 0.28), 0.5, 0.5), from)
 	bomb.rotation.x = PI / 2.0
 	var tween := create_tween()
 	tween.tween_property(bomb, "position", spot + Vector3(0, 0.5, 0), 0.75).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tween.tween_callback(func() -> void:
 		bomb.queue_free()
-		Fx.boom(level, spot, 1.8)
+		Fx.boom(level, spot, 1.2 + 0.2 * int(stats["level"]))
 		Audio.play("breach", -2.0)
 		Audio.buzz(70)
 		var reach := float(stats["radius"])
+		var damage := float(stats["damage"])
 		for i in targets.size():
 			if not targets[i]["destroyed"] and PathUtils.flat_distance(targets[i]["top"], spot) <= reach + STRUCTURE_RADIUS * 0.5:
 				_shake(i)
-				_damage_target(i, float(stats["damage"]))
+				_damage_target(i, damage)
 		for u in defenders:
 			if not u.dead and PathUtils.flat_distance(u.position, spot) <= reach:
-				u.damage(float(stats["damage"]))
+				u.damage(damage)
 		for k in standing_walls.keys():
 			if PathUtils.flat_distance(wall_index[k]["center"], spot) <= reach + 2.0:
-				_damage_wall(k, float(stats["damage"])))
+				_damage_wall(k, damage))
 
 
-## The fighter from the approved sketch: grey fuselage, swept wings, twin tails' worth of fin,
-## a glowing afterburner and a fictional blue-and-white roundel. Faces -Z (look_at forward).
-func _jet_model() -> Node3D:
-	var jet := Node3D.new()
-	var body := Node3D.new()
-	body.scale = Vector3.ONE * 1.6
-	body.rotation.y = PI
-	jet.add_child(body)
-	var grey := MeshKit.mat(Color(0.55, 0.59, 0.62), 0.45, 0.4)
-	MeshKit.add(body, MeshKit.cyl(0.22, 0.32, 4.2, 14), grey).rotation.x = PI / 2.0
-	MeshKit.add(body, MeshKit.cyl(0.0, 0.22, 1.1, 14), grey, Vector3(0, 0, 2.6)).rotation.x = PI / 2.0
-	MeshKit.add(body, MeshKit.sphere(0.24, 12), MeshKit.mat(Color(0.17, 0.23, 0.27), 0.1, 0.6), Vector3(0, 0.22, 1.3)).scale = Vector3(0.8, 0.7, 1.8)
-	var wing := MeshKit.add(body, MeshKit.box(Vector3(5.2, 0.06, 1.6)), grey, Vector3(0, -0.03, -0.3))
-	wing.scale = Vector3(1, 1, 1)
-	MeshKit.add(body, MeshKit.box(Vector3(0.06, 1.0, 0.9)), grey, Vector3(0, 0.55, -1.7)).rotation.x = -0.3
-	for s in [-1.0, 1.0]:
-		MeshKit.add(body, MeshKit.box(Vector3(1.0, 0.05, 0.6)), grey, Vector3(s * 0.6, 0, -1.8))
-		MeshKit.add(body, MeshKit.cyl(0.18, 0.18, 0.02, 20), MeshKit.mat(UnitModels.BLUE, 0.4), Vector3(s * 1.6, 0.04, -0.4))
-		MeshKit.add(body, MeshKit.cyl(0.1, 0.1, 0.025, 20), MeshKit.mat(UnitModels.WHITE, 0.4), Vector3(s * 1.6, 0.045, -0.4))
-	var burner := MeshKit.add(body, MeshKit.sphere(0.2, 10), MeshKit.glow(Color(1.0, 0.64, 0.29), 0.85), Vector3(0, 0, -2.3))
-	burner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return jet
-
-
-## A flare fired over `p`: an orange light that drifts down slowly on a smoke trail.
-## Every attacking unit drops what it is doing and goes for whatever is near it.
-func _fire_flare(p: Vector3) -> void:
-	var seconds := float(Catalog.ABILITIES["flare"]["seconds"])
+## Flares fired over `p`: orange lights that drift down slowly on smoke trails (more of them,
+## brighter, and on parachutes at higher levels). While they burn every attacking unit goes
+## for whatever is near them.
+func _fire_flare(p: Vector3, stats: Dictionary) -> void:
+	var seconds := float(stats["seconds"])
+	var lvl := int(stats["level"])
 	if flare_node != null:
 		flare_node.queue_free()
 	flare_pos = p
@@ -463,17 +463,28 @@ func _fire_flare(p: Vector3) -> void:
 	flare_node = Node3D.new()
 	level.add_child(flare_node)
 	flare_node.position = p + Vector3(0, 16, 0)
-	var core := MeshKit.add(flare_node, MeshKit.sphere(0.45, 10), MeshKit.glow(Color(1.0, 0.95, 0.75)))
-	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var halo := MeshKit.add(flare_node, MeshKit.sphere(1.3, 12), MeshKit.glow(Color(1.0, 0.35, 0.16), 0.45))
-	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var count := int(stats["flares"])
+	for i in count:
+		var f := Node3D.new()
+		f.position = Vector3((i - (count - 1) / 2.0) * 2.4, (i % 2) * 1.2, 0)
+		f.add_to_group("flare_lights")
+		flare_node.add_child(f)
+		var core := MeshKit.add(f, MeshKit.sphere(0.35 + 0.05 * lvl, 10), MeshKit.glow(Color(1.0, 0.95, 0.75)))
+		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var halo := MeshKit.add(f, MeshKit.sphere(1.0 + 0.15 * lvl, 12), MeshKit.glow(Color(1.0, 0.3, 0.12) if lvl >= 3 else Color(1.0, 0.45, 0.2), 0.45))
+		halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		halo.add_to_group("flare_halos")
+		if lvl >= 3:
+			var chute := MeshKit.add(f, MeshKit.sphere(1.2, 12), MeshKit.mat(Color(0.9, 0.88, 0.8), 0.8), Vector3(0, 2.0, 0))
+			chute.scale = Vector3(1, 0.45, 1)
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.5, 0.25)
-	light.light_energy = 3.0
-	light.omni_range = 14.0
+	light.light_energy = 2.0 + lvl * 0.5
+	light.omni_range = 12.0 + lvl * 1.5
 	flare_node.add_child(light)
-	var ring := MeshKit.add(level, MeshKit.ring(3.4, 0.2), MeshKit.glow(Color(1.0, 0.48, 0.24), 0.8), p + Vector3(0, 0.1, 0))
+	var ring := MeshKit.add(level, MeshKit.ring(3.0 + 0.4 * lvl, 0.2), MeshKit.glow(Color(1.0, 0.48, 0.24), 0.8), p + Vector3(0, 0.1, 0))
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.set_meta("ground_ring", true)
 	ring.reparent(flare_node)
 	var tween := create_tween()
 	tween.tween_property(flare_node, "position:y", 3.0, seconds)
@@ -490,19 +501,23 @@ func _tick_flare(delta: float) -> void:
 	flare_left -= delta
 	if flare_node != null:
 		var flicker := 1.0 + sin(Time.get_ticks_msec() * 0.03) * 0.12
-		(flare_node.get_child(1) as Node3D).scale = Vector3.ONE * flicker
-		# The ground ring stays on the ground while the flare comes down.
-		(flare_node.get_child(3) as Node3D).global_position = flare_pos + Vector3(0, 0.1, 0)
+		for halo in get_tree().get_nodes_in_group("flare_halos"):
+			(halo as Node3D).scale = Vector3.ONE * flicker
+		# The ground ring stays on the ground while the flares come down.
+		for child in flare_node.get_children():
+			if child.has_meta("ground_ring"):
+				(child as Node3D).global_position = flare_pos + Vector3(0, 0.1, 0)
 		_flare_smoke -= delta
 		if _flare_smoke <= 0.0:
 			_flare_smoke = 0.12
-			var puff := MeshKit.add(level, MeshKit.sphere(0.5, 8), MeshKit.glow(Color(0.8, 0.8, 0.8), 0.4), flare_node.position + Vector3(randf_range(-0.2, 0.2), 0.6, randf_range(-0.2, 0.2)))
-			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var pt := create_tween()
-			pt.set_parallel(true)
-			pt.tween_property(puff, "scale", Vector3.ONE * 2.5, 2.0)
-			pt.tween_property(puff.material_override, "albedo_color:a", 0.0, 2.0)
-			pt.chain().tween_callback(puff.queue_free)
+			for f in get_tree().get_nodes_in_group("flare_lights"):
+				var puff := MeshKit.add(level, MeshKit.sphere(0.5, 8), MeshKit.glow(Color(0.8, 0.8, 0.8), 0.4), (f as Node3D).global_position + Vector3(randf_range(-0.2, 0.2), 0.6, randf_range(-0.2, 0.2)))
+				puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				var pt := create_tween()
+				pt.set_parallel(true)
+				pt.tween_property(puff, "scale", Vector3.ONE * 2.5, 2.0)
+				pt.tween_property(puff.material_override, "albedo_color:a", 0.0, 2.0)
+				pt.chain().tween_callback(puff.queue_free)
 	if flare_left <= 0.0:
 		if flare_node != null:
 			flare_node.queue_free()
@@ -513,16 +528,17 @@ func _tick_flare(delta: float) -> void:
 			u.target = -1
 
 
-## Demo runs use the abilities on their own: a strike on the Command Tower as soon as it is
-## affordable, then a flare on whatever is still standing.
+## Demo runs use the abilities on their own: a strike on the Command Tower a few seconds in,
+## then a flare on whatever is still standing.
 func _autoplay_abilities() -> void:
-	if energy >= float(Catalog.ABILITIES["strike"]["energy"]) and not has_meta("struck"):
+	var elapsed := Catalog.BATTLE_SECONDS - time_left
+	if elapsed > 8.0 and int(support.get("strike", 0)) > 0 and not has_meta("struck"):
 		set_meta("struck", true)
 		for t in targets:
 			if t["type"] == "hq" and not t["destroyed"]:
 				_use_ability("strike", t["top"])
 				return
-	if has_meta("struck") and not has_meta("flared") and energy >= float(Catalog.ABILITIES["flare"]["energy"]):
+	if elapsed > 20.0 and int(support.get("flare", 0)) > 0 and not has_meta("flared"):
 		for t in targets:
 			if not t["destroyed"]:
 				set_meta("flared", true)
@@ -1178,8 +1194,6 @@ func _destroy(index: int) -> void:
 	else:
 		(t["node"] as Node3D).visible = false
 	_rubble(top)
-	energy = minf(Catalog.ENERGY_MAX, energy + (Catalog.ENERGY_PER_HQ if t["type"] == "hq" else Catalog.ENERGY_PER_BUILDING))
-	hud.set_energy(energy, armed)
 	var loot := int(t["loot_coins"])
 	var loot_fuel := int(t["loot_fuel"])
 	if loot > 0 or loot_fuel > 0:
@@ -1233,6 +1247,7 @@ func _finish() -> void:
 		gained = GameState.record_raid(stars, loot_gained, fuel_gained)
 		if GameState.raid_target == "enemy":
 			GameState.use_army(deployed)
+			GameState.use_support(support_used)
 	Audio.hum(0.0)
 	for i in stars:
 		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))

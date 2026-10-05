@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 7
+const SAVE_VERSION := 8
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -32,6 +32,12 @@ var training: Array = []
 var train_started := 0.0
 ## Wall pieces: each {edge: [c, r, d], level} (see Walls).
 var walls: Array = []
+## Unlocked support abilities and their levels; prepared ones ready for the next attack;
+## and the Support Base's queue, the first started at support_started.
+var abilities := {}
+var support_ready := {}
+var support_queue: Array = []
+var support_started := 0.0
 var enemy_index := 0
 var raid_target := "enemy"
 var city_seed := 7
@@ -128,6 +134,9 @@ func new_player() -> void:
 	]
 	units = {"infantry": 1, "courier": 1}
 	walls = []
+	abilities = {"flare": 1}
+	support_ready = {}
+	support_queue = []
 	army = {"infantry": 2, "courier": 2}
 	training = []
 	train_started = 0.0
@@ -483,6 +492,145 @@ func remove(cell: Array) -> bool:
 	return true
 
 
+# ---------------------------------------------------------------- support base
+
+func support_slots() -> int:
+	return Catalog.support_slots(level_of("support"))
+
+
+static func _slots_of(kind: String) -> int:
+	return int(Catalog.ABILITIES[kind]["slots"])
+
+
+## Slots taken by what is ready plus what is being prepared.
+func support_used() -> int:
+	var n := 0
+	for kind in support_ready:
+		n += int(support_ready[kind]) * _slots_of(kind)
+	for kind in support_queue:
+		n += _slots_of(kind)
+	return n
+
+
+func prepare_block_reason(kind: String) -> String:
+	if level_of("support") <= 0:
+		return I18n.t("Build a Support Base first")
+	if not abilities.has(kind):
+		return I18n.t("Locked")
+	if support_used() + _slots_of(kind) > support_slots():
+		return I18n.t("No free slots")
+	return _fuel_reason(int(Catalog.ABILITIES[kind]["fuel"]))
+
+
+func prepare(kind: String) -> bool:
+	if prepare_block_reason(kind) != "":
+		return false
+	process_support()
+	_spend_fuel(int(Catalog.ABILITIES[kind]["fuel"]))
+	if support_queue.is_empty():
+		support_started = now()
+	support_queue.append(kind)
+	save_game()
+	return true
+
+
+func cancel_prepare(kind: String) -> bool:
+	var index := support_queue.rfind(kind)
+	if index < 0:
+		return false
+	support_queue.remove_at(index)
+	if not infinite_coins:
+		fuel = mini(fuel_cap(), fuel + int(Catalog.ABILITIES[kind]["fuel"]))
+	if index == 0:
+		support_started = now()
+	save_game()
+	return true
+
+
+## Moves every finished ability from the queue to ready. Returns how many finished.
+func process_support() -> int:
+	if level_of("support") <= 0:
+		return 0
+	var done := 0
+	while not support_queue.is_empty():
+		var kind: String = support_queue[0]
+		var ready_at := support_started + float(Catalog.ABILITIES[kind]["seconds"])
+		if ready_at > now():
+			break
+		support_queue.remove_at(0)
+		support_ready[kind] = int(support_ready.get(kind, 0)) + 1
+		support_started = ready_at
+		done += 1
+	if done > 0:
+		save_game()
+	return done
+
+
+func support_head_left() -> float:
+	if support_queue.is_empty():
+		return 0.0
+	return maxf(0.0, support_started + float(Catalog.ABILITIES[support_queue[0]]["seconds"]) - now())
+
+
+func support_total_left() -> float:
+	var total := support_head_left()
+	for i in range(1, support_queue.size()):
+		total += float(Catalog.ABILITIES[support_queue[i]]["seconds"])
+	return total
+
+
+func speed_up_support() -> bool:
+	if support_queue.is_empty():
+		return false
+	var cost := Catalog.speedup_gems(support_total_left())
+	if not infinite_coins and gems < cost:
+		return false
+	_spend_gems(cost)
+	for kind in support_queue:
+		support_ready[kind] = int(support_ready.get(kind, 0)) + 1
+	support_queue = []
+	save_game()
+	return true
+
+
+## Removes the abilities an attack used.
+func use_support(used: Dictionary) -> void:
+	for kind in used:
+		support_ready[kind] = maxi(0, int(support_ready.get(kind, 0)) - int(used[kind]))
+		if support_ready[kind] == 0:
+			support_ready.erase(kind)
+	save_game()
+
+
+## Why an ability can't be unlocked or upgraded ("" if it can). The Support Base caps it.
+func ability_block_reason(kind: String) -> String:
+	var base := level_of("support")
+	var needed := int(Catalog.ABILITIES[kind]["support"])
+	if base < needed:
+		return I18n.t("Needs Support Base Lv %d") % needed
+	if abilities.has(kind):
+		var lvl := int(abilities[kind])
+		if lvl >= Catalog.MAX_LEVEL:
+			return I18n.t("Max level")
+		if lvl >= base:
+			return I18n.t("Upgrade the Support Base first")
+		return _fuel_reason(Catalog.ability_upgrade_cost(kind, lvl))
+	return _fuel_reason(int(Catalog.ABILITIES[kind]["unlock"]))
+
+
+func upgrade_ability(kind: String) -> bool:
+	if ability_block_reason(kind) != "":
+		return false
+	if abilities.has(kind):
+		_spend_fuel(Catalog.ability_upgrade_cost(kind, int(abilities[kind])))
+		abilities[kind] = int(abilities[kind]) + 1
+	else:
+		_spend_fuel(int(Catalog.ABILITIES[kind]["unlock"]))
+		abilities[kind] = 1
+	save_game()
+	return true
+
+
 # ---------------------------------------------------------------- walls
 
 func wall_at(edge: Array) -> Dictionary:
@@ -689,6 +837,7 @@ func save_game() -> void:
 	file.store_string(JSON.stringify({
 		"version": SAVE_VERSION, "coins": coins, "fuel": fuel, "gems": gems, "workers": workers,
 		"structures": structures, "units": units, "army": army, "training": training, "walls": walls,
+		"abilities": abilities, "support_ready": support_ready, "support_queue": support_queue, "support_started": support_started,
 		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 	}))
 
@@ -698,7 +847,7 @@ func load_game() -> bool:
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -724,6 +873,17 @@ func load_game() -> bool:
 	for k in data.get("training", []):
 		training.append(str(k))
 	train_started = float(data.get("train_started", now()))
+	abilities = {"flare": 1}
+	for k in data.get("abilities", {}):
+		abilities[k] = int(data["abilities"][k])
+	support_ready = {}
+	for k in data.get("support_ready", {}):
+		if int(data["support_ready"][k]) > 0:
+			support_ready[k] = int(data["support_ready"][k])
+	support_queue = []
+	for k in data.get("support_queue", []):
+		support_queue.append(str(k))
+	support_started = float(data.get("support_started", now()))
 	walls = []
 	for w in data.get("walls", []):
 		walls.append({"edge": [int(w["edge"][0]), int(w["edge"][1]), int(w["edge"][2])], "level": int(w["level"])})

@@ -1,7 +1,7 @@
 class_name RaidHud
 extends CanvasLayer
 ## Battle UI (landscape): timer and destruction at the top; End and the unit cards in one
-## bottom corner, the energy bar and support abilities (air strike, flare) in the other;
+## bottom corner, the prepared support abilities (air strike, flare) in the other;
 ## floating health bars over damaged structures and units, and the result panel.
 
 signal unit_selected(type: String)
@@ -18,8 +18,7 @@ var _status: Label
 var _cards: HBoxContainer
 var _card_buttons := {}
 var _end: Button
-var _energy: ProgressBar
-var _energy_label: Label
+var _support_row: HBoxContainer
 var _abilities := {}
 var _bars_layer: Control
 var _bars := {}
@@ -137,57 +136,34 @@ func set_progress(percent: int, stars: int) -> void:
 	_progress.text = I18n.t("%d%%  ·  Stars %d/3") % [percent, stars]
 
 
-## Energy bar over two round ability buttons.
+## Two round ability buttons, each with how many are left.
 func _support_panel() -> Control:
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
-	box.size_flags_vertical = Control.SIZE_SHRINK_END
-	_energy = ProgressBar.new()
-	_energy.show_percentage = false
-	_energy.max_value = Catalog.ENERGY_MAX
-	_energy.custom_minimum_size = Vector2(240, 26)
-	var bg := HomeHud.flat(Color(0.04, 0.06, 0.04, 0.8))
-	bg.set_corner_radius_all(13)
-	bg.set_content_margin_all(0)
-	var fill := HomeHud.flat(Color(1.0, 0.78, 0.2))
-	fill.set_corner_radius_all(13)
-	fill.set_content_margin_all(0)
-	_energy.add_theme_stylebox_override("background", bg)
-	_energy.add_theme_stylebox_override("fill", fill)
-	box.add_child(_energy)
-	_energy_label = HomeHud.make_label(_energy, "", 17, Color(0.12, 0.09, 0.0))
-	_energy_label.remove_theme_color_override("font_outline_color")
-	_energy_label.add_theme_constant_override("outline_size", 0)
-	_energy_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_energy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_energy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	row.alignment = BoxContainer.ALIGNMENT_END
-	box.add_child(row)
-	for kind in ["flare", "strike"]:
+	row.size_flags_vertical = Control.SIZE_SHRINK_END
+	_support_row = row
+	for kind in Catalog.ABILITY_ORDER:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(110, 110)
-		b.add_theme_font_size_override("font_size", 18)
+		b.add_theme_font_size_override("font_size", 19)
 		b.toggle_mode = true
-		var cost: int = Catalog.ABILITIES[kind]["energy"]
-		b.text = (I18n.t("Flare") if kind == "flare" else I18n.t("Air\nstrike")) + "\n" + I18n.t("%d energy") % cost
 		b.pressed.connect(func() -> void:
 			Audio.play("click", -6.0)
 			ability_pressed.emit(kind))
 		row.add_child(b)
 		_abilities[kind] = b
-	return box
+	return row
 
 
-## Shows the energy, lights up the abilities the player can afford, and marks the armed one.
-func set_energy(energy: float, armed: String) -> void:
-	_energy.value = energy
-	_energy_label.text = I18n.t("Energy %d") % int(energy)
+## Shows how many of each ability are left, greys out the spent ones, marks the armed one.
+func set_support(counts: Dictionary, armed: String) -> void:
 	for kind in _abilities:
 		var b: Button = _abilities[kind]
-		var ready := energy >= float(Catalog.ABILITIES[kind]["energy"])
-		b.disabled = not ready and armed != kind
+		var left := int(counts.get(kind, 0))
+		b.text = (I18n.t("Flare") if kind == "flare" else I18n.t("Air
+strike")) + "
+x%d" % left
+		b.disabled = left <= 0 and armed != kind
 		b.set_pressed_no_signal(armed == kind)
 		var base := Color(0.91, 0.33, 0.23) if kind == "strike" else Color(1.0, 0.48, 0.24)
 		for state in ["normal", "hover", "pressed", "disabled"]:
@@ -263,7 +239,7 @@ func show_result(stars: int, percent: int, gained: Dictionary, practice: bool) -
 
 
 func blocks(pos: Vector2) -> bool:
-	for c: Control in [_cards, _end, _result, _energy.get_parent() as Control]:
+	for c: Control in [_cards, _end, _result, _support_row]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false

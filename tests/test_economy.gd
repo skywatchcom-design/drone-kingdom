@@ -426,3 +426,58 @@ func test_old_defenses_migrate() -> bool:
 		if Catalog.DEFENSES.has(old) or not Catalog.DEFENSES.has(retired[old]):
 			return false
 	return retired.size() == 3
+
+
+func _with_support(gs: Node, lvl: int) -> void:
+	gs.structures.append({"type": "support", "cell": [0, 0], "level": lvl})
+
+
+func test_support_needs_a_base_and_slots() -> bool:
+	var gs := _fresh_state()
+	gs.fuel = 5000
+	var no_base: String = gs.prepare_block_reason("flare")
+	_with_support(gs, 1)
+	var a: bool = gs.prepare("flare")
+	var b: bool = gs.prepare("flare")
+	var full: String = gs.prepare_block_reason("flare")
+	var locked: String = gs.prepare_block_reason("strike")
+	gs.free()
+	return no_base == "Build a Support Base first" and a and b and full == "No free slots" and locked == "Locked"
+
+
+func test_support_prepares_over_time_and_is_used_up() -> bool:
+	var gs := _fresh_state()
+	gs.fuel = 5000
+	_with_support(gs, 1)
+	gs.prepare("flare")
+	var not_yet: bool = gs.process_support() == 0
+	gs.support_started -= 1000.0
+	gs.process_support()
+	var ready: bool = int(gs.support_ready.get("flare", 0)) == 1
+	gs.use_support({"flare": 1})
+	var gone: bool = not gs.support_ready.has("flare")
+	gs.free()
+	return not_yet and ready and gone
+
+
+func test_strike_unlocks_at_support_level_two() -> bool:
+	var gs := _fresh_state()
+	gs.fuel = 5000
+	_with_support(gs, 1)
+	var early: String = gs.ability_block_reason("strike")
+	gs.structure_at([0, 0])["level"] = 2
+	var unlocked: bool = gs.upgrade_ability("strike")
+	var slots_ok: bool = gs.support_slots() == 3
+	gs.free()
+	return early == "Needs Support Base Lv 2" and unlocked and slots_ok
+
+
+func test_ability_levels_get_stronger() -> bool:
+	var total := []
+	for l in range(1, Catalog.MAX_LEVEL + 1):
+		var st := Catalog.ability_stats("strike", l)
+		total.append(float(st["bombs"]) * float(st["damage"]))
+	for i in range(1, total.size()):
+		if total[i] <= total[i - 1]:
+			return false
+	return Catalog.ability_stats("flare", 5)["seconds"] > Catalog.ability_stats("flare", 1)["seconds"]

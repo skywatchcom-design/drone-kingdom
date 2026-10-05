@@ -7,7 +7,7 @@ extends RefCounted
 ## The older models are drawn in a small unit size and scaled up to fill their pad.
 const SCALE := 1.35
 ## Sketch-based models are drawn at pad size.
-const PAD_SIZED := ["pump", "tank", "camp", "quarters", "garage"]
+const PAD_SIZED := ["pump", "tank", "camp", "quarters", "garage", "support"]
 const FUEL := Color(0.93, 0.35, 0.55)
 
 
@@ -34,6 +34,8 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _quarters(root, level)
 		"garage":
 			height = _garage(root, level)
+		"support":
+			height = _support(root, level)
 		"hangar":
 			height = _hangar(root, level)
 	if type not in PAD_SIZED:
@@ -269,6 +271,53 @@ static func _garage(root: Node3D, level: int) -> float:
 	crate(root, 1.9, 2.0, 0.8)
 	chevrons(root, level, Vector3(-2.3, 0, 2.3))
 	return h + 0.9
+
+
+## Support Base (approved sketch): a small strip with a windsock and a flare rack. Lv2 fuel
+## drums; Lv3 a spinning radar and a parked jet; Lv4 a second flare rack; Lv5 a control tower
+## and a concrete shelter over the jet.
+static func _support(root: Node3D, level: int) -> float:
+	MeshKit.add(root, MeshKit.box(Vector3(5.2, 0.08, 5.2)), MeshKit.mat(Color(0.25, 0.26, 0.26), 0.9), Vector3(0, 0.04, 0))
+	for i in 5:
+		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.02, 0.12)), MeshKit.mat(Color(0.95, 0.76, 0.2), 0.6), Vector3(-2.0 + i * 1.0, 0.09, 1.9))
+	var sinai := MeshKit.mat(UnitModels.SINAI, 0.8)
+	if level < 5:
+		MeshKit.add(root, MeshKit.box(Vector3(1.4, 1.1, 1.2)), sinai, Vector3(-1.7, 0.6, -1.8))
+		MeshKit.add(root, MeshKit.box(Vector3(1.5, 0.12, 1.3)), MeshKit.mat(RUST, 0.6), Vector3(-1.7, 1.2, -1.8))
+	else:
+		MeshKit.add(root, MeshKit.box(Vector3(1.2, 2.6, 1.2)), sinai, Vector3(-2.0, 1.3, -2.0))
+		MeshKit.add(root, MeshKit.box(Vector3(1.5, 0.7, 1.5)), MeshKit.mat(Color(0.19, 0.22, 0.25), 0.3, 0.4), Vector3(-2.0, 2.9, -2.0))
+		MeshKit.add(root, MeshKit.box(Vector3(1.6, 0.1, 1.6)), MeshKit.mat(RUST, 0.6), Vector3(-2.0, 3.3, -2.0))
+	MeshKit.add(root, MeshKit.cyl(0.03, 0.03, 2.2, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(2.3, 1.1, -2.2))
+	var sock := MeshKit.add(root, MeshKit.cyl(0.12, 0.2, 0.8, 10), MeshKit.mat(Color(1.0, 0.48, 0.16), 0.6), Vector3(2.3, 2.1, -1.8))
+	sock.rotation.x = PI / 2.0
+	for r in (2 if level >= 4 else 1):
+		for k in 3:
+			MeshKit.add(root, MeshKit.cyl(0.08, 0.08, 0.8, 8), MeshKit.mat(UnitModels.OLIVE_DARK, 0.6, 0.3), Vector3(1.4 + r * 0.7, 0.45, 0.2 + k * 0.25)).rotation.z = -0.7
+		MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.25, 0.9)), MeshKit.mat(UnitModels.OLIVE, 0.7), Vector3(1.6 + r * 0.7, 0.15, 0.45))
+	if level >= 2:
+		for k in 3:
+			MeshKit.add(root, MeshKit.cyl(0.22, 0.22, 0.6, 10), MeshKit.mat(FUEL, 0.5, 0.2), Vector3(-2.2 + k * 0.5, 0.3, 2.2))
+	if level >= 3:
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 2.0, 6), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(2.3, 1.0, 1.9))
+		var radar := Node3D.new()
+		radar.position = Vector3(2.3, 2.1, 1.9)
+		root.add_child(radar)
+		MeshKit.add(radar, MeshKit.box(Vector3(1.0, 0.4, 0.06)), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3)).rotation.x = -0.3
+		var spin := radar.create_tween().set_loops()
+		spin.tween_property(radar, "rotation:y", TAU, 3.0).as_relative()
+		var jet := Node3D.new()
+		jet.position = Vector3(0.3, 0.45, -0.4 if level < 5 else 0.9)
+		jet.rotation.y = PI * 0.15 if level < 5 else 0.0
+		jet.scale = Vector3.ONE * 0.42
+		root.add_child(jet)
+		UnitModels.aircraft(jet, 3)
+	if level >= 5:
+		var shelter := MeshKit.add(root, MeshKit.cyl(1.7, 1.7, 3.4, 20), MeshKit.mat(CONCRETE, 0.85), Vector3(0.4, 0, -0.6))
+		shelter.rotation.x = PI / 2.0
+		shelter.scale = Vector3(1, 1, 0.9)
+	chevrons(root, level, Vector3(2.3, 0, 2.6))
+	return 3.4 if level >= 5 else 2.4
 
 
 ## Sways a property back and forth around its current value, forever (flags, pumpjacks, hooks).

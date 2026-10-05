@@ -186,6 +186,10 @@ func _tick_second() -> void:
 		_rebuild()
 		_reopen()
 		return
+	if GameState.process_support() > 0:
+		hud.toast(I18n.t("Support done"))
+		if open_sheet == "support" and hud.panel_open():
+			_open_support()
 	var trained := GameState.process_training()
 	if trained > 0:
 		hud.toast(I18n.t("Training done") if GameState.training.is_empty() else I18n.t("+%d trained") % trained)
@@ -195,6 +199,8 @@ func _tick_second() -> void:
 		_open_cell(open_cell)
 	elif open_sheet == "army" and hud.panel_open() and (trained > 0 or not GameState.training.is_empty()):
 		_open_army()
+	elif open_sheet == "support" and hud.panel_open() and not GameState.support_queue.is_empty():
+		_open_support()
 
 
 func _refresh_header() -> void:
@@ -576,6 +582,8 @@ func _structure_sheet(cell: Array, s: Dictionary) -> Control:
 	box.add_child(extra)
 	if type == "hangar" or type == "garage":
 		HomeHud.make_button(extra, I18n.t("Unlock and upgrade units"), 22, 72).pressed.connect(func() -> void: _open_lab(type))
+	if type == "support":
+		HomeHud.make_button(extra, I18n.t("Prepare and upgrade"), 22, 72).pressed.connect(_open_support)
 	if type == "camp" or type == "quarters":
 		HomeHud.make_button(extra, I18n.t("Train army"), 22, 72).pressed.connect(_open_army)
 	if type != "hq" and not GameState.is_busy(s):
@@ -608,6 +616,8 @@ func _stat_lines(type: String, lvl: int) -> Array:
 			return [[I18n.t("Army space"), str(Catalog.quarters_space(lvl))]]
 		"camp":
 			return [[I18n.t("Training speed"), "x%.2f" % (1.0 + 0.25 * (lvl - 1))]]
+		"support":
+			return [[I18n.t("Slots"), str(Catalog.support_slots(lvl))]]
 	var st := Catalog.defense_stats(type, lvl)
 	var lines := [[I18n.t("Range"), I18n.t("%.1f m") % st["radius"]]]
 	if st.has("dps"):
@@ -736,6 +746,155 @@ func _train_card(type: String) -> Control:
 	if reason != "":
 		_wrap(HomeHud.make_label(box, reason, 19, BAD))
 	return card
+
+
+# ---------------------------------------------------------------- support base
+
+## The Support Base sheet: slots used, what is ready and being prepared, and a card per
+## ability to prepare more, unlock it or upgrade it.
+func _open_support() -> void:
+	open_cell = []
+	open_sheet = "support"
+	marker.visible = false
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	HomeHud.make_label(box, I18n.t("Slots %d / %d") % [GameState.support_used(), GameState.support_slots()], 28, GOLD)
+	var ready := []
+	for kind in Catalog.ABILITY_ORDER:
+		if int(GameState.support_ready.get(kind, 0)) > 0:
+			ready.append("%s x%d" % [Catalog.display_name(kind), int(GameState.support_ready[kind])])
+	_wrap(HomeHud.make_label(box, I18n.t("Ready: %s") % "  ·  ".join(ready) if not ready.is_empty() else I18n.t("Nothing prepared yet. Prepare below; you take what is ready into the next attack."), 22))
+	if not GameState.support_queue.is_empty():
+		var line := I18n.t("Preparing %s  ·  %s") % [Catalog.display_name(GameState.support_queue[0]), HomeHud.clock(GameState.support_head_left())]
+		_wrap(HomeHud.make_label(box, line, 24))
+		var gems := Catalog.speedup_gems(GameState.support_total_left())
+		var fast := HomeHud.make_button(box, I18n.t("Finish now  ·  %d gems") % gems, 24, 72)
+		var can := GameState.infinite_coins or GameState.gems >= gems
+		fast.disabled = not can
+		_gold(fast, can)
+		fast.pressed.connect(func() -> void:
+			if GameState.speed_up_support():
+				Audio.play("build")
+				_refresh_header()
+				_open_support())
+	for kind in Catalog.ABILITY_ORDER:
+		box.add_child(_ability_card(kind))
+	hud.show_content(Catalog.display_name("support"), box)
+
+
+func _ability_card(kind: String) -> Control:
+	var def: Dictionary = Catalog.ABILITIES[kind]
+	var owned: bool = GameState.abilities.has(kind)
+	var lvl := int(GameState.abilities.get(kind, 1))
+	var st := Catalog.ability_stats(kind, lvl)
+	var card := _card(owned)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	card.add_child(row)
+	var preview := _ability_preview(kind, lvl, owned)
+	preview.custom_minimum_size = Vector2(220, 170)
+	row.add_child(preview)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var name_label := HomeHud.make_label(head, Catalog.display_name(kind), 28, UnitModels.LEVEL_COLORS[lvl - 1].lightened(0.3) if owned else Color(0.6, 0.62, 0.66))
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	HomeHud.make_label(head, I18n.t("Lv %d") % lvl if owned else I18n.t("Locked"), 24, SOFT)
+	_wrap(HomeHud.make_label(box, I18n.t(def["role"]), 20, SOFT))
+	var facts := I18n.t("Bombs %d  ·  %d damage each") % [int(st["bombs"]), int(st["damage"])] if kind == "strike" else I18n.t("Burns %d s") % int(st["seconds"])
+	HomeHud.make_label(box, facts, 20)
+	HomeHud.make_label(box, I18n.t("%d slots  ·  %d fuel  ·  %s") % [int(def["slots"]), int(def["fuel"]), HomeHud.clock(float(def["seconds"]))], 20, SOFT)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	box.add_child(buttons)
+	if owned:
+		var queued := GameState.support_queue.count(kind)
+		var minus := HomeHud.make_button(buttons, "-", 28, 60)
+		minus.custom_minimum_size.x = 60
+		minus.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		minus.disabled = queued <= 0
+		minus.pressed.connect(func() -> void:
+			GameState.cancel_prepare(kind)
+			_refresh_header()
+			_open_support())
+		var why := GameState.prepare_block_reason(kind)
+		var prep := HomeHud.make_button(buttons, I18n.t("Prepare") + ("  (%d)" % queued if queued > 0 else ""), 22, 60)
+		prep.disabled = why != ""
+		_gold(prep, why == "")
+		prep.pressed.connect(func() -> void:
+			if GameState.prepare(kind):
+				Audio.play("click")
+				_refresh_header()
+				_open_support())
+		if why != "":
+			_wrap(HomeHud.make_label(box, why, 19, BAD))
+	var reason := GameState.ability_block_reason(kind)
+	var up_text := I18n.t("Unlock  ·  %d fuel") % int(def["unlock"])
+	if owned:
+		up_text = I18n.t("Max level") if lvl >= Catalog.MAX_LEVEL else I18n.t("Upgrade  ·  %d fuel") % Catalog.ability_upgrade_cost(kind, lvl)
+	var up := HomeHud.make_button(buttons, up_text, 20, 60)
+	up.disabled = reason != ""
+	_gold(up, reason == "" and not owned)
+	up.pressed.connect(func() -> void:
+		if GameState.upgrade_ability(kind):
+			Audio.play("build")
+			_refresh_header()
+			_open_support())
+	if reason != "" and not (owned and lvl >= Catalog.MAX_LEVEL):
+		_wrap(HomeHud.make_label(box, reason, 19, BAD))
+	return card
+
+
+## A small 3D stage with the plane (air strike) or the flare at this level.
+func _ability_preview(kind: String, lvl: int, owned: bool) -> Control:
+	var frame := SubViewportContainer.new()
+	frame.stretch = true
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.msaa_3d = Viewport.MSAA_4X
+	frame.add_child(vp)
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CLEAR_COLOR
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.55, 0.6, 0.7)
+	env.ambient_light_energy = 0.8
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	var world_env := WorldEnvironment.new()
+	world_env.environment = env
+	vp.add_child(world_env)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-50, 30, 0)
+	light.light_energy = 1.6
+	vp.add_child(light)
+	var cam := Camera3D.new()
+	cam.fov = 32.0
+	vp.add_child(cam)
+	cam.look_at_from_position(Vector3(0, 4.5, 11.0), Vector3(0, 0.5, 0))
+	var holder := Node3D.new()
+	vp.add_child(holder)
+	var spin := holder.create_tween().set_loops()
+	spin.tween_property(holder, "rotation:y", TAU, 8.0).as_relative()
+	if kind == "strike":
+		UnitModels.aircraft(holder, lvl)
+	else:
+		var st := Catalog.ability_stats("flare", lvl)
+		var count := int(st["flares"])
+		for i in count:
+			var f := Node3D.new()
+			f.position = Vector3((i - (count - 1) / 2.0) * 1.8, 0.5 + (i % 2) * 0.6, 0)
+			holder.add_child(f)
+			MeshKit.add(f, MeshKit.sphere(0.3 + 0.05 * lvl, 10), MeshKit.glow(Color(1.0, 0.95, 0.75)))
+			MeshKit.add(f, MeshKit.sphere(0.9 + 0.12 * lvl, 12), MeshKit.glow(Color(1.0, 0.3, 0.12) if lvl >= 3 else Color(1.0, 0.45, 0.2), 0.45))
+			if lvl >= 3:
+				MeshKit.add(f, MeshKit.sphere(1.0, 12), MeshKit.mat(Color(0.9, 0.88, 0.8), 0.8), Vector3(0, 1.7, 0)).scale = Vector3(1, 0.45, 1)
+	if not owned:
+		frame.modulate = Color(0.55, 0.55, 0.6)
+	return frame
 
 
 # ---------------------------------------------------------------- hangar and garage
