@@ -60,3 +60,21 @@ func test_tilt_is_clamped() -> bool:
 	var tilt := RaidRules.bank_angles(Vector3(500, 0, 500), Vector3(0, 0, 100), 0.0)
 	return absf(tilt.x) <= 0.45 and absf(tilt.y) <= 0.5
 
+
+
+func test_syndicate_forces_fit_every_mission() -> bool:
+	if Syndicate.FORCES.size() != Syndicate.COUNT:
+		return false
+	var last := 1
+	for f: Dictionary in Syndicate.FORCES:
+		var lvl := int(f["level"])
+		if lvl < last or lvl > 5 or (f["army"] as Dictionary).is_empty():
+			return false
+		last = lvl
+		for type in f["army"]:
+			if not Catalog.UNIT_ORDER.has(type):
+				return false
+		for kind in f["support"]:
+			if not Catalog.ABILITY_ORDER.has(kind):
+				return false
+	return true

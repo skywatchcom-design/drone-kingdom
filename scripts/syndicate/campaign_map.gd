@@ -200,6 +200,20 @@ func _show_brief(i: int) -> void:
 	var defs := HomeHud.ink(box, I18n.t("Defenses: %s") % ", ".join(parts), 17, Color(0.3, 0.29, 0.24))
 	defs.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	defs.custom_minimum_size.x = 430
+	# The task force the mission hands out; the player's own army stays home.
+	var f := Syndicate.force(i)
+	var units := []
+	for type in Catalog.UNIT_ORDER:
+		var n := int(f["army"].get(type, 0))
+		if n > 0:
+			units.append("%s x%d" % [Catalog.display_name(type), n])
+	for kind in Catalog.ABILITY_ORDER:
+		var n := int(f["support"].get(kind, 0))
+		if n > 0:
+			units.append("%s x%d" % [I18n.t("Flare") if kind == "flare" else I18n.t("Air strike"), n])
+	var force_label := HomeHud.ink(box, I18n.t("Your task force (level %d): %s") % [int(f["level"]), ", ".join(units)], 17, Color(0.18, 0.32, 0.55))
+	force_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	force_label.custom_minimum_size.x = 430
 	var attack := Button.new()
 	attack.text = I18n.t("ATTACK!")
 	attack.icon = Icons.tex("swords", 64)
@@ -214,10 +228,6 @@ func _show_brief(i: int) -> void:
 
 
 func _attack(i: int) -> void:
-	if GameState.army_used() <= 0:
-		_toast.text = I18n.t("Train an army first")
-		_toast.modulate.a = 1.6
-		return
 	GameState.raid_target = "syndicate"
 	GameState.syndicate_mission = i
 	get_tree().change_scene_to_file(RAID_SCENE)

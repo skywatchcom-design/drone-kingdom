@@ -82,5 +82,6 @@ Approved 6.10.2026: Syndicate sketch (https://claude.ai/artifact/G1Y41QRsCwW8TVG
 (scarred mercenary commander, red implant eye, metal jaw, spiked armor; aggressive taunts).
 Week 4 (6.10.2026): Syndicate campaign: `Syndicate` (10 missions, bases from specs, Razor's lines, paint
 swap), map scene `scenes/syndicate/map.tscn` (briefing, stars, locks), robot guards (`UnitModels._robot`),
-Attack opens a choice (campaign or raid). Raid flags: `--syndicate N`; map flag: `--mission N`.
+Attack opens a choice (campaign or raid). Each mission hands out a fixed task force at the mission's level (`Syndicate.FORCES`);
+the player's own army and support stay home. Raid flags: `--syndicate N`; map flag: `--mission N`.
 Still waiting on the owner: Apple Developer and Google Play accounts.

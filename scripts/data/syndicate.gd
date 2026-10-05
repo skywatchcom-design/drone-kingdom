@@ -34,6 +34,27 @@ const MISSIONS := [
 		"taunt": "You got this far because I let you. Now the game ends."},
 ]
 
+## The task force each mission hands the player (their own army stays home): units and how
+## many cards of each, the level of every unit, and prepared support. Picked to fit the base:
+## few anti-air means drones, lots of anti-air means tanks, many walls mean engineers.
+const FORCES := [
+	{"level": 1, "army": {"infantry": 3, "courier": 2}, "support": {}},
+	{"level": 1, "army": {"infantry": 3, "armor": 1, "courier": 1}, "support": {"flare": 1}},
+	{"level": 2, "army": {"infantry": 3, "engineers": 1, "armor": 1}, "support": {"flare": 1}},
+	{"level": 2, "army": {"infantry": 3, "engineers": 2, "armor": 1, "courier": 1}, "support": {"strike": 1}},
+	{"level": 2, "army": {"infantry": 3, "engineers": 1, "armor": 2, "scout": 2}, "support": {"strike": 1, "flare": 1}},
+	{"level": 3, "army": {"infantry": 4, "engineers": 2, "armor": 1, "courier": 2, "heavy": 1}, "support": {"strike": 1}},
+	{"level": 3, "army": {"infantry": 2, "engineers": 1, "courier": 3, "scout": 2, "heavy": 2}, "support": {"strike": 1, "flare": 1}},
+	{"level": 4, "army": {"infantry": 4, "engineers": 2, "armor": 2}, "support": {"strike": 2}},
+	{"level": 4, "army": {"infantry": 4, "engineers": 2, "armor": 2, "courier": 2, "heavy": 1}, "support": {"strike": 1, "flare": 1}},
+	{"level": 5, "army": {"infantry": 5, "engineers": 2, "armor": 2, "courier": 2, "scout": 2, "heavy": 2}, "support": {"strike": 2, "flare": 1}},
+]
+
+
+static func force(index: int) -> Dictionary:
+	return FORCES[clampi(index, 0, COUNT - 1)]
+
+
 ## What Razor says when the player beats one of his bases.
 const LOSE_LINES := [
 	"Enjoy it. Next time I come to you.",

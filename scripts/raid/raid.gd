@@ -61,6 +61,8 @@ var flare_left := 0.0
 var flare_node: Node3D
 var _flare_smoke := 0.0
 var army := {}
+## Unit level forced by a Syndicate task force (0: each unit at the player's own level).
+var force_level := 0
 ## Units sent in, by type; they are used up when the battle ends.
 var deployed := {}
 var drone_names := {}
@@ -155,7 +157,12 @@ func _start() -> void:
 			Syndicate.boss_dressing(level, city.roof_top([4, 4]))
 
 	var plan: Dictionary = GameState.army
-	if autoplay:
+	# Syndicate missions hand out their own task force, all at the mission's level.
+	var syndicate_force: Dictionary = Syndicate.force(int(base["mission"])) if base.get("syndicate", false) else {}
+	if not syndicate_force.is_empty():
+		plan = syndicate_force["army"]
+		force_level = int(syndicate_force["level"])
+	if autoplay and (syndicate_force.is_empty() or args.has("--army")):
 		plan = {"infantry": 3, "engineers": 1, "armor": 1, "courier": 2, "scout": 2, "heavy": 1}
 		if args.has("--army"):
 			plan = {}
@@ -173,7 +180,10 @@ func _start() -> void:
 	hud.set_loot(0, 0)
 	support = GameState.support_ready.duplicate()
 	support_levels = GameState.abilities.duplicate()
-	if autoplay:
+	if not syndicate_force.is_empty():
+		support = (syndicate_force["support"] as Dictionary).duplicate()
+		support_levels = {"strike": force_level, "flare": force_level}
+	elif autoplay:
 		var lvl := 3
 		if args.has("--support-level"):
 			lvl = int(args[args.find("--support-level") + 1])
@@ -261,7 +271,7 @@ func _try_deploy(screen_pos: Vector2) -> void:
 func _deploy(type: String, p: Vector3) -> void:
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
-	var stats := GameState.unit_stats_for(type)
+	var stats := _stats(type)
 	var d := Drone.new()
 	d.configure(stats)
 	d.kind = type
@@ -284,7 +294,7 @@ func _deploy(type: String, p: Vector3) -> void:
 func _deploy_ground(type: String, p: Vector3) -> void:
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
-	var stats := GameState.unit_stats_for(type)
+	var stats := _stats(type)
 	var count := int(stats.get("squad", 1))
 	var facing := atan2(-p.x, -p.z)
 	var right := Vector3(cos(facing), 0, -sin(facing))
@@ -313,6 +323,10 @@ func _deploy_ground(type: String, p: Vector3) -> void:
 		selected = _first_available()
 	hud.update_army(army, drone_names, selected)
 	hud.set_status("")
+
+
+func _stats(type: String) -> Dictionary:
+	return Catalog.unit_stats(type, force_level) if force_level > 0 else GameState.unit_stats_for(type)
 
 
 func _autoplay_deploy() -> void:
