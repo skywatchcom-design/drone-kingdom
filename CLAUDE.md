@@ -60,8 +60,7 @@ shows one structure at all levels; raid takes `--enemy N` and `--army infantry:2
 Week 3 extras (5.10.2026): player-built walls (`Walls`, wall mode, battle routing), Support Base with
 prepared air strikes/flares (no energy), build menu picture cards, five-level looks for every unit,
 drone, plane and building (level colors none/silver/blue/red/gold + ring under units). Save v8.
-Next:
-Syndicate PvE map, Supabase backend, onboarding. Soft launch target: ~2 months, Android + iOS together.
+Next: Supabase backend (shield after being attacked comes with it), onboarding. Soft launch target: ~2 months, Android + iOS together.
 
 Approved 3.10.2026: ground-forces sketch (https://claude.ai/artifact/BD7VJUbaPSCevXsmgRoS2o) and casualty
 style (hit soldier vanishes, a small helmet rolls on the ground). Next sketch: new defenses (MG, AT, AA, mortar).
@@ -81,4 +80,7 @@ Settings + Shop bottom right; Shop tabs army/resources/defenses/walls with pictu
 building shows Info / Upgrade / own action; big upgrade and info windows (`ShopUI`, `Icons` from SVG).
 Approved 6.10.2026: Syndicate sketch (https://claude.ai/artifact/G1Y41QRsCwW8TVG8wyP9NB) with leader RAZOR
 (scarred mercenary commander, red implant eye, metal jaw, spiked armor; aggressive taunts).
+Week 4 (6.10.2026): Syndicate campaign: `Syndicate` (10 missions, bases from specs, Razor's lines, paint
+swap), map scene `scenes/syndicate/map.tscn` (briefing, stars, locks), robot guards (`UnitModels._robot`),
+Attack opens a choice (campaign or raid). Raid flags: `--syndicate N`; map flag: `--mission N`.
 Still waiting on the owner: Apple Developer and Google Play accounts.

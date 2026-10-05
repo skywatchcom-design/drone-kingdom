@@ -160,9 +160,7 @@ func set_support(counts: Dictionary, armed: String) -> void:
 	for kind in _abilities:
 		var b: Button = _abilities[kind]
 		var left := int(counts.get(kind, 0))
-		b.text = (I18n.t("Flare") if kind == "flare" else I18n.t("Air
-strike")) + "
-x%d" % left
+		b.text = (I18n.t("Flare") if kind == "flare" else I18n.t("Air\nstrike")) + "\nx%d" % left
 		b.disabled = left <= 0 and armed != kind
 		b.set_pressed_no_signal(armed == kind)
 		var base := Color(0.91, 0.33, 0.23) if kind == "strike" else Color(1.0, 0.48, 0.24)
@@ -226,13 +224,16 @@ func update_bars(entries: Array) -> void:
 
 
 ## `gained` is {coins, fuel} actually banked.
-func show_result(stars: int, percent: int, gained: Dictionary, practice: bool) -> void:
+func show_result(stars: int, percent: int, gained: Dictionary, practice: bool, extra: String = "") -> void:
 	_result_title.text = I18n.t("Battle over")
 	_result_stars.text = I18n.t("Stars %d / 3   ·   %d%%") % [stars, percent]
 	if practice:
 		_result_info.text = I18n.t("Practice run on your own base.\nNo coins at stake.")
 	else:
 		_result_info.text = I18n.t("Loot banked: %d coins, %d fuel") % [int(gained["coins"]), int(gained["fuel"])]
+	if extra != "":
+		_result_info.text += "\n" + extra
+	_result_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_result.visible = true
 	_cards.visible = false
 	_end.visible = false

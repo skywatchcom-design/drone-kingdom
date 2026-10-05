@@ -481,3 +481,40 @@ func test_ability_levels_get_stronger() -> bool:
 		if total[i] <= total[i - 1]:
 			return false
 	return Catalog.ability_stats("flare", 5)["seconds"] > Catalog.ability_stats("flare", 1)["seconds"]
+
+
+func test_syndicate_missions_open_in_order() -> bool:
+	var gs := _fresh_state()
+	var first: bool = gs.syndicate_open() == 1
+	gs.syndicate_mission = 0
+	gs.raid_target = "syndicate"
+	var lost: Dictionary = gs.record_raid(0, 0, 0)
+	var still: bool = gs.syndicate_open() == 1 and not lost["first"]
+	gs.coins = 0
+	var won: Dictionary = gs.record_raid(2, 50, 0)
+	var opened: bool = gs.syndicate_open() == 2
+	var paid: bool = won["first"] and won["coins"] == 50 + int(Syndicate.MISSIONS[0]["reward"]["coins"])
+	var again: Dictionary = gs.record_raid(3, 0, 0)
+	var stars: bool = gs.syndicate_total_stars() == 3 and not again["first"]
+	gs.free()
+	return first and still and opened and paid and stars
+
+
+func test_syndicate_bases_are_valid() -> bool:
+	for i in Syndicate.COUNT:
+		var b := Syndicate.base(i)
+		var seen := {}
+		var hq := 0
+		for st in b["structures"]:
+			var key := "%d,%d" % st["cell"]
+			if seen.has(key) or int(st["cell"][0]) < 0 or int(st["cell"][0]) >= City.GRID or int(st["cell"][1]) < 0 or int(st["cell"][1]) >= City.GRID:
+				return false
+			seen[key] = true
+			if st["type"] == "hq":
+				hq += 1
+		for w in b["walls"]:
+			if not Walls.valid(w["edge"]):
+				return false
+		if hq != 1:
+			return false
+	return Syndicate.base(Syndicate.BOSS)["boss"] and Syndicate.base(9)["walls"].size() > Syndicate.base(2)["walls"].size()

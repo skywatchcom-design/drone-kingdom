@@ -29,6 +29,8 @@ static func build(kind: String, root: Node3D, level: int = 1) -> Dictionary:
 		"engineers":
 			p = _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
 			_engineer_level(root, p, level)
+		"robot":
+			p = _robot(root, level)
 		_:
 			p = _soldier(root, Color(0.333, 0.376, 0.235), Color(0.3, 0.325, 0.22), false)
 			_infantry_level(root, p, level)
@@ -158,6 +160,49 @@ static func _tank_level(root: Node3D, p: Dictionary, level: int) -> void:
 			MeshKit.add(turret, MeshKit.box(Vector3(0.35, 0.4, 0.35)), MeshKit.mat(Color(0.23, 0.25, 0.21), 0.6, 0.3), Vector3(sx * 1.15, 0.6, -0.3))
 			var aps := MeshKit.add(turret, MeshKit.box(Vector3(0.25, 0.28, 0.05)), MeshKit.glow(Color(0.37, 0.88, 1.0), 0.9), Vector3(sx * 1.15, 0.62, -0.11))
 			aps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## A Syndicate robot guard (approved sketch G1Y41QRsCwW8TVG8wyP9NB): graphite body with a
+## violet band, a boxy head with one glowing violet eye, an antenna with a red tip and a gun
+## arm. Higher levels add violet shoulder plates. Same moving parts as a soldier.
+static func _robot(root: Node3D, level: int) -> Dictionary:
+	var dark := MeshKit.mat(Color(0.17, 0.18, 0.2), 0.5, 0.5)
+	var shell := MeshKit.mat(Color(0.23, 0.24, 0.27), 0.4, 0.6)
+	var violet := MeshKit.mat(Color(0.54, 0.24, 1.0), 0.4, 0.3)
+	var hips := []
+	for x in [-0.13, 0.13]:
+		var hip := Node3D.new()
+		hip.position = Vector3(x, 0.48, 0)
+		root.add_child(hip)
+		MeshKit.add(hip, MeshKit.box(Vector3(0.11, 0.44, 0.13)), dark, Vector3(0, -0.22, 0))
+		MeshKit.add(hip, MeshKit.box(Vector3(0.16, 0.07, 0.22)), dark, Vector3(0, -0.45, 0.04))
+		hips.append(hip)
+	var torso := Node3D.new()
+	torso.position.y = 0.5
+	root.add_child(torso)
+	MeshKit.add(torso, MeshKit.box(Vector3(0.45, 0.36, 0.3)), shell, Vector3(0, 0.2, 0))
+	MeshKit.add(torso, MeshKit.box(Vector3(0.46, 0.06, 0.31)), violet, Vector3(0, 0.29, 0))
+	var head := MeshKit.add(torso, MeshKit.box(Vector3(0.3, 0.22, 0.27)), shell, Vector3(0, 0.55, 0))
+	var eye := MeshKit.add(torso, MeshKit.box(Vector3(0.2, 0.06, 0.03)), MeshKit.glow(Color(0.75, 0.55, 1.0)), Vector3(0, 0.56, 0.14))
+	eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	MeshKit.add(torso, MeshKit.cyl(0.01, 0.01, 0.24, 4), dark, Vector3(-0.09, 0.78, 0))
+	MeshKit.add(torso, MeshKit.sphere(0.03, 6), MeshKit.glow(Color(0.9, 0.33, 0.24)), Vector3(-0.09, 0.9, 0))
+	if level >= 3:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(torso, MeshKit.box(Vector3(0.15, 0.12, 0.36)), violet, Vector3(sx * 0.33, 0.37, 0))
+	var arms := Node3D.new()
+	arms.position = Vector3(0, 0.3, 0.05)
+	torso.add_child(arms)
+	MeshKit.add(arms, MeshKit.box(Vector3(0.1, 0.1, 0.3)), dark, Vector3(-0.28, -0.04, 0.1))
+	var rifle := Node3D.new()
+	rifle.position = Vector3(0.28, -0.04, 0.12)
+	arms.add_child(rifle)
+	MeshKit.add(rifle, MeshKit.box(Vector3(0.1, 0.1, 0.42)), dark)
+	MeshKit.add(rifle, MeshKit.cyl(0.03, 0.03, 0.2, 8), MeshKit.mat(Color(0.1, 0.1, 0.11), 0.5, 0.4), Vector3(0, 0, 0.3)).rotation.x = PI / 2.0
+	var muzzle := Node3D.new()
+	muzzle.position = Vector3(0, 0, 0.42)
+	rifle.add_child(muzzle)
+	return {"hips": hips, "torso": torso, "helmet": head, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null}
 
 
 static func _soldier(root: Node3D, vest_color: Color, gear_color: Color, engineer: bool) -> Dictionary:

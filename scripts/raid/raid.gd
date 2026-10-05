@@ -13,11 +13,12 @@ extends Node3D
 ## near it). The plane and the flare look stronger at every level. Used ones are gone.
 ## Run with `-- --autoplay` to deploy a full army automatically (used for screenshots;
 ## `--support-level N` sets the air strike and flare level), and
-## `--enemy N` to pick which enemy base, `--army infantry:2,courier:2` to pick the army.
+## `--enemy N` to pick which enemy base (or `--syndicate N` for a Syndicate mission), `--army infantry:2,courier:2` to pick the army.
 
 enum Phase { BATTLE, RESULT }
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
+const MAP_SCENE := "res://scenes/syndicate/map.tscn"
 const VIEW_SIZE := 50.0
 const TRAVEL_ALT := 11.0
 const DEPLOY_CLEARANCE := 6.5
@@ -91,7 +92,7 @@ func _ready() -> void:
 	hud.unit_selected.connect(_on_unit_selected)
 	hud.end_pressed.connect(_finish)
 	hud.retry_pressed.connect(func() -> void: get_tree().reload_current_scene())
-	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(HOME_SCENE))
+	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAP_SCENE if GameState.raid_target == "syndicate" else HOME_SCENE))
 	hud.ability_pressed.connect(_on_ability)
 	_start()
 
@@ -101,7 +102,13 @@ func _start() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.has("--enemy"):
 		enemy_index = int(args[args.find("--enemy") + 1])
-	base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(enemy_index, GameState.hq_level())
+	if args.has("--syndicate"):
+		GameState.raid_target = "syndicate"
+		GameState.syndicate_mission = int(args[args.find("--syndicate") + 1])
+	if GameState.raid_target == "syndicate":
+		base = Syndicate.base(GameState.syndicate_mission)
+	else:
+		base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(enemy_index, GameState.hq_level())
 	level = Node3D.new()
 	add_child(level)
 	var reserved: Array = []
@@ -141,6 +148,11 @@ func _start() -> void:
 		wall_index[k] = {"edge": edge, "level": int(w["level"]), "hp": hp, "max_hp": hp, "destroyed": false,
 			"node": StructureModels.wall(level, edge, int(w["level"])), "a": ends[0], "b": ends[1], "center": Walls.center(edge)}
 		standing_walls[k] = true
+
+	if base.get("syndicate", false):
+		Syndicate.paint(level)
+		if base.get("boss", false):
+			Syndicate.boss_dressing(level, city.roof_top([4, 4]))
 
 	var plan: Dictionary = GameState.army
 	if autoplay:
@@ -559,6 +571,8 @@ func _call_defenders(attackers: Array) -> void:
 			continue
 		quarters_called[i] = true
 		var stats := Catalog.unit_stats("infantry", int(t["level"]))
+		if base.get("syndicate", false):
+			stats["kind"] = "robot"
 		var count := Catalog.defender_count(int(t["level"]))
 		for k in count:
 			var u := GroundUnit.new()
@@ -1251,7 +1265,14 @@ func _finish() -> void:
 	Audio.hum(0.0)
 	for i in stars:
 		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))
-	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.raid_target == "self")
+	var extra := ""
+	if base.get("syndicate", false):
+		var lines: Array = Syndicate.LOSE_LINES if stars > 0 else Syndicate.WIN_LINES
+		extra = I18n.t("Razor: \"%s\"") % I18n.t(lines[randi() % lines.size()])
+		if gained.get("first", false):
+			var r: Dictionary = Syndicate.MISSIONS[GameState.syndicate_mission]["reward"]
+			extra += "\n" + I18n.t("First win reward: %d coins, %d fuel, %d gems") % [int(r.get("coins", 0)), int(r.get("fuel", 0)), int(r.get("gems", 0))]
+	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.raid_target == "self", extra)
 
 
 func _destroyed_ratio() -> float:

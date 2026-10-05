@@ -57,7 +57,7 @@ func _ready() -> void:
 	cam = WorldSetup.create(self, VIEW_SIZE)
 	hud = HomeHud.new()
 	add_child(hud)
-	hud.attack_pressed.connect(func() -> void: _go_raid("enemy"))
+	hud.attack_pressed.connect(_open_attack_choice)
 	hud.army_pressed.connect(_open_army)
 	hud.build_pressed.connect(func() -> void: _open_shop())
 	hud.actions_closed.connect(func() -> void:
@@ -1190,6 +1190,39 @@ func _toggle_infinite() -> void:
 	GameState.set_infinite_coins(not GameState.infinite_coins)
 	_refresh_header()
 	_open_settings()
+
+
+## Attack opens a choice: the Syndicate campaign map, or a raid on the next enemy base.
+func _open_attack_choice() -> void:
+	_deselect()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 24)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
+	var to_map := func() -> void:
+		hud.hide_modal()
+		get_tree().change_scene_to_file("res://scenes/syndicate/map.tscn")
+	var to_raid := func() -> void:
+		hud.hide_modal()
+		_go_raid("enemy")
+	var choices := [
+		["syndicate", I18n.t("Syndicate campaign"), I18n.t("Stars %d / %d") % [GameState.syndicate_total_stars(), Syndicate.COUNT * 3], to_map],
+		["swords", I18n.t("Raid a base"), target["name"], to_raid],
+	]
+	for c: Array in choices:
+		var b := Button.new()
+		b.text = "%s\n%s" % [c[1], c[2]]
+		b.icon = Icons.tex(c[0], 160)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.custom_minimum_size = Vector2(300, 260)
+		b.add_theme_font_size_override("font_size", 24)
+		HomeHud._style_button(b, Color(0.32, 0.22, 0.45) if c[0] == "syndicate" else Color(0.82, 0.32, 0.2), 16, Color.WHITE, 4)
+		b.pressed.connect(func() -> void: Audio.play("click", -6.0))
+		b.pressed.connect(c[3])
+		row.add_child(b)
+	hud.show_modal(row, Vector2(720, 330))
 
 
 func _go_raid(target: String) -> void:

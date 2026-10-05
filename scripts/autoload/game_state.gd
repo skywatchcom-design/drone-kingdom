@@ -42,6 +42,10 @@ var enemy_index := 0
 var raid_target := "enemy"
 var city_seed := 7
 var best_stars := {}
+## Syndicate campaign: best stars per mission (by index as a string) and which mission the
+## next attack is on. A mission opens once the one before it has at least one star.
+var syndicate_stars := {}
+var syndicate_mission := 0
 
 const SETTINGS_PATH := "user://settings.json"
 ## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
@@ -143,6 +147,8 @@ func new_player() -> void:
 	enemy_index = 0
 	raid_target = "enemy"
 	best_stars = {}
+	syndicate_stars = {}
+	syndicate_mission = 0
 	save_game()
 
 
@@ -796,8 +802,39 @@ func use_army(deployed: Dictionary) -> void:
 	save_game()
 
 
+## How many Syndicate missions are open to attack (the first is always open).
+func syndicate_open() -> int:
+	var n := 1
+	while n < Syndicate.COUNT and int(syndicate_stars.get(str(n - 1), 0)) > 0:
+		n += 1
+	return n
+
+
+func syndicate_total_stars() -> int:
+	var total := 0
+	for k in syndicate_stars:
+		total += int(syndicate_stars[k])
+	return total
+
+
+## Records a Syndicate battle. The first win of a mission pays its reward on top of the loot.
+## Returns {coins, fuel, gems, first} actually banked.
+func record_syndicate(index: int, stars: int, loot: int, loot_fuel: int) -> Dictionary:
+	var key := str(index)
+	var first := stars > 0 and int(syndicate_stars.get(key, 0)) == 0
+	syndicate_stars[key] = maxi(int(syndicate_stars.get(key, 0)), stars)
+	var reward: Dictionary = Syndicate.MISSIONS[index]["reward"] if first else {}
+	var got := {"coins": add_coins(loot + int(reward.get("coins", 0))), "fuel": add_fuel(loot_fuel + int(reward.get("fuel", 0))),
+		"gems": int(reward.get("gems", 0)), "first": first}
+	gems += int(got["gems"])
+	save_game()
+	return got
+
+
 ## Banks the loot of an attack on an enemy. Returns {coins, fuel} actually banked.
 func record_raid(stars: int, loot: int, loot_fuel: int = 0) -> Dictionary:
+	if raid_target == "syndicate":
+		return record_syndicate(syndicate_mission, stars, loot, loot_fuel)
 	if raid_target != "enemy":
 		return {"coins": 0, "fuel": 0}
 	var key := str(enemy_index)
@@ -839,6 +876,7 @@ func save_game() -> void:
 		"structures": structures, "units": units, "army": army, "training": training, "walls": walls,
 		"abilities": abilities, "support_ready": support_ready, "support_queue": support_queue, "support_started": support_started,
 		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
+		"syndicate_stars": syndicate_stars, "syndicate_mission": syndicate_mission,
 	}))
 
 
@@ -892,4 +930,8 @@ func load_game() -> bool:
 	enemy_index = int(data.get("enemy_index", 0))
 	city_seed = int(data.get("city_seed", 7))
 	best_stars = data.get("best_stars", {})
+	syndicate_stars = {}
+	for k in data.get("syndicate_stars", {}):
+		syndicate_stars[str(k)] = int(data["syndicate_stars"][k])
+	syndicate_mission = int(data.get("syndicate_mission", 0))
 	return true
