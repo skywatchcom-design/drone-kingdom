@@ -75,4 +75,8 @@ Approved 5.10.2026: walls/support/build-menu/level-looks sketch (https://claude.
 player-built walls on the paths between pads (outer fence removed), Support Base with prepared air
 strikes and flares (no energy), build menu cards with pictures, and dramatic 5-level looks for units,
 drones, air strike and flare (level colors none/silver/blue/red/gold).
+Approved 6.10.2026: Clash-style base screen (https://claude.ai/artifact/4WKjsEP2MoNrBQh5iGnwTF), same layout
+in both languages: badge top left, workers top middle, resources top right, Attack + Army bottom left,
+Settings + Shop bottom right; Shop tabs army/resources/defenses/walls with picture cards; tapping a
+building shows Info / Upgrade / own action; big upgrade and info windows (`ShopUI`, `Icons` from SVG).
 Still waiting on the owner: Apple Developer and Google Play accounts.

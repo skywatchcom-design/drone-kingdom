@@ -39,6 +39,15 @@ const INFO := {
 	"jammer": "Scrambles drones inside its field so they drift and slow down.",
 }
 
+## The Shop's tabs and what each one sells, in order.
+const SHOP_ORDER := ["army", "resources", "defenses", "walls"]
+const SHOP_TABS := {
+	"army": ["camp", "quarters", "garage", "hangar", "support"],
+	"resources": ["generator", "storage", "pump", "tank"],
+	"defenses": ["mg", "at", "aa", "mortar", "jammer"],
+	"walls": ["wall"],
+}
+
 ## One short line per structure for the build menu cards.
 const SHORT := {
 	"generator": "Makes coins over time.",

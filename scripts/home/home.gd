@@ -3,7 +3,8 @@ extends Node3D
 ## tap a floating coin or fuel drop to collect, train an army (Army button or the Training
 ## Camp), unlock and upgrade units in the Garage and the Hangar, then Attack. Settings holds
 ## language, sound, practice on your own base and dev tools.
-## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` /
+## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` / `--screenshot-shop` /
+## `--screenshot-upgrade` / `--screenshot-info` /
 ## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-build` / `--screenshot-settings` to open a
 ## sheet on start.
 
@@ -28,6 +29,10 @@ var coins: Array[CoinBubble] = []
 ## Countdown labels over structures being built or upgraded, by cell key.
 var timers := {}
 var open_cell: Array = []
+## The wall piece tapped last, or [].
+var open_wall: Array = []
+## The Shop tab opened last.
+var shop_tab := "army"
 ## Which sheet is open besides a structure's ("army", "hangar", "garage" or ""), so it can
 ## be refreshed as training moves on.
 var open_sheet := ""
@@ -54,7 +59,11 @@ func _ready() -> void:
 	add_child(hud)
 	hud.attack_pressed.connect(func() -> void: _go_raid("enemy"))
 	hud.army_pressed.connect(_open_army)
-	hud.build_pressed.connect(func() -> void: _open_build([]))
+	hud.build_pressed.connect(func() -> void: _open_shop())
+	hud.actions_closed.connect(func() -> void:
+		open_cell = []
+		open_wall = []
+		marker.visible = false)
 	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
 	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
@@ -73,8 +82,12 @@ func _ready() -> void:
 		_open_lab("hangar")
 	elif args.has("--screenshot-garage"):
 		_open_lab("garage")
-	elif args.has("--screenshot-build"):
-		_open_build([])
+	elif args.has("--screenshot-build") or args.has("--screenshot-shop"):
+		_open_shop("defenses")
+	elif args.has("--screenshot-upgrade"):
+		_open_upgrade([4, 4])
+	elif args.has("--screenshot-info"):
+		_open_info("mg", 1, [4, 3])
 	elif args.has("--screenshot-settings"):
 		_open_settings()
 
@@ -198,7 +211,7 @@ func _tick_second() -> void:
 		hud.toast(I18n.t("Training done") if GameState.training.is_empty() else I18n.t("+%d trained") % trained)
 	_update_timers()
 	_refresh_header()
-	if not open_cell.is_empty() and GameState.is_busy(GameState.structure_at(open_cell)):
+	if not open_cell.is_empty() and hud.actions_open() and GameState.is_busy(GameState.structure_at(open_cell)):
 		_open_cell(open_cell)
 	elif open_sheet == "army" and hud.panel_open() and (trained > 0 or not GameState.training.is_empty()):
 		_open_army()
@@ -209,6 +222,7 @@ func _tick_second() -> void:
 func _refresh_header() -> void:
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	hud.set_header(GameState.hq_level(), target["name"], GameState.infinite_coins)
+	hud.set_shop_badge(ShopUI.new_count())
 	for bubble in coins:
 		if bubble.scale.x > 0.99:
 			bubble.set_amount(GameState.generator_pending(GameState.structure_at(bubble.cell)))
@@ -248,7 +262,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var edge := _pick_edge(touch.position, EDGE_PICK * 0.6)
 	if not edge.is_empty() and not GameState.wall_at(edge).is_empty() and (cell.is_empty() \
 			or cam.unproject_position(Walls.center(edge)).distance_to(touch.position) < cam.unproject_position(city.roof_top(cell)).distance_to(touch.position)):
-		_open_wall(edge)
+		_select_wall(edge)
 		return
 	if placing != "" and not cell.is_empty() and GameState.structure_at(cell).is_empty():
 		var type := placing
@@ -256,10 +270,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_do_build(type, cell)
 		return
 	placing = ""
+	hud.hide_panel()
 	if cell.is_empty():
-		hud.hide_panel()
-		open_cell = []
-		marker.visible = false
+		_deselect()
 	else:
 		_open_cell(cell)
 
@@ -312,113 +325,233 @@ func _pick_cell(screen_pos: Vector2) -> Array:
 
 
 func _reopen() -> void:
-	if not open_cell.is_empty() and hud.panel_open():
+	if not open_cell.is_empty() and hud.actions_open():
 		_open_cell(open_cell)
 
 
-# ---------------------------------------------------------------- build menu
+# ---------------------------------------------------------------- selection, shop and windows
 
+## Tapping a building: its name and level over round actions: Info, Upgrade (or Finish now
+## while it is busy), and its own action (train, prepare, units, collect).
 func _open_cell(cell: Array) -> void:
+	var s := GameState.structure_at(cell)
+	if s.is_empty():
+		_deselect()
+		return
 	open_cell = cell
+	open_wall = []
 	open_sheet = ""
 	marker.visible = true
 	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
+	var type: String = s["type"]
+	var lvl := int(s["level"])
+	var actions := [{"icon": "info", "label": I18n.t("Info"), "call": func() -> void: _open_info(type, lvl, cell)}]
+	if GameState.is_busy(s):
+		var gems := GameState.speedup_cost(cell)
+		actions.append({"icon": "clock", "label": I18n.t("Finish now"), "cost": str(gems), "cost_icon": "gem",
+			"disabled": not (GameState.infinite_coins or GameState.gems >= gems), "call": func() -> void: _do_speed_up(cell)})
+	elif lvl < Catalog.MAX_LEVEL:
+		actions.append({"icon": "up", "label": I18n.t("Upgrade"), "cost": HomeHud._thousands(Catalog.upgrade_cost(type, lvl)),
+			"cost_icon": "coin", "call": func() -> void: _open_upgrade(cell)})
+	var own := _own_action(type, cell)
+	if not own.is_empty():
+		actions.append(own)
+	var title := "%s  (%s)" % [Catalog.display_name(type), I18n.t("Lv %d") % lvl]
+	if GameState.is_busy(s):
+		title += "  ·  " + HomeHud.clock(GameState.seconds_left(s))
+	hud.show_actions(title, actions)
+
+
+func _own_action(type: String, cell: Array) -> Dictionary:
+	match type:
+		"camp", "quarters":
+			return {"icon": "train", "label": I18n.t("Train"), "call": _open_army}
+		"hangar":
+			return {"icon": "drone", "label": I18n.t("Drones"), "call": func() -> void: _open_lab("hangar")}
+		"garage":
+			return {"icon": "army", "label": I18n.t("Units"), "call": func() -> void: _open_lab("garage")}
+		"support":
+			return {"icon": "plane", "label": I18n.t("Prepare"), "call": _open_support}
+		"generator", "pump":
+			return {"icon": "coin" if type == "generator" else "fuel", "label": I18n.t("Collect"), "call": func() -> void: _collect(cell)}
+	return {}
+
+
+func _collect(cell: Array) -> void:
+	for bubble in coins:
+		if bubble.cell == cell and bubble.visible:
+			_try_collect(cam.unproject_position(bubble.global_position))
+			return
+	hud.toast(I18n.t("Nothing to collect yet"))
+
+
+func _deselect() -> void:
+	open_cell = []
+	open_wall = []
+	marker.visible = false
+	hud.hide_actions()
+
+
+## The big upgrade window for a structure: next-level picture, stat bars, time and price.
+func _open_upgrade(cell: Array) -> void:
 	var s := GameState.structure_at(cell)
-	if s.is_empty():
-		hud.show_content(I18n.t("Build here"), _build_menu(cell))
-	else:
-		var title := "%s  ·  %s" % [Catalog.display_name(s["type"]), I18n.t("Lv %d") % int(s["level"])]
-		hud.show_content(title, _structure_sheet(cell, s))
+	var type: String = s["type"]
+	var lvl := int(s["level"])
+	var extra := ""
+	if type == "hq":
+		var unlocks := _hq_unlocks(lvl)
+		if unlocks != "":
+			extra = I18n.t("Upgrading unlocks: %s") % unlocks
+	var confirm := func() -> void:
+		hud.hide_modal()
+		_do_upgrade(cell)
+	var content := ShopUI.upgrade_window(I18n.t("Upgrade %s to Lv %d?") % [Catalog.display_name(type), lvl + 1], type, lvl + 1,
+		_upgrade_rows(type, lvl), extra, HomeHud.clock(Catalog.build_seconds(type, lvl + 1)),
+		Catalog.upgrade_cost(type, lvl), "coin", GameState.upgrade_block_reason(cell), confirm)
+	hud.show_modal(content, Vector2(940, 540))
 
 
-func _build_menu(cell: Array) -> Control:
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	for option in ["wall"] + Catalog.BUILD_ORDER:
-		grid.add_child(_build_card(option, cell))
-	return grid
-
-
-## A build menu card: a picture of the structure, its name, one short line on what it does,
-## and the price and time (or why it can't be built yet, in which case the card is faded).
-func _build_card(type: String, cell: Array) -> Control:
-	var wall := type == "wall"
-	var why := GameState.wall_block_reason() if wall else GameState.build_block_reason(type)
-	var card := _card(why == "")
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if why != "":
-		card.modulate = Color(1, 1, 1, 0.6)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	card.add_child(box)
-	box.add_child(_thumbnail(type))
-	HomeHud.make_label(box, Catalog.display_name(type), 22)
-	var line := _wrap(HomeHud.make_label(box, I18n.t(Catalog.SHORT[type]), 16, SOFT))
-	line.custom_minimum_size.y = 42
-	var price := I18n.t("Build  ·  %d") % (Catalog.WALL_COST if wall else Catalog.build_cost(type))
-	if not wall:
-		price += "  ·  " + HomeHud.clock(Catalog.build_seconds(type, 1))
-	var b := HomeHud.make_button(box, price if why == "" else why, 16, 52)
-	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	b.disabled = why != ""
-	_gold(b, why == "")
-	b.pressed.connect(func() -> void:
-		if wall:
-			_start_wall_mode()
-		elif cell.is_empty():
-			_start_placing(type)
-		else:
-			_do_build(type, cell))
-	return card
-
-
-## A picture of a structure at level 1, rendered once into a small 3D stage.
-func _thumbnail(type: String) -> Control:
-	var frame := SubViewportContainer.new()
-	frame.stretch = true
-	frame.custom_minimum_size = Vector2(0, 118)
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var vp := SubViewport.new()
-	vp.own_world_3d = true
-	vp.msaa_3d = Viewport.MSAA_4X
-	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
-	frame.add_child(vp)
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.36, 0.48, 0.25)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.65, 0.7)
-	env.ambient_light_energy = 0.9
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	vp.add_child(world_env)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-52, 28, 0)
-	light.light_energy = 1.4
-	light.shadow_enabled = true
-	vp.add_child(light)
-	var stage := Node3D.new()
-	vp.add_child(stage)
-	MeshKit.add(stage, MeshKit.box(Vector3(5.4, 0.12, 5.4)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), Vector3(0, 0.06, 0))
+## Rows for the upgrade window: [icon, label, now, next, best], health first, then what the
+## structure does.
+func _upgrade_rows(type: String, lvl: int) -> Array:
+	var nxt := mini(lvl + 1, Catalog.MAX_LEVEL)
+	var top := Catalog.MAX_LEVEL
 	if type == "wall":
-		StructureModels.wall(stage, [0, 0, 1], 1).position = Vector3.ZERO
-	elif Catalog.is_defense(type):
-		var d := Catalog.make_defense(type)
-		stage.add_child(d)
-		d.setup(Catalog.defense_stats(type, 1), 0.12)
-		d.show_range(false)
+		return [["heart", I18n.t("Health"), Catalog.wall_hp(lvl), Catalog.wall_hp(nxt), Catalog.wall_hp(top)]]
+	var rows := [["heart", I18n.t("Health"), Catalog.structure_hp(type, lvl), Catalog.structure_hp(type, nxt), Catalog.structure_hp(type, top)]]
+	match type:
+		"hq":
+			rows.append(["star", I18n.t("Max level for others"), lvl, nxt, top])
+		"generator":
+			rows.append(["coin", I18n.t("Coins per minute"), Catalog.generator_rate(lvl), Catalog.generator_rate(nxt), Catalog.generator_rate(top)])
+			rows.append(["box", I18n.t("Holds up to"), Catalog.generator_rate(lvl) * Catalog.GENERATOR_FILL_MINUTES, Catalog.generator_rate(nxt) * Catalog.GENERATOR_FILL_MINUTES, Catalog.generator_rate(top) * Catalog.GENERATOR_FILL_MINUTES])
+		"pump":
+			rows.append(["fuel", I18n.t("Fuel per minute"), Catalog.pump_rate(lvl), Catalog.pump_rate(nxt), Catalog.pump_rate(top)])
+			rows.append(["box", I18n.t("Holds up to"), Catalog.pump_rate(lvl) * Catalog.GENERATOR_FILL_MINUTES, Catalog.pump_rate(nxt) * Catalog.GENERATOR_FILL_MINUTES, Catalog.pump_rate(top) * Catalog.GENERATOR_FILL_MINUTES])
+		"storage":
+			rows.append(["coin", I18n.t("Coin cap bonus"), 700 * lvl, 700 * nxt, 700 * top])
+		"tank":
+			rows.append(["fuel", I18n.t("Fuel cap bonus"), 600 * lvl, 600 * nxt, 600 * top])
+		"quarters":
+			rows.append(["army", I18n.t("Army space"), Catalog.quarters_space(lvl), Catalog.quarters_space(nxt), Catalog.quarters_space(top)])
+		"camp":
+			rows.append(["clock", I18n.t("Training speed %"), 100 + 25 * (lvl - 1), 100 + 25 * (nxt - 1), 100 + 25 * (top - 1)])
+		"hangar":
+			rows.append(["drone", I18n.t("Drone max level"), lvl, nxt, top])
+		"garage":
+			rows.append(["army", I18n.t("Soldier and tank max level"), lvl, nxt, top])
+		"support":
+			rows.append(["plane", I18n.t("Slots"), Catalog.support_slots(lvl), Catalog.support_slots(nxt), Catalog.support_slots(top)])
+	if Catalog.is_defense(type):
+		var a := Catalog.defense_stats(type, lvl)
+		var b := Catalog.defense_stats(type, nxt)
+		var c := Catalog.defense_stats(type, top)
+		for k: Array in [["dps", "boom", "Damage per second"], ["damage", "boom", "Damage per shot"], ["radius", "range", "Range"], ["splash", "range", "Blast radius"]]:
+			if a.has(k[0]):
+				rows.append([k[1], I18n.t(k[2]), a[k[0]], b[k[0]], c[k[0]]])
+	return rows
+
+
+## The info window: picture at this level, the numbers, what it is good and bad against,
+## and what it is for. A built structure can be removed from here.
+func _open_info(type: String, lvl: int, cell: Array) -> void:
+	var rows := []
+	if type == "wall":
+		rows.append([I18n.t("Health"), str(int(Catalog.wall_hp(lvl)))])
 	else:
-		StructureModels.build(stage, type, 1, Vector3(0, 0.12, 0))
-	for label in stage.find_children("*", "Label3D", true, false):
-		(label as Node3D).visible = false
-	var cam := Camera3D.new()
-	cam.fov = 40.0
-	vp.add_child(cam)
-	cam.look_at_from_position(Vector3(5.6, 6.4, 7.4), Vector3(0, 1.1, 0))
-	return frame
+		rows.append([I18n.t("Health"), str(int(Catalog.structure_hp(type, lvl)))])
+		rows.append_array(_stat_lines(type, lvl))
+	if Catalog.is_defense(type):
+		var vs: Dictionary = Catalog.DEFENSES[type].get("vs", {})
+		var names := {"soldier": I18n.t("Soldiers"), "tank": I18n.t("Tanks"), "air": I18n.t("Drones")}
+		var strong := []
+		var weak := []
+		for k in names:
+			var f := float(vs.get(k, 0.0))
+			if f >= 1.0:
+				strong.append(names[k])
+			elif f < 0.5:
+				weak.append(names[k])
+		if not strong.is_empty():
+			rows.append([I18n.t("Strong against"), ", ".join(strong)])
+		if not weak.is_empty():
+			rows.append([I18n.t("Weak against"), ", ".join(weak)])
+	var buttons := []
+	if not cell.is_empty() and type != "hq" and not GameState.is_busy(GameState.structure_at(cell)):
+		var remove := func() -> void:
+			hud.hide_modal()
+			_do_remove(cell)
+		buttons.append({"text": I18n.t("Remove (no refund)"), "call": remove})
+	var title := "%s  (%s)" % [Catalog.display_name(type), I18n.t("Lv %d") % lvl]
+	hud.show_modal(ShopUI.info_window(title, type, lvl, rows, I18n.t(Catalog.INFO[type]), buttons), Vector2(860, 500))
+
+
+## Tapping a wall piece: Info, Upgrade, and upgrading every piece of its level at once.
+func _select_wall(edge: Array) -> void:
+	var w := GameState.wall_at(edge)
+	var lvl := int(w["level"])
+	open_wall = edge
+	open_cell = []
+	marker.visible = true
+	marker.position = Walls.center(edge) + Vector3(0, 0.5, 0)
+	var actions := [{"icon": "info", "label": I18n.t("Info"), "call": func() -> void: _open_wall_info(edge)}]
+	if lvl < Catalog.MAX_LEVEL:
+		var cost := Catalog.wall_upgrade_cost(lvl)
+		actions.append({"icon": "up", "label": I18n.t("Upgrade"), "cost": HomeHud._thousands(cost), "cost_icon": "coin",
+			"call": func() -> void: _open_wall_upgrade(edge)})
+		var same := GameState.walls.filter(func(o: Dictionary) -> bool: return int(o["level"]) == lvl).size()
+		if same > 1:
+			var all := func() -> void:
+				var n := GameState.upgrade_walls_at_level(lvl)
+				if n > 0:
+					Audio.play("build")
+					hud.toast(I18n.t("%d walls upgraded") % n)
+					_rebuild()
+					_select_wall(edge)
+			actions.append({"icon": "up", "label": I18n.t("All %d") % same, "cost": HomeHud._thousands(cost * same), "cost_icon": "coin",
+				"disabled": GameState.wall_upgrade_reason(edge) != "", "call": all})
+	hud.show_actions("%s  (%s)" % [Catalog.display_name("wall"), I18n.t("Lv %d") % lvl], actions)
+
+
+func _open_wall_info(edge: Array) -> void:
+	var lvl := int(GameState.wall_at(edge)["level"])
+	var remove := func() -> void:
+		hud.hide_modal()
+		GameState.remove_wall(edge)
+		_rebuild()
+		_deselect()
+	var buttons := [{"text": I18n.t("Remove (no refund)"), "call": remove}]
+	hud.show_modal(ShopUI.info_window("%s  (%s)" % [Catalog.display_name("wall"), I18n.t("Lv %d") % lvl], "wall", lvl,
+		[[I18n.t("Health"), str(int(Catalog.wall_hp(lvl)))]], I18n.t(Catalog.INFO["wall"]), buttons), Vector2(820, 440))
+
+
+func _open_wall_upgrade(edge: Array) -> void:
+	var lvl := int(GameState.wall_at(edge)["level"])
+	var confirm := func() -> void:
+		hud.hide_modal()
+		if GameState.upgrade_wall(edge):
+			Audio.play("build")
+			_rebuild()
+			_select_wall(edge)
+	var content := ShopUI.upgrade_window(I18n.t("Upgrade %s to Lv %d?") % [Catalog.display_name("wall"), lvl + 1], "wall", lvl + 1,
+		_upgrade_rows("wall", lvl), "", "", Catalog.wall_upgrade_cost(lvl), "coin", GameState.wall_upgrade_reason(edge), confirm)
+	hud.show_modal(content, Vector2(900, 480))
+
+
+## The Shop, on `tab` (or the last tab used).
+func _open_shop(tab: String = "") -> void:
+	if tab != "":
+		shop_tab = tab
+	_deselect()
+	hud.hide_panel()
+	var buy := func(type: String) -> void:
+		hud.hide_modal()
+		if type == "wall":
+			_start_wall_mode()
+		else:
+			_start_placing(type)
+	var content := ShopUI.shop(shop_tab, func(t: String) -> void: _open_shop(t), buy, func(type: String) -> void: _open_info(type, 1, []))
+	hud.show_modal(content, Vector2(1180, 610))
 
 
 # ---------------------------------------------------------------- walls
@@ -482,59 +615,6 @@ func _paint_wall(screen_pos: Vector2) -> void:
 		_update_wall_banner()
 
 
-## A wall piece's sheet: its health, upgrade it alone or every piece of its level, or remove it.
-func _open_wall(edge: Array) -> void:
-	open_cell = []
-	open_sheet = ""
-	marker.visible = false
-	var w := GameState.wall_at(edge)
-	var lvl := int(w["level"])
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	_wrap(HomeHud.make_label(box, I18n.t(Catalog.INFO["wall"]), 22, SOFT))
-	var hp := Catalog.wall_hp(lvl)
-	HomeHud.stat_bar(box, I18n.t("Health %d") % int(hp), hp, Catalog.wall_hp(Catalog.MAX_LEVEL), Color(0.35, 0.85, 0.45))
-	if lvl >= Catalog.MAX_LEVEL:
-		HomeHud.make_label(box, I18n.t("Max level reached"), 26, GOLD)
-	else:
-		var reason := GameState.wall_upgrade_reason(edge)
-		var cost := Catalog.wall_upgrade_cost(lvl)
-		var up := HomeHud.make_button(box, I18n.t("Upgrade to Lv %d  ·  %d coins") % [lvl + 1, cost], 26, 84)
-		up.disabled = reason != ""
-		_gold(up, reason == "")
-		up.pressed.connect(func() -> void:
-			if GameState.upgrade_wall(edge):
-				Audio.play("build")
-				_rebuild()
-				_open_wall(edge))
-		var same := GameState.walls.filter(func(o: Dictionary) -> bool: return int(o["level"]) == lvl).size()
-		if same > 1:
-			var all := HomeHud.make_button(box, I18n.t("Upgrade all %d Lv %d walls  ·  %d coins") % [same, lvl, cost * same], 22, 72)
-			all.disabled = reason != ""
-			all.pressed.connect(func() -> void:
-				var n := GameState.upgrade_walls_at_level(lvl)
-				if n > 0:
-					Audio.play("build")
-					hud.toast(I18n.t("%d walls upgraded") % n)
-					_rebuild()
-					_open_wall(edge))
-		if reason != "":
-			_wrap(HomeHud.make_label(box, reason, 22, BAD))
-	HomeHud.make_button(box, I18n.t("Remove (no refund)"), 22, 64).pressed.connect(func() -> void:
-		GameState.remove_wall(edge)
-		_rebuild()
-		hud.hide_panel())
-	hud.show_content("%s  ·  %s" % [Catalog.display_name("wall"), I18n.t("Lv %d") % lvl], box)
-
-
-## The Build button: pick something, then tap a free pad for it.
-func _open_build(cell: Array) -> void:
-	open_cell = []
-	open_sheet = ""
-	marker.visible = false
-	hud.show_content(I18n.t("Build"), _build_menu(cell))
-
-
 func _start_placing(type: String) -> void:
 	placing = type
 	hud.hide_panel()
@@ -565,79 +645,6 @@ func _open_settings() -> void:
 		dev.add_theme_color_override("font_color", GOOD if GameState.infinite_coins else SOFT)
 		dev.pressed.connect(_toggle_infinite)
 	hud.show_content(I18n.t("Settings"), box)
-
-
-# ---------------------------------------------------------------- structure sheet
-
-## What a structure does, its health, a "now vs next level" table, and the upgrade button.
-func _structure_sheet(cell: Array, s: Dictionary) -> Control:
-	var type: String = s["type"]
-	var lvl := int(s["level"])
-	var maxed := lvl >= Catalog.MAX_LEVEL
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
-	_wrap(HomeHud.make_label(box, I18n.t(Catalog.INFO[type]), 23, SOFT))
-	var hp := Catalog.structure_hp(type, lvl)
-	HomeHud.stat_bar(box, I18n.t("Health %d") % int(hp), hp, hp, Color(0.35, 0.85, 0.45))
-
-	var now := _stat_lines(type, lvl)
-	var next := [] if maxed else _stat_lines(type, lvl + 1)
-	var table := GridContainer.new()
-	table.columns = 2 if maxed else 3
-	table.add_theme_constant_override("h_separation", 24)
-	table.add_theme_constant_override("v_separation", 8)
-	box.add_child(table)
-	HomeHud.make_label(table, "", 20)
-	HomeHud.make_label(table, I18n.t("Now"), 20, SOFT)
-	if not maxed:
-		HomeHud.make_label(table, I18n.t("Lv %d") % (lvl + 1), 20, GOOD)
-	for i in now.size():
-		var name_label := HomeHud.make_label(table, now[i][0], 23, SOFT)
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		HomeHud.make_label(table, now[i][1], 25)
-		if not maxed:
-			var changed: bool = next[i][1] != now[i][1]
-			HomeHud.make_label(table, next[i][1], 25, GOOD if changed else SOFT)
-
-	if type == "hq" and not maxed:
-		var unlocks := _hq_unlocks(lvl)
-		if unlocks != "":
-			_wrap(HomeHud.make_label(box, I18n.t("Upgrading unlocks: %s") % unlocks, 22, GOLD))
-
-	var reason := GameState.upgrade_block_reason(cell)
-	if GameState.is_busy(s):
-		var what := I18n.t("Building") if s.get("fresh", false) else I18n.t("Upgrading to Lv %d") % (lvl + 1)
-		var line := HomeHud.make_label(box, "%s  ·  %s" % [what, HomeHud.clock(GameState.seconds_left(s))], 28, GOLD)
-		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var gems := GameState.speedup_cost(cell)
-		var fast := HomeHud.make_button(box, I18n.t("Finish now  ·  %d gems") % gems, 28, 100)
-		var can := GameState.infinite_coins or GameState.gems >= gems
-		fast.disabled = not can
-		_gold(fast, can)
-		fast.pressed.connect(func() -> void: _do_speed_up(cell))
-	elif maxed:
-		HomeHud.make_label(box, I18n.t("Max level reached"), 26, GOLD)
-	else:
-		var up := HomeHud.make_button(box, I18n.t("Upgrade to Lv %d  ·  %d coins  ·  %s") % [lvl + 1, Catalog.upgrade_cost(type, lvl), HomeHud.clock(Catalog.build_seconds(type, lvl + 1))], 26, 100)
-		up.disabled = reason != ""
-		_gold(up, reason == "")
-		up.pressed.connect(func() -> void: _do_upgrade(cell))
-		if reason != "":
-			var why := HomeHud.make_label(box, reason, 23, BAD)
-			why.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	var extra := HBoxContainer.new()
-	extra.add_theme_constant_override("separation", 12)
-	box.add_child(extra)
-	if type == "hangar" or type == "garage":
-		HomeHud.make_button(extra, I18n.t("Unlock and upgrade units"), 22, 72).pressed.connect(func() -> void: _open_lab(type))
-	if type == "support":
-		HomeHud.make_button(extra, I18n.t("Prepare and upgrade"), 22, 72).pressed.connect(_open_support)
-	if type == "camp" or type == "quarters":
-		HomeHud.make_button(extra, I18n.t("Train army"), 22, 72).pressed.connect(_open_army)
-	if type != "hq" and not GameState.is_busy(s):
-		HomeHud.make_button(extra, I18n.t("Remove (no refund)"), 22, 72).pressed.connect(func() -> void: _do_remove(cell))
-	return box
 
 
 ## [label, value] pairs describing a structure at a level, in the same order for every level.
@@ -1162,7 +1169,7 @@ func _open_workers() -> void:
 func _do_remove(cell: Array) -> void:
 	if GameState.remove(cell):
 		_rebuild()
-		hud.hide_panel()
+		_deselect()
 
 
 func _do_unit(type: String) -> void:
