@@ -79,4 +79,6 @@ Approved 6.10.2026: Clash-style base screen (https://claude.ai/artifact/4WKjsEP2
 in both languages: badge top left, workers top middle, resources top right, Attack + Army bottom left,
 Settings + Shop bottom right; Shop tabs army/resources/defenses/walls with picture cards; tapping a
 building shows Info / Upgrade / own action; big upgrade and info windows (`ShopUI`, `Icons` from SVG).
+Approved 6.10.2026: Syndicate sketch (https://claude.ai/artifact/G1Y41QRsCwW8TVG8wyP9NB) with leader RAZOR
+(scarred mercenary commander, red implant eye, metal jaw, spiked armor; aggressive taunts).
 Still waiting on the owner: Apple Developer and Google Play accounts.
