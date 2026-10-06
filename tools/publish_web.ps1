@@ -6,6 +6,8 @@ $root = Split-Path $PSScriptRoot -Parent
 $godot = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.7.2-stable_win64_console.exe"
 Set-Location $root
 New-Item -ItemType Directory -Force build\web | Out-Null
+# Keep Godot from importing its own output.
+if (-not (Test-Path build\.gdignore)) { New-Item -ItemType File build\.gdignore | Out-Null }
 & $godot --headless --path . --export-release "Web" build\web\index.html
 $pages = "$env:TEMP\skywatch-pages"
 if (Test-Path $pages) { Remove-Item -Recurse -Force $pages }
