@@ -28,6 +28,13 @@ Read the GDD before changing gameplay: it records every product decision made wi
 - Repo: https://github.com/skywatchcom-design/drone-kingdom (branch `main`). Commit messages via a file
   (`git commit -F`) because PowerShell mangles quotes in inline messages.
 
+## Download size budget (owner, 7.10.2026)
+The store download must stay under 150 MB (aim for under 80). Rules: textures at most 1024 px
+(webp/jpg sources, VRAM-compressed on import); AI models slimmed to about 10k triangles; audio as
+ogg; ship arm64 only; the export must exclude `assets/models/incoming/` (source GLBs), `tmp/`,
+`tools/`, `tests/` and `docs/`. `tmp/` holds a `.gdignore` so Godot never imports screenshots.
+Check the exported size on every build.
+
 ## Code map
 - `scripts/autoload/game_state.gd` – the save and every economy rule (build/upgrade/army/collect).
   Settings (language, sound, dev infinite coins) live in a separate `user://settings.json`.
