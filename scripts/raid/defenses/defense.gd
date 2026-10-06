@@ -37,6 +37,8 @@ func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 	StructureModels.chevrons(model, level, Vector3(1.85, 0, 1.85))
 	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.22), MeshKit.glow(_ring_color(), 0.45), Vector3(0, roof_y + 0.15, 0))
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Hidden until the player taps this defense (owner feedback: rings everywhere are noise).
+	_ring.visible = false
 	StructureModels.level_label(self, level, head_y + 2.6)
 
 

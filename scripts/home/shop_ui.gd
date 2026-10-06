@@ -497,8 +497,14 @@ static func picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
 	vp.msaa_3d = Viewport.MSAA_4X
-	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	frame.add_child(vp)
+	# Draw once the frame has a real size (and again if it changes): a first render at zero
+	# size breaks the web (Compatibility) renderer and left battle cards blank.
+	frame.resized.connect(func() -> void:
+		if frame.size.x >= 4.0 and frame.size.y >= 4.0:
+			vp.size = Vector2i(frame.size)
+			vp.render_target_update_mode = SubViewport.UPDATE_ONCE)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = bg

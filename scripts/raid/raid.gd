@@ -63,6 +63,7 @@ var flare_left := 0.0
 var flare_node: Node3D
 var _flare_smoke := 0.0
 var army := {}
+var _pinch := Pinch.new()
 ## The red squares shown for a moment after a tap too close to a building.
 var _zones: Node3D
 var _zone_fill: StandardMaterial3D
@@ -226,8 +227,13 @@ func _first_available() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	var zoom := _pinch.handle(event)
+	if zoom != 1.0:
+		cam.size = clampf(cam.size / zoom, 36.0, 90.0)
+		return
 	if event is InputEventScreenDrag:
-		_pan((event as InputEventScreenDrag).relative)
+		if not _pinch.gesture:
+			_pan((event as InputEventScreenDrag).relative)
 		return
 	if event is InputEventMouseButton and event.pressed:
 		var wheel := event as InputEventMouseButton
@@ -242,7 +248,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if touch.pressed:
 		press_pos = touch.position
 		return
-	if hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
+	if _pinch.gesture or hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
 		return
 	_try_deploy(touch.position)
 

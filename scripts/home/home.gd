@@ -3,7 +3,7 @@ extends Node3D
 ## tap a floating coin or fuel drop to collect, train an army (Army button or the Training
 ## Camp), unlock and upgrade units in the Garage and the Hangar, then Attack. Settings holds
 ## language, sound, practice on your own base and dev tools.
-## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` / `--screenshot-shop` /
+## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` / `--screenshot-place` / `--screenshot-shop` /
 ## `--screenshot-upgrade` / `--screenshot-info` /
 ## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-build` / `--screenshot-settings` to open a
 ## sheet on start.
@@ -39,7 +39,15 @@ var army_box: Control
 ## be refreshed as training moves on.
 var open_sheet := ""
 ## Structure type picked from the Build menu, waiting for a free pad to be tapped.
-var placing := ""
+var placing := "":
+	set(value):
+		placing = value
+		_show_free_pads(value != "")
+## Glowing squares on every free pad while a building waits to be placed.
+var _free_pads: MultiMeshInstance3D
+var _free_pad_mat: StandardMaterial3D
+var _blink := 0.0
+var _pinch := Pinch.new()
 ## Wall mode: tapping or dragging along the paths between pads builds wall pieces.
 var wall_mode := false
 ## Small markers on the empty paths, shown in wall mode.
@@ -81,6 +89,8 @@ func _ready() -> void:
 		_open_cell([4, 4])
 	elif args.has("--screenshot-army"):
 		_open_army()
+	elif args.has("--screenshot-place"):
+		_start_placing("generator")
 	elif args.has("--screenshot-hangar"):
 		_open_lab("hangar")
 	elif args.has("--screenshot-garage"):
@@ -198,6 +208,9 @@ func _key(cell: Array) -> String:
 func _process(delta: float) -> void:
 	for defense in defenses:
 		defense.tick(delta, [])
+	if _free_pads != null and _free_pads.visible:
+		_blink += delta
+		_free_pad_mat.albedo_color.a = 0.25 + 0.3 * (0.5 + 0.5 * sin(_blink * 6.0))
 	header_timer -= delta
 	if header_timer <= 0.0:
 		header_timer = 1.0
@@ -244,7 +257,13 @@ func _refresh_header() -> void:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	var zoom := _pinch.handle(event)
+	if zoom != 1.0:
+		cam.size = clampf(cam.size / zoom, 36.0, 90.0)
+		return
 	if event is InputEventScreenDrag:
+		if _pinch.gesture:
+			return
 		var drag := event as InputEventScreenDrag
 		if wall_mode and not hud.blocks(drag.position):
 			_paint_wall(drag.position)
@@ -264,7 +283,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if touch.pressed:
 		press_pos = touch.position
 		return
-	if hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
+	if _pinch.gesture or hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
 		return
 	if wall_mode:
 		_paint_wall(touch.position)
@@ -355,6 +374,7 @@ func _open_cell(cell: Array) -> void:
 	open_wall = []
 	open_sheet = ""
 	marker.visible = true
+	_show_range(cell)
 	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
 	var type: String = s["type"]
 	var lvl := int(s["level"])
@@ -402,7 +422,33 @@ func _deselect() -> void:
 	open_cell = []
 	open_wall = []
 	marker.visible = false
+	_show_range([])
 	hud.hide_actions()
+
+
+## Shows the range ring of the defense on `cell` only (none for an empty cell).
+func _show_range(cell: Array) -> void:
+	var at := City.cell_pos(cell) if not cell.is_empty() else Vector3(INF, 0, INF)
+	for d in defenses:
+		d.show_range(Vector2(d.position.x - at.x, d.position.z - at.z).length() < 1.0)
+
+
+## Blinks every free pad while a building waits to be placed, so it is clear where it can go.
+func _show_free_pads(on: bool) -> void:
+	if _free_pads != null:
+		_free_pads.queue_free()
+		_free_pads = null
+	if not on or city == null:
+		return
+	var xfs := []
+	for c in City.GRID:
+		for r in City.GRID:
+			if GameState.structure_at([c, r]).is_empty():
+				xfs.append(Transform3D(Basis(), city.roof_top([c, r]) + Vector3(0, 0.05, 0)))
+	_free_pad_mat = MeshKit.glow(Color(0.45, 1.0, 0.45), 0.4)
+	_free_pads = MeshKit.multi(level, MeshKit.box(Vector3(City.PAD - 0.2, 0.06, City.PAD - 0.2)), _free_pad_mat, xfs)
+	_free_pads.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_blink = 0.0
 
 
 ## The big upgrade window for a structure: next-level picture, stat bars, time and price.
