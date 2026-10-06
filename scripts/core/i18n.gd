@@ -342,9 +342,15 @@ static func rtl() -> bool:
 	return lang == "he"
 
 
-## Point the default UI and 3D-label font at a system font that has Hebrew glyphs
-## (Segoe UI / Arial on Windows, Arial Hebrew / system font on iOS and Android).
+## The default UI and 3D-label font: Assistant (bundled, OFL), which has Hebrew and Latin, so
+## Hebrew shows everywhere, including the web build where system fonts are not available.
+## Bold-ish weight for a game look; system fonts stay as a fallback for missing glyphs.
 static func setup_font() -> void:
-	var font := SystemFont.new()
-	font.font_names = PackedStringArray(["Rubik", "Segoe UI", "Arial", "Arial Hebrew", "Noto Sans Hebrew", "Helvetica Neue", "sans-serif"])
+	var system := SystemFont.new()
+	system.font_names = PackedStringArray(["Segoe UI", "Arial", "Arial Hebrew", "Helvetica Neue", "sans-serif"])
+	var base: FontFile = load("res://assets/fonts/Assistant.ttf")
+	base.fallbacks = [system]
+	var font := FontVariation.new()
+	font.base_font = base
+	font.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 650}
 	ThemeDB.fallback_font = font
