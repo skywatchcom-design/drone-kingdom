@@ -223,20 +223,19 @@ func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dic
 		var count := _card_label(b, "", 22, Vector2(8, 2))
 		count.add_theme_constant_override("outline_size", 6)
 		count.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.1))
-		var badge := PanelContainer.new()
+		var badge := Panel.new()
 		var bs := HomeHud.flat(UnitModels.LEVEL_COLORS[lvl - 1].lightened(0.25))
 		bs.set_corner_radius_all(5)
-		bs.content_margin_left = 6
-		bs.content_margin_right = 6
 		badge.add_theme_stylebox_override("panel", bs)
-		badge.position = Vector2(6, CARD.y - 50)
+		badge.position = Vector2(6, CARD.y - 48)
+		badge.size = Vector2(24, 20)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(badge)
-		var bl := Label.new()
-		bl.text = str(lvl)
-		bl.add_theme_font_size_override("font_size", 15)
+		var bl := _card_label(badge, str(lvl), 14, Vector2.ZERO)
+		bl.size = badge.size
+		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		bl.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
-		badge.add_child(bl)
 		var strip := ColorRect.new()
 		strip.color = Color(0.04, 0.05, 0.04, 0.75)
 		strip.position = Vector2(0, CARD.y - 24)

@@ -28,7 +28,11 @@ func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 	model.position.y = roof_y
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.0 + 0.03 * (level - 1))
 	add_child(model)
+	MeshKit.blob(self, Vector2(6.4, 6.4), Vector3(0, roof_y, 0), 0.5)
+	MeshKit.grime_root = model
+	MeshKit.grime_top = 0.8
 	_build()
+	MeshKit.grime_root = null
 	head_y = roof_y + _head_height() * model.scale.y
 	StructureModels.chevrons(model, level, Vector3(1.85, 0, 1.85))
 	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.22), MeshKit.glow(_ring_color(), 0.45), Vector3(0, roof_y + 0.15, 0))

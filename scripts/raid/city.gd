@@ -28,6 +28,7 @@ var _pine_colors: Array = []
 var _bushes: Array = []
 var _rocks: Array = []
 var _stream: Array = []
+var _blobs: Array = []
 
 
 static func cell_pos(cell: Array) -> Vector3:
@@ -50,7 +51,7 @@ func roof_top(cell: Array) -> Vector3:
 ## where to build), only the occupied ones in a raid.
 func build(seed_value: int, pad_cells: Array) -> void:
 	_rng.seed = seed_value
-	MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.mat(Color(0.36, 0.55, 0.26), 0.95), Vector3(0, -0.2, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.surface("grass", Color(0.36, 0.46, 0.24), 1.0, 0.0, true), Vector3(0, -0.2, 0))
 	_add_compound(pad_cells)
 	_add_stream()
 	_add_fields()
@@ -70,23 +71,53 @@ func _process(delta: float) -> void:
 
 func _add_compound(pad_cells: Array) -> void:
 	var lawn := YARD * 2.0
-	MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.mat(Color(0.47, 0.64, 0.31), 0.95), Vector3(0, 0.03, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.surface("grass", Color(0.4, 0.5, 0.26), 1.0, 0.0, true), Vector3(0, 0.03, 0))
 	for c in GRID:
 		for r in GRID:
 			heights[_key([c, r])] = PAD_H + 0.06
 	var pads := []
 	for cell in pad_cells:
 		pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.mat(Color(0.6, 0.67, 0.48), 0.9), pads)
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.surface("concrete", Color(0.58, 0.56, 0.5), 0.95, 0.0, true), pads)
 	var borders := []
 	for t: Transform3D in pads:
 		borders.append(Transform3D(Basis(), t.origin + Vector3(0, -0.02, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.mat(Color(0.52, 0.56, 0.42), 0.9), borders)
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color(0.47, 0.46, 0.4), 0.95, 0.0, true), borders)
+	_add_tufts(pad_cells)
+
+
+## Short grass tufts on the lawn between the pads, and wild ones outside.
+func _add_tufts(pad_cells: Array) -> void:
+	var blade := MeshKit.cyl(0.02, 0.1, 0.6, 4)
+	var xfs := []
+	var colors := []
+	var shades := [Color(0.33, 0.47, 0.2), Color(0.39, 0.53, 0.23), Color(0.48, 0.56, 0.27), Color(0.3, 0.44, 0.19)]
+	var tries := 0
+	while xfs.size() < 3600 and tries < 12000:
+		tries += 1
+		var p := Vector3(_rng.randf_range(-YARD - 30.0, YARD + 30.0), 0, _rng.randf_range(-YARD - 30.0, YARD + 30.0))
+		var on_pad := false
+		for cell in pad_cells:
+			var c := cell_pos(cell)
+			if absf(p.x - c.x) < PAD / 2.0 + 0.2 and absf(p.z - c.z) < PAD / 2.0 + 0.2:
+				on_pad = true
+				break
+		if on_pad or (absf(p.x) < 4.0 and p.z > YARD - 3.0):
+			continue
+		var h := _rng.randf_range(0.5, 1.3)
+		var b := Basis(Vector3.UP, _rng.randf() * TAU).rotated(Vector3.RIGHT, _rng.randf_range(-0.3, 0.3)).scaled(Vector3(1, h, 1))
+		xfs.append(Transform3D(b, p + Vector3(0, 0.06 + 0.4 * h, 0)))
+		colors.append(shades[xfs.size() % shades.size()])
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 1.0
+	var mi := MeshKit.multi(self, blade, m, xfs, colors)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 
 func _add_road() -> void:
-	var dirt := MeshKit.mat(Color(0.62, 0.52, 0.38), 0.95)
+	var dirt := MeshKit.surface("dirt", Color(0.66, 0.55, 0.4), 1.0, 0.0, true)
 	MeshKit.add(self, MeshKit.box(Vector3(6.0, 0.05, 120.0)), dirt, Vector3(0, 0.025, YARD + 60.0))
 	MeshKit.add(self, MeshKit.box(Vector3(7.0, 0.06, 4.0)), dirt, Vector3(0, 0.03, YARD - 1.0))
 
@@ -155,7 +186,7 @@ func _add_hills() -> void:
 	for i in 10:
 		var a := TAU * i / 10.0 + _rng.randf_range(-0.2, 0.2)
 		var d := _rng.randf_range(110.0, 150.0)
-		var hill := MeshKit.add(self, MeshKit.sphere(1.0, 20), MeshKit.mat(Color(0.3, 0.47, 0.25).lerp(Color(0.42, 0.55, 0.32), _rng.randf()), 0.95), Vector3(cos(a) * d, -6.0, sin(a) * d))
+		var hill := MeshKit.add(self, MeshKit.sphere(1.0, 20), MeshKit.surface("grass", Color(0.42, 0.6, 0.3).lerp(Color(0.5, 0.64, 0.36), _rng.randf()), 1.0, 0.0, true), Vector3(cos(a) * d, -6.0, sin(a) * d))
 		hill.scale = Vector3(_rng.randf_range(40.0, 70.0), _rng.randf_range(14.0, 24.0), _rng.randf_range(30.0, 50.0))
 
 
@@ -174,10 +205,20 @@ func _scatter_nature() -> void:
 		var size := _rng.randf_range(0.8, 1.4)
 		if roll < 0.4:
 			_trunks.append(Transform3D(Basis().scaled(Vector3.ONE * size), p + Vector3(0, 0.75 * size, 0)))
-			_leaves.append(Transform3D(Basis().scaled(Vector3(1.0, 0.9, 1.0) * size * 1.3), p + Vector3(0, 2.2 * size, 0)))
-			_leaf_colors.append(Color(0.24, 0.5, 0.2).lerp(Color(0.45, 0.63, 0.24), _rng.randf()))
+			# A crown of several leafy clumps in slightly different greens.
+			var base := Color(0.24, 0.48, 0.2).lerp(Color(0.42, 0.6, 0.24), _rng.randf())
+			for k in 5:
+				var off := Vector3(_rng.randf_range(-0.7, 0.7), _rng.randf_range(-0.3, 0.7), _rng.randf_range(-0.7, 0.7)) * size
+				var r := _rng.randf_range(0.6, 0.95) * size * 1.15
+				if k == 0:
+					off = Vector3.ZERO
+					r = size * 1.2
+				_leaves.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(1.0, 0.85, 1.0) * r), p + Vector3(0, 2.2 * size, 0) + off))
+				_leaf_colors.append(base.lightened(_rng.randf_range(-0.08, 0.12)))
+			_blobs.append(Transform3D(Basis().scaled(Vector3.ONE * size * 3.4), p + Vector3(0, 0.05, 0)))
 		elif roll < 0.7:
 			_pines.append(Transform3D(Basis().scaled(Vector3(1.0, 1.0, 1.0) * size), p + Vector3(0, 2.4 * size, 0)))
+			_blobs.append(Transform3D(Basis().scaled(Vector3.ONE * size * 2.8), p + Vector3(0, 0.05, 0)))
 			_pine_colors.append(Color(0.14, 0.36, 0.2).lerp(Color(0.22, 0.45, 0.25), _rng.randf()))
 			_trunks.append(Transform3D(Basis().scaled(Vector3(0.7, 0.6, 0.7) * size), p + Vector3(0, 0.45 * size, 0)))
 		elif roll < 0.88:
@@ -204,10 +245,15 @@ func _flush_multimeshes() -> void:
 	var leaf_mat := MeshKit.mat(Color.WHITE, 0.9)
 	leaf_mat.vertex_color_use_as_albedo = true
 	MeshKit.multi(self, MeshKit.cyl(0.14, 0.2, 1.5, 8), MeshKit.mat(Color(0.42, 0.29, 0.18), 0.9), _trunks)
-	MeshKit.multi(self, MeshKit.sphere(1.0, 10), leaf_mat, _leaves, _leaf_colors)
+	MeshKit.multi(self, MeshKit.sphere(1.0, 12), leaf_mat, _leaves, _leaf_colors)
+	# Soft shade under the trees: one blob quad per tree, in a single draw call.
+	var shade := MeshKit.blob(self, Vector2.ONE, Vector3.ZERO, 0.45)
+	var shades := MeshKit.multi(self, shade.mesh, shade.material_override, _blobs)
+	shades.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shade.queue_free()
 	MeshKit.multi(self, MeshKit.cyl(0.0, 1.3, 3.6, 10), leaf_mat, _pines, _pine_colors)
 	MeshKit.multi(self, MeshKit.sphere(0.9, 8), MeshKit.mat(Color(0.3, 0.5, 0.22), 0.9), _bushes)
-	MeshKit.multi(self, MeshKit.sphere(0.8, 6), MeshKit.mat(Color(0.55, 0.55, 0.53), 0.9), _rocks)
+	MeshKit.multi(self, MeshKit.sphere(0.8, 7), MeshKit.surface("concrete", Color(0.62, 0.6, 0.56), 0.95), _rocks)
 
 
 func _key(cell: Array) -> String:

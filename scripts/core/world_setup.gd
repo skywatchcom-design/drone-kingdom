@@ -19,7 +19,8 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.55
+	env.tonemap_exposure = 0.92
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	# Haze that only starts behind the focus point, so distant blocks fade into the sky.
 	env.fog_enabled = true
@@ -33,9 +34,10 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
-	sun.light_energy = 1.4
-	sun.light_color = Color(1.0, 0.95, 0.87)
+	sun.light_energy = 1.7
+	sun.light_color = Color(1.0, 0.92, 0.8)
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.6
 	sun.directional_shadow_max_distance = 320.0
 	parent.add_child(sun)
 

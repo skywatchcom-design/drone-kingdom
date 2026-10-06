@@ -18,7 +18,7 @@ func _build() -> void:
 	var olive := MeshKit.mat(UnitModels.OLIVE, 0.7, 0.2)
 	var metal := MeshKit.mat(UnitModels.METAL, 0.5, 0.5)
 	if level >= 3:
-		MeshKit.add(model, MeshKit.cyl(1.7, 1.9, 0.4, 20), MeshKit.mat(StructureModels.CONCRETE, 0.85), Vector3(0, 0.2, 0))
+		MeshKit.add(model, MeshKit.cyl(1.7, 1.9, 0.4, 20), MeshKit.surface("concrete", StructureModels.CONCRETE, 0.9), Vector3(0, 0.2, 0))
 		StructureModels.sandbags(model, 2.2, 1)
 	_pivot = Node3D.new()
 	_pivot.position.y = 0.4 if level >= 3 else 0.0

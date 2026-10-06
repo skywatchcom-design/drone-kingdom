@@ -15,7 +15,7 @@ var _shots := 0
 
 func _build() -> void:
 	if level >= 5:
-		MeshKit.add(model, MeshKit.cyl(1.9, 2.0, 0.9, 24), MeshKit.mat(StructureModels.CONCRETE, 0.85), Vector3(0, 0.45, 0))
+		MeshKit.add(model, MeshKit.cyl(1.9, 2.0, 0.9, 24), MeshKit.surface("concrete", StructureModels.CONCRETE, 0.9), Vector3(0, 0.45, 0))
 	StructureModels.sandbags(model, 1.7, 2 if level >= 3 else 1)
 	var steel := MeshKit.mat(Color(0.18, 0.19, 0.2), 0.6, 0.4)
 	for a in [0.0, 2.1, 4.2]:

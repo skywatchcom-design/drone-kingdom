@@ -18,7 +18,7 @@ var _shots := 0
 func _build() -> void:
 	var olive := MeshKit.mat(UnitModels.OLIVE, 0.7)
 	var metal := MeshKit.mat(UnitModels.METAL, 0.5, 0.5)
-	MeshKit.add(model, MeshKit.cyl(1.3, 1.5, 0.5, 20), MeshKit.mat(StructureModels.CONCRETE, 0.85), Vector3(0, 0.25, 0))
+	MeshKit.add(model, MeshKit.cyl(1.3, 1.5, 0.5, 20), MeshKit.surface("concrete", StructureModels.CONCRETE, 0.9), Vector3(0, 0.25, 0))
 	_pivot = Node3D.new()
 	_pivot.position.y = 0.5
 	model.add_child(_pivot)

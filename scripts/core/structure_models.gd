@@ -18,6 +18,9 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 	root.position = top
 	root.scale = Vector3.ONE * (1.0 if type in PAD_SIZED else SCALE)
 	var height := 3.0
+	MeshKit.grime_root = root
+	MeshKit.grime_top = 1.3
+	MeshKit.blob(root, Vector2(6.6, 6.6), Vector3.ZERO, 0.5)
 	match type:
 		"hq":
 			height = _hq(root, level)
@@ -39,6 +42,7 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _support(root, level)
 		"hangar":
 			height = _hangar(root, level)
+	MeshKit.grime_root = null
 	if type not in PAD_SIZED:
 		chevrons(root, level, Vector3(1.7, 0, 1.7))
 	level_label(root, level, height + 1.2)
@@ -396,7 +400,7 @@ static func _support(root: Node3D, level: int) -> float:
 		root.add_child(jet)
 		UnitModels.aircraft(jet, 3)
 	if level >= 5:
-		var shelter := MeshKit.add(root, MeshKit.cyl(1.7, 1.7, 3.4, 20), MeshKit.mat(CONCRETE, 0.85), Vector3(0.4, 0, -0.6))
+		var shelter := MeshKit.add(root, MeshKit.cyl(1.7, 1.7, 3.4, 20), MeshKit.surface("concrete", CONCRETE, 0.9), Vector3(0.4, 0, -0.6))
 		shelter.rotation.x = PI / 2.0
 		shelter.scale = Vector3(1, 1, 0.9)
 	chevrons(root, level, Vector3(2.3, 0, 2.6))
@@ -438,7 +442,7 @@ static func sandbags(parent: Node3D, r: float, rows: int) -> void:
 			var a := (i + (row % 2) * 0.5) / n * TAU
 			var b := Basis(Vector3.UP, -a).scaled(Vector3(1.25, 0.55, 0.8))
 			transforms.append(Transform3D(b, Vector3(cos(a) * r, 0.2 + row * 0.3, sin(a) * r)))
-	MeshKit.multi(parent, MeshKit.sphere(0.32, 8), MeshKit.mat(BAG, 0.95), transforms)
+	MeshKit.multi(parent, MeshKit.sphere(0.32, 8), MeshKit.surface("canvas", BAG, 0.95), transforms)
 
 
 ## An olive ammo crate with a yellow band.
@@ -449,7 +453,11 @@ static func crate(parent: Node3D, x: float, z: float, s: float = 1.0) -> void:
 
 ## A camouflage net on four poles.
 static func camo_net(parent: Node3D, w: float, d: float, y: float) -> void:
-	MeshKit.add(parent, MeshKit.box(Vector3(w, 0.05, d)), MeshKit.mat(Color(0.33, 0.38, 0.23), 0.95), Vector3(0, y, 0))
+	var net := PlaneMesh.new()
+	net.size = Vector2(w, d)
+	net.subdivide_width = 6
+	net.subdivide_depth = 6
+	MeshKit.add(parent, net, MeshKit.surface("net", Color(0.33, 0.38, 0.23), 1.0), Vector3(0, y, 0))
 	for i in 4:
 		MeshKit.add(parent, MeshKit.cyl(0.05, 0.05, y, 6), MeshKit.mat(WOOD, 0.9), Vector3((-1 if i < 2 else 1) * w * 0.45, y / 2.0, (-1 if i % 2 else 1) * d * 0.45))
 
@@ -502,12 +510,12 @@ static func wall(parent: Node3D, edge: Array, level: int) -> Node3D:
 			var rows := 2 if level == 3 else 3
 			for r in rows:
 				for k in 3:
-					MeshKit.add(root, MeshKit.box(Vector3(seg / 3.0 - 0.02, 0.28, 0.42)), MeshKit.mat(BAG, 0.95), Vector3(x - seg / 3.0 + k * seg / 3.0 + (r % 2) * 0.12, 0.15 + r * 0.27, 0))
+					MeshKit.add(root, MeshKit.box(Vector3(seg / 3.0 - 0.02, 0.28, 0.42)), MeshKit.surface("canvas", BAG, 0.95), Vector3(x - seg / 3.0 + k * seg / 3.0 + (r % 2) * 0.12, 0.15 + r * 0.27, 0))
 			if level == 4:
 				MeshKit.add(root, MeshKit.box(Vector3(0.08, 1.4, 0.08)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(x - seg / 2.0 + 0.05, 0.7, 0))
 				_wire_coil(root, wire, x, 1.05, seg)
 		else:
-			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.3, 1.0)), MeshKit.mat(CONCRETE, 0.85), Vector3(x, 0.15, 0))
+			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.3, 1.0)), MeshKit.surface("concrete", CONCRETE, 0.9), Vector3(x, 0.15, 0))
 			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 1.9, 0.3)), MeshKit.mat(Color(0.72, 0.71, 0.68), 0.85), Vector3(x, 1.25, 0))
 			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.12, 0.31)), MeshKit.mat(RUST, 0.6), Vector3(x, 1.7, 0))
 			_wire_coil(root, wire, x, 2.35, seg)

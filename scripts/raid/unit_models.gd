@@ -206,58 +206,74 @@ static func _robot(root: Node3D, level: int) -> Dictionary:
 
 
 static func _soldier(root: Node3D, vest_color: Color, gear_color: Color, engineer: bool) -> Dictionary:
-	var uni := MeshKit.mat(OLIVE, 0.85)
-	var dark := MeshKit.mat(OLIVE_DARK, 0.85)
+	# B+ look: real proportions, rounded limbs, camo uniform, canvas vest and pack.
+	var uni := MeshKit.surface("camo", OLIVE, 0.95)
+	var dark := MeshKit.surface("camo", OLIVE_DARK, 0.9)
 	var boots := MeshKit.mat(Color(0.16, 0.15, 0.12), 0.8)
+	var pads := MeshKit.mat(Color(0.2, 0.21, 0.17), 0.85)
 	var hips := []
-	for x in [-0.09, 0.09]:
+	for x in [-0.085, 0.085]:
 		var hip := Node3D.new()
-		hip.position = Vector3(x, 0.48, 0)
+		hip.position = Vector3(x, 0.5, 0)
 		root.add_child(hip)
-		MeshKit.add(hip, MeshKit.box(Vector3(0.13, 0.46, 0.14)), uni, Vector3(0, -0.23, 0))
-		MeshKit.add(hip, MeshKit.box(Vector3(0.14, 0.1, 0.22)), boots, Vector3(0, -0.47, 0.04))
+		MeshKit.add(hip, MeshKit.cyl(0.07, 0.062, 0.25, 10), uni, Vector3(0, -0.125, 0))
+		MeshKit.add(hip, MeshKit.cyl(0.06, 0.05, 0.22, 10), uni, Vector3(0, -0.34, 0))
+		MeshKit.add(hip, MeshKit.box(Vector3(0.1, 0.08, 0.07)), pads, Vector3(0, -0.24, 0.055))
+		MeshKit.add(hip, MeshKit.box(Vector3(0.11, 0.08, 0.2)), boots, Vector3(0, -0.46, 0.035))
 		hips.append(hip)
 	var torso := Node3D.new()
 	torso.position.y = 0.5
 	root.add_child(torso)
-	MeshKit.add(torso, MeshKit.box(Vector3(0.34, 0.42, 0.2)), uni, Vector3(0, 0.22, 0))
-	MeshKit.add(torso, MeshKit.box(Vector3(0.37, 0.3, 0.24)), MeshKit.mat(vest_color, 0.85), Vector3(0, 0.24, 0))
+	var chest := MeshKit.add(torso, MeshKit.capsule(0.15, 0.48), uni, Vector3(0, 0.22, 0))
+	chest.scale = Vector3(1.05, 1.0, 0.68)
+	var vest := MeshKit.add(torso, MeshKit.capsule(0.165, 0.36), MeshKit.surface("canvas", vest_color, 0.95), Vector3(0, 0.25, 0))
+	vest.scale = Vector3(1.05, 1.0, 0.78)
 	for i in [-1, 0, 1]:
-		MeshKit.add(torso, MeshKit.box(Vector3(0.08, 0.09, 0.05)), dark, Vector3(i * 0.11, 0.17, 0.13))
-	MeshKit.add(torso, MeshKit.box(Vector3(0.28, 0.34, 0.14)), MeshKit.mat(gear_color, 0.85), Vector3(0, 0.26, -0.17))
+		MeshKit.add(torso, MeshKit.box(Vector3(0.075, 0.09, 0.05)), MeshKit.surface("canvas", OLIVE_DARK, 0.95), Vector3(i * 0.095, 0.17, 0.12))
+	MeshKit.add(torso, MeshKit.cyl(0.13, 0.15, 0.06, 12), boots, Vector3(0, 0.02, 0))
+	var pack := MeshKit.add(torso, MeshKit.capsule(0.12, 0.34), MeshKit.surface("canvas", gear_color, 0.95), Vector3(0, 0.27, -0.16))
+	pack.scale = Vector3(1.1, 1.0, 0.7)
+	MeshKit.add(torso, MeshKit.cyl(0.055, 0.055, 0.26, 10), MeshKit.surface("canvas", OLIVE_DARK, 0.95), Vector3(0, 0.46, -0.17)).rotation.z = PI / 2.0
 	if engineer:
 		# Shovel strapped to the pack.
-		var handle := MeshKit.add(torso, MeshKit.box(Vector3(0.03, 0.5, 0.03)), MeshKit.mat(Color(0.45, 0.32, 0.2), 0.9), Vector3(0.1, 0.3, -0.26))
+		var handle := MeshKit.add(torso, MeshKit.cyl(0.014, 0.014, 0.5, 6), MeshKit.mat(Color(0.45, 0.32, 0.2), 0.9), Vector3(0.1, 0.3, -0.26))
 		handle.rotation.z = 0.3
 		MeshKit.add(torso, MeshKit.box(Vector3(0.12, 0.14, 0.02)), MeshKit.mat(Color(0.35, 0.36, 0.38), 0.5, 0.6), Vector3(0.18, 0.55, -0.26))
-	MeshKit.add(torso, MeshKit.sphere(0.11, 12), MeshKit.mat(SKIN, 0.7), Vector3(0, 0.54, 0))
-	var helmet := MeshKit.add(torso, MeshKit.sphere(0.135, 14), dark, Vector3(0, 0.6, 0))
-	helmet.scale = Vector3(1, 0.72, 1.08)
-	var patch := MeshKit.add(torso, MeshKit.box(Vector3(0.07, 0.03, 0.02)), MeshKit.mat(BLUE, 0.4), Vector3(0.19, 0.38, 0))
+	MeshKit.add(torso, MeshKit.cyl(0.04, 0.045, 0.06, 8), MeshKit.mat(SKIN, 0.7), Vector3(0, 0.47, 0))
+	MeshKit.add(torso, MeshKit.sphere(0.092, 14), MeshKit.mat(SKIN, 0.7), Vector3(0, 0.55, 0.005)).scale = Vector3(0.95, 1.08, 1.0)
+	var helmet := MeshKit.add(torso, MeshKit.sphere(0.118, 16), dark, Vector3(0, 0.6, -0.005))
+	helmet.scale = Vector3(1, 0.78, 1.1)
+	MeshKit.add(torso, MeshKit.cyl(0.13, 0.13, 0.015, 16), pads, Vector3(0, 0.565, 0))
+	MeshKit.add(torso, MeshKit.box(Vector3(0.17, 0.03, 0.03)), MeshKit.mat(Color(0.08, 0.08, 0.08), 0.3, 0.4), Vector3(0, 0.625, 0.1))
+	var patch := MeshKit.add(torso, MeshKit.box(Vector3(0.06, 0.03, 0.02)), MeshKit.mat(BLUE, 0.4), Vector3(0.17, 0.38, 0))
 	patch.rotation.z = 0.2
-	var stripe := MeshKit.add(torso, MeshKit.box(Vector3(0.07, 0.03, 0.021)), MeshKit.mat(WHITE, 0.4), Vector3(0.19, 0.355, 0))
+	var stripe := MeshKit.add(torso, MeshKit.box(Vector3(0.06, 0.03, 0.021)), MeshKit.mat(WHITE, 0.4), Vector3(0.17, 0.355, 0))
 	stripe.rotation.z = 0.2
 	var arms := Node3D.new()
 	arms.position = Vector3(0, 0.36, 0.05)
 	torso.add_child(arms)
-	MeshKit.add(arms, MeshKit.box(Vector3(0.09, 0.09, 0.32)), uni, Vector3(-0.15, -0.02, 0.12)).rotation.y = 0.35
-	MeshKit.add(arms, MeshKit.box(Vector3(0.09, 0.09, 0.32)), uni, Vector3(0.14, -0.02, 0.12)).rotation.y = -0.25
+	for side in [[-0.15, 0.35], [0.14, -0.25]]:
+		var arm := MeshKit.add(arms, MeshKit.capsule(0.045, 0.34), uni, Vector3(side[0], -0.02, 0.12))
+		arm.rotation = Vector3(PI / 2.0, side[1], 0)
+		MeshKit.add(arms, MeshKit.sphere(0.04, 8), boots, Vector3(side[0] * 0.5, -0.03, 0.28))
 	var rifle := Node3D.new()
 	rifle.position = Vector3(0.04, 0, 0.24)
 	arms.add_child(rifle)
-	var steel := MeshKit.mat(Color(0.11, 0.114, 0.12), 0.5, 0.4)
-	MeshKit.add(rifle, MeshKit.box(Vector3(0.05, 0.08, 0.6)), steel, Vector3(0, 0, 0.05))
-	MeshKit.add(rifle, MeshKit.box(Vector3(0.04, 0.12, 0.06)), steel, Vector3(0, -0.08, 0.02))
-	MeshKit.add(rifle, MeshKit.box(Vector3(0.03, 0.03, 0.16)), steel, Vector3(0, 0.02, 0.4))
+	var steel := MeshKit.mat(Color(0.11, 0.114, 0.12), 0.45, 0.5)
+	MeshKit.add(rifle, MeshKit.box(Vector3(0.045, 0.075, 0.42)), steel, Vector3(0, 0, 0.0))
+	MeshKit.add(rifle, MeshKit.box(Vector3(0.04, 0.09, 0.16)), steel, Vector3(0, -0.01, -0.24))
+	MeshKit.add(rifle, MeshKit.box(Vector3(0.035, 0.12, 0.05)), steel, Vector3(0, -0.08, 0.06))
+	MeshKit.add(rifle, MeshKit.box(Vector3(0.03, 0.04, 0.08)), MeshKit.mat(Color(0.05, 0.05, 0.05), 0.3, 0.5), Vector3(0, 0.06, 0.02))
+	MeshKit.add(rifle, MeshKit.cyl(0.013, 0.013, 0.22, 6), steel, Vector3(0, 0.01, 0.32)).rotation.x = PI / 2.0
 	var muzzle := Node3D.new()
-	muzzle.position = Vector3(0, 0.02, 0.5)
+	muzzle.position = Vector3(0, 0.02, 0.45)
 	rifle.add_child(muzzle)
 	return {"hips": hips, "torso": torso, "helmet": helmet, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null}
 
 
 static func _tank(root: Node3D) -> Dictionary:
-	var sinai := MeshKit.mat(SINAI, 0.85, 0.1)
-	var sinai_dark := MeshKit.mat(SINAI_DARK, 0.85, 0.1)
+	var sinai := MeshKit.surface("camo", SINAI, 0.85, 0.1)
+	var sinai_dark := MeshKit.surface("camo", SINAI_DARK, 0.85, 0.1)
 	var metal := MeshKit.mat(METAL, 0.6, 0.5)
 	MeshKit.add(root, MeshKit.box(Vector3(2.3, 0.55, 4.6)), sinai, Vector3(0, 0.75, 0))
 	MeshKit.add(root, MeshKit.box(Vector3(2.25, 0.5, 1.2)), sinai, Vector3(0, 0.82, 2.45)).rotation.x = 0.55
@@ -272,7 +288,7 @@ static func _tank(root: Node3D) -> Dictionary:
 			MeshKit.add(wheel, MeshKit.cyl(0.3, 0.3, 0.3, 12), metal).rotation.z = PI / 2.0
 			MeshKit.add(wheel, MeshKit.box(Vector3(0.32, 0.5, 0.08)), MeshKit.mat(Color(0.12, 0.12, 0.12), 0.7))
 			wheels.append(wheel)
-		MeshKit.add(root, MeshKit.box(Vector3(0.55, 0.62, 4.7)), MeshKit.mat(Color(0.15, 0.15, 0.15), 0.9), Vector3(sx * 1.0, 0.33, 0))
+		MeshKit.add(root, MeshKit.box(Vector3(0.55, 0.62, 4.7)), MeshKit.surface("canvas", Color(0.17, 0.16, 0.14), 0.9, 0.3), Vector3(sx * 1.0, 0.33, 0))
 	var turret := Node3D.new()
 	turret.position = Vector3(0, 1.05, -0.4)
 	root.add_child(turret)
@@ -293,6 +309,19 @@ static func _tank(root: Node3D) -> Dictionary:
 	var muzzle := Node3D.new()
 	muzzle.position = Vector3(0, 0, 3.05)
 	gun.add_child(muzzle)
+	# B+ details: engine grille, exhausts, headlights, stowage and a tarp roll on the bustle.
+	var black := MeshKit.mat(Color(0.12, 0.12, 0.11), 0.8, 0.3)
+	for i in 6:
+		MeshKit.add(root, MeshKit.box(Vector3(1.8, 0.03, 0.07)), black, Vector3(0, 1.08, -1.4 - i * 0.15))
+	for sx in [-1.0, 1.0]:
+		MeshKit.add(root, MeshKit.cyl(0.08, 0.08, 0.3, 8), black, Vector3(sx * 0.7, 0.85, -2.35)).rotation.x = PI / 2.0
+		MeshKit.add(root, MeshKit.cyl(0.08, 0.06, 0.08, 10), MeshKit.glow(Color(1.0, 0.96, 0.8)), Vector3(sx * 0.95, 1.0, 3.0)).rotation.x = PI / 2.0
+	var olive := MeshKit.surface("canvas", OLIVE, 0.9)
+	for i in 2:
+		MeshKit.add(root, MeshKit.box(Vector3(0.28, 0.4, 0.15)), olive, Vector3(0.55 + i * 0.32, 1.27, -2.05))
+	MeshKit.add(root, MeshKit.box(Vector3(0.6, 0.32, 0.45)), MeshKit.mat(Color(0.48, 0.36, 0.22), 0.85), Vector3(-0.65, 1.23, -1.95))
+	MeshKit.add(turret, MeshKit.cyl(0.2, 0.2, 1.4, 12), MeshKit.surface("canvas", Color(0.44, 0.42, 0.3), 0.95), Vector3(0, 0.55, -1.75)).rotation.z = PI / 2.0
+	MeshKit.add(turret, MeshKit.cyl(0.006, 0.006, 1.6, 4), black, Vector3(0.7, 1.2, -1.1))
 	# Fictional shield emblem on both sides of the hull.
 	for sx in [-1.0, 1.0]:
 		MeshKit.add(root, MeshKit.box(Vector3(0.02, 0.22, 0.36)), MeshKit.mat(BLUE, 0.4), Vector3(sx * 1.17, 0.85, 1.0))

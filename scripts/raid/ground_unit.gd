@@ -63,7 +63,12 @@ func _ready() -> void:
 	_model = Node3D.new()
 	_model.scale = Vector3.ONE * model_scale
 	add_child(_model)
+	MeshKit.grime_root = _model
+	MeshKit.grime_top = 0.7 if kind == "armor" else 0.32
 	_parts = UnitModels.build(kind, _model, level)
+	MeshKit.grime_root = null
+	var r := body_radius()
+	MeshKit.blob(self, Vector2(r, r) * 2.8, Vector3.ZERO, 0.45)
 	# A ring in the level color underfoot (defenders wear a red one instead).
 	if not has_meta("home") and not showcase:
 		var ring := MeshKit.add(self, MeshKit.ring(body_radius() + 0.35, 0.1), MeshKit.glow(UnitModels.LEVEL_COLORS[clampi(level, 1, 5) - 1], 0.85), Vector3(0, 0.07, 0))
