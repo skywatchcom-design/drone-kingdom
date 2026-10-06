@@ -227,9 +227,14 @@ static func multi(parent: Node3D, mesh: Mesh, material: Material, transforms: Ar
 			mm.set_instance_color(i, colors[i])
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm
-	# Instance colors are given in sRGB like every other color in the code.
-	if material is StandardMaterial3D and mm.use_colors:
-		(material as StandardMaterial3D).vertex_color_is_srgb = true
+	# Instance colors are given in sRGB like every other color in the code. Without them, don't
+	# read vertex color at all (the Compatibility renderer feeds white there, washing the
+	# material color out).
+	if material is StandardMaterial3D:
+		if mm.use_colors:
+			(material as StandardMaterial3D).vertex_color_is_srgb = true
+		else:
+			(material as StandardMaterial3D).vertex_color_use_as_albedo = false
 	mi.material_override = material
 	parent.add_child(mi)
 	return mi

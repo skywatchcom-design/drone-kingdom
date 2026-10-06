@@ -78,11 +78,19 @@ func _add_compound(pad_cells: Array) -> void:
 	var pads := []
 	for cell in pad_cells:
 		pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.surface("concrete", Color(0.6, 0.58, 0.54), 0.95, 0.0, true), pads)
+	# The Compatibility renderer (web) lights flat pale ground much brighter: darker pads there.
+	var web := RenderingServer.get_current_rendering_method() == "gl_compatibility"
+	var pad_colors := []
+	pad_colors.resize(pads.size())
+	pad_colors.fill(Color(0.45, 0.44, 0.4) if web else Color(0.6, 0.58, 0.54))
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.surface("concrete", Color.WHITE, 0.95), pads, pad_colors)
 	var borders := []
 	for t: Transform3D in pads:
 		borders.append(Transform3D(Basis(), t.origin + Vector3(0, -0.02, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color(0.46, 0.45, 0.41), 0.95, 0.0, true), borders)
+	var border_colors := []
+	border_colors.resize(borders.size())
+	border_colors.fill(Color(0.33, 0.32, 0.29) if web else Color(0.46, 0.45, 0.41))
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color.WHITE, 0.95), borders, border_colors)
 	_add_tufts(pad_cells)
 
 

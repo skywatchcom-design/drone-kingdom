@@ -28,13 +28,19 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	env.fog_light_color = Color(0.74, 0.81, 0.88)
 	env.fog_depth_begin = CAM_DISTANCE + 20.0
 	env.fog_depth_end = CAM_DISTANCE + 110.0
+	# The web build runs the Compatibility renderer, which lights everything brighter and
+	# flatter: pull exposure and ambient down there so it matches the phone look.
+	var compat := RenderingServer.get_current_rendering_method() == "gl_compatibility"
+	if compat:
+		env.tonemap_exposure = 0.85
+		env.ambient_light_energy = 0.3
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	parent.add_child(world_env)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
-	sun.light_energy = 1.7
+	sun.light_energy = 1.05 if compat else 1.7
 	sun.light_color = Color(1.0, 0.92, 0.8)
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.6
