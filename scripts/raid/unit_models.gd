@@ -32,9 +32,75 @@ static func build(kind: String, root: Node3D, level: int = 1) -> Dictionary:
 		"robot":
 			p = _robot(root, level)
 		_:
-			p = _soldier(root, Color(0.333, 0.376, 0.235), Color(0.3, 0.325, 0.22), false)
-			_infantry_level(root, p, level)
+			if ResourceLoader.exists(AI_MODEL % "infantry" + ".res"):
+				p = _ai_soldier(root, "infantry", level)
+			else:
+				p = _soldier(root, Color(0.333, 0.376, 0.235), Color(0.3, 0.325, 0.22), false)
+				_infantry_level(root, p, level)
 	return p
+
+
+## Models generated with TRELLIS.2 and slimmed by scripts/dev/slim_model.gd: a .res mesh with
+## its feet at y = 0 and height 1, plus an albedo texture next to it.
+const AI_MODEL := "res://assets/models/%s"
+static var _ai_cache := {}
+
+
+static func _ai_parts(name: String, darken: float) -> Array:
+	var key := "%s@%.2f" % [name, darken]
+	if not _ai_cache.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = load(AI_MODEL % name + "_albedo.webp")
+		m.albedo_color = Color.WHITE.darkened(darken)
+		m.roughness = 0.9
+		_ai_cache[key] = [load(AI_MODEL % name + ".res"), m]
+	return _ai_cache[key]
+
+
+## The generated soldier is one rigid mesh. It rides on the torso node, so the walk bob, lean,
+## kneel and recoil still work; the hips are empty pivots. Levels add parts and darker armor:
+## Lv2 level patches; Lv3 a light machine gun with a drum and a helmet band; Lv4 dark armor
+## and a radio antenna; Lv5 near-black armor and a glowing visor.
+static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
+	var hips := []
+	for x in [-0.09, 0.09]:
+		var hip := Node3D.new()
+		hip.position = Vector3(x, 0.48, 0)
+		root.add_child(hip)
+		hips.append(hip)
+	var torso := Node3D.new()
+	torso.position.y = 0.5
+	root.add_child(torso)
+	var darken: float = [0.0, 0.0, 0.08, 0.35, 0.55][clampi(level, 1, 5) - 1]
+	var parts := _ai_parts(name, darken)
+	var body := MeshInstance3D.new()
+	body.mesh = parts[0]
+	body.material_override = parts[1]
+	body.scale = Vector3.ONE * 1.2
+	body.position.y = -0.5
+	torso.add_child(body)
+	var helmet := Node3D.new()
+	helmet.position = Vector3(0, 0.6, 0)
+	torso.add_child(helmet)
+	var muzzle := Node3D.new()
+	muzzle.position = Vector3(-0.05, 0.2, 0.32)
+	torso.add_child(muzzle)
+	var mark := level_material(level)
+	if level >= 2:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(torso, MeshKit.box(Vector3(0.05, 0.06, 0.13)), mark, Vector3(sx * 0.2, 0.42, 0))
+	if level >= 3:
+		var steel := MeshKit.mat(Color(0.1, 0.1, 0.11), 0.45, 0.5)
+		MeshKit.add(torso, MeshKit.cyl(0.07, 0.07, 0.08, 12), steel, muzzle.position + Vector3(0.02, -0.08, -0.12)).rotation.z = PI / 2.0
+		MeshKit.add(torso, MeshKit.cyl(0.018, 0.018, 0.26, 6), steel, muzzle.position + Vector3(0, 0, 0.1)).rotation.x = PI / 2.0
+		muzzle.position.z += 0.22
+		var band := MeshKit.add(torso, MeshKit.cyl(0.125, 0.125, 0.03, 16), mark, Vector3(0, 0.56, 0))
+		band.scale = Vector3(1, 1, 1.1)
+	if level >= 4:
+		MeshKit.add(torso, MeshKit.cyl(0.006, 0.006, 0.8, 4), MeshKit.mat(Color(0.1, 0.1, 0.1), 0.5), Vector3(-0.1, 0.75, -0.2))
+	if level >= 5:
+		MeshKit.add(torso, MeshKit.box(Vector3(0.17, 0.04, 0.03)), MeshKit.glow(Color(0.37, 0.88, 1.0)), Vector3(0, 0.55, 0.11))
+	return {"hips": hips, "torso": torso, "helmet": helmet, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null, "rigid": true}
 
 
 ## Swaps one exact color for another on every mesh under `node` (each mesh has its own material).

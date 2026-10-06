@@ -343,6 +343,8 @@ static func picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33
 		g.showcase = true
 		g.rotation.y = 0.45 if type != "armor" else -0.6
 		stage.add_child(g)
+		# Hold the pose: the card may redraw later, and the showcase spin would turn it away.
+		g.set_process(false)
 		var tank := type == "armor"
 		look = Vector3(0, 0.9 if tank else 1.45, 0)
 		eye = Vector3(2.6, 3.0, 5.4) * (1.55 if tank else 0.75) * (0.85 + 0.05 * level)

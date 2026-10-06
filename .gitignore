@@ -4,3 +4,6 @@
 /tmp/
 *.tmp
 export_credentials.cfg
+assets/models/incoming/*.glb
+assets/models/incoming/*.glb.import
+assets/models/incoming/*.png

@@ -160,6 +160,9 @@ func _animate_soldier(delta: float) -> void:
 	var torso: Node3D = _parts["torso"]
 	torso.position.y = 0.5 + absf(sin(_phase)) * 0.03 * amount - 0.2 * k
 	torso.rotation.x = 0.05 * k + 0.12 * amount
+	# A rigid generated model has no legs to swing: it rocks side to side as it walks.
+	if _parts.get("rigid", false):
+		torso.rotation.z = sin(_phase) * 0.09 * amount
 	_recoil = maxf(0.0, _recoil - delta * 8.0)
 	torso.position.z = -0.03 * _recoil
 
