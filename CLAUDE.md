@@ -90,4 +90,11 @@ square around each standing building (red squares flash after a bad tap). Raid f
 Approved 6.10.2026: art direction B+ "stylized-realistic, improved" (https://claude.ai/artifact/2CogN9cX5xuLj8cwdXBn67):
 sky lighting, soft contact shadows, grime low on walls and hulls, textured grass/dirt/concrete/camo,
 rolling ground with grass tufts, more parts per model. Free only: everything built in code.
+Approved 6.10.2026: living base with photo textures (https://claude.ai/artifact/Wh6JXRFwid3cJxTbP8DZsG).
+In game (7.10.2026): Poly Haven CC0 photo textures in `assets/textures` used by `MeshKit.mat/surface`
+(triplanar, bump maps); B+ Command Tower; `BaseLife` (home: patrol, jeep, workers at sites, smoke from
+"smoke" markers, blinking "blink" lights, patrol drone, birds). AI models: TRELLIS.2 GLBs from the owner
+in `assets/models/incoming` (git-ignored), slimmed by `scripts/dev/slim_model.gd` into
+`assets/models/<name>.res` + `<name>_albedo.webp`; see `docs/model-prompts.md`. Done: infantry, tank
+(hull + turret). Tripo's free plan cannot export, so it is not used.
 Still waiting on the owner: Apple Developer and Google Play accounts.

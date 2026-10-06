@@ -119,6 +119,13 @@ func _rebuild() -> void:
 			free_edges.append(Transform3D(Basis(Vector3.UP, PI / 2.0 if int(e[2]) == 0 else 0.0), Walls.center(e) + Vector3(0, 0.15, 0)))
 	edge_markers = MeshKit.multi(level, MeshKit.box(Vector3(5.6, 0.12, 0.5)), MeshKit.glow(Color(1.0, 0.85, 0.35), 0.45), free_edges)
 	edge_markers.visible = wall_mode
+	var sites := []
+	for s in GameState.structures:
+		if GameState.is_busy(s):
+			sites.append(city.roof_top(s["cell"]))
+	var life := BaseLife.new()
+	level.add_child(life)
+	life.setup(level, sites)
 	marker = MeshKit.add(level, MeshKit.ring(3.4, 0.3), MeshKit.glow(Color(1, 1, 1), 0.9))
 	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	marker.visible = false

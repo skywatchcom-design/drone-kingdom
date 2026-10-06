@@ -49,6 +49,14 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 	return root
 
 
+## An empty marker that BaseLife looks for: "smoke" puffs rise from it.
+static func mark(parent: Node3D, kind: String, pos: Vector3) -> void:
+	var m := Node3D.new()
+	m.position = pos
+	m.set_meta(kind, true)
+	parent.add_child(m)
+
+
 static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 	var label := Label3D.new()
 	label.text = I18n.t("Lv %d") % level
@@ -122,7 +130,7 @@ static func _hq(root: Node3D, level: int) -> float:
 		MeshKit.add(root, MeshKit.cyl(0.04, 0.07, ah, 6), metal, Vector3(x, top + 0.24 + ah / 2.0, -0.5))
 		for k in 2:
 			MeshKit.add(root, MeshKit.box(Vector3(0.4, 0.03, 0.03)), metal, Vector3(x, top + 0.9 + k * 0.5, -0.5))
-		MeshKit.add(root, MeshKit.sphere(0.1, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(x, top + 0.3 + ah, -0.5))
+		MeshKit.add(root, MeshKit.sphere(0.1, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(x, top + 0.3 + ah, -0.5)).set_meta("blink", true)
 	if level >= 3:
 		# Sandbag walls round the front corners.
 		var bags := []
@@ -359,6 +367,12 @@ static func _quarters(root: Node3D, level: int) -> float:
 			MeshKit.add(root, MeshKit.box(Vector3(0.4, 0.5, 0.02)), MeshKit.mat(Color(0.13, 0.15, 0.1), 0.9), Vector3(x, 0.3, z + 0.8))
 		if level >= 3:
 			crate(root, 0.0, 0.0, 0.8)
+		# A campfire ring between the tents; BaseLife sends smoke up from the marker.
+		MeshKit.add(root, MeshKit.cyl(0.38, 0.42, 0.12, 12), MeshKit.surface("concrete", Color(0.45, 0.43, 0.4), 0.95), Vector3(0, 0.12, 2.15))
+		MeshKit.add(root, MeshKit.sphere(0.16, 8), MeshKit.glow(Color(1.0, 0.55, 0.16), 0.9), Vector3(0, 0.2, 2.15))
+		for x in [-0.8, 0.8]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.16, 0.24)), MeshKit.surface("wood", WOOD, 0.9), Vector3(x, 0.14, 2.15))
+		mark(root, "smoke", Vector3(0, 0.3, 2.15))
 	else:
 		for i in 2:
 			var z := -1.2 + i * 2.4
@@ -387,6 +401,9 @@ static func _garage(root: Node3D, level: int) -> float:
 	var h := 2.6 if level >= 5 else (2.1 if level >= 3 else 1.7)
 	MeshKit.add(root, MeshKit.box(Vector3(w, h, 2.8)), MeshKit.surface("camo", UnitModels.SINAI_DARK, 0.8), Vector3(0, h / 2.0, -0.6))
 	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, 2.9, 16), MeshKit.surface("corrugated", Color(0.37, 0.42, 0.35), 0.7, 0.2), Vector3(0, h, -0.6))
+	# A stove pipe for the workshop; BaseLife puffs smoke from its top.
+	MeshKit.add(root, MeshKit.cyl(0.12, 0.14, 1.4, 10), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.4), Vector3(-w / 2.0 + 0.5, h + 0.4, -1.5))
+	mark(root, "smoke", Vector3(-w / 2.0 + 0.5, h + 1.15, -1.5))
 	roof.rotation.x = PI / 2.0
 	roof.scale = Vector3(1, 1, 0.35)
 	var doors := 2 if level >= 5 else 1
