@@ -3,7 +3,10 @@ extends SceneTree
 ## Godot's importer already builds simplified LODs; this keeps the one closest to the target
 ## triangle count, drops unused vertices, re-centers it with its feet at y = 0, scales it to
 ## `height` and saves it as a .res (no material: game code adds one from the albedo texture).
-##   godot --headless --path . -s scripts/dev/slim_model.gd -- in.glb out.res target_tris height
+##   godot --headless --path . -s scripts/dev/slim_model.gd -- in.glb out.res target_tris height [cells] [turn split_y pivot_x pivot_z]
+## `turn` (degrees about Y) points the model's front along +Z. With `split_y`, triangles above
+## that height (source units) go into a second mesh, out_turret.res, centered on the pivot
+## (source x, z), so a tank turret can turn on its own.
 
 
 func _init() -> void:
@@ -40,7 +43,18 @@ func _init() -> void:
 		arrays = _cluster(arrays, cells)
 		print("cluster ", cells, " -> ", (arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3)
 		cells *= 0.85
+	var turn := deg_to_rad(float(a[5])) if a.size() > 5 else 0.0
+	var split_y := float(a[6]) if a.size() > 6 else INF
+	var pivot := Vector3(float(a[7]), 0, float(a[8])) if a.size() > 8 else Vector3.ZERO
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var raw_verts := verts.duplicate()
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var spin := Basis(Vector3.UP, turn)
+	for i in verts.size():
+		verts[i] = spin * verts[i]
+		normals[i] = spin * normals[i]
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	pivot = spin * pivot
 	var out := arrays
 	# Feet on the ground, centered, scaled to the wanted height.
 	var lo := Vector3(INF, INF, INF)
@@ -54,13 +68,39 @@ func _init() -> void:
 		verts[i] = (verts[i] + shift) * k
 	out[Mesh.ARRAY_VERTEX] = verts
 	var indices: PackedInt32Array = out[Mesh.ARRAY_INDEX]
-	var am := ArrayMesh.new()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
 	# The material is built in game code from the albedo texture saved next to the mesh, so
 	# the mesh does not depend on the source GLB.
-	var err := ResourceSaver.save(am, dst)
-	print("saved ", dst, " tris ", indices.size() / 3, " verts ", verts.size(), " err ", err)
+	if split_y == INF:
+		_save(out, dst)
+		quit()
+		return
+	var low := PackedInt32Array()
+	var high := PackedInt32Array()
+	for t in range(0, indices.size(), 3):
+		var cy := 0.0
+		for j in 3:
+			cy += raw_verts[indices[t + j]].y
+		var part := high if cy / 3.0 > split_y else low
+		for j in 3:
+			part.append(indices[t + j])
+	var p := (pivot + shift) * k
+	p.y = 0.0
+	var top := _compact(out, high)
+	var top_v: PackedVector3Array = top[Mesh.ARRAY_VERTEX]
+	for i in top_v.size():
+		top_v[i] -= p
+	top[Mesh.ARRAY_VERTEX] = top_v
+	_save(_compact(out, low), dst)
+	_save(top, dst.get_basename() + "_turret.res")
+	print("turret pivot ", p)
 	quit()
+
+
+func _save(arrays: Array, path: String) -> void:
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var err := ResourceSaver.save(am, path)
+	print("saved ", path, " tris ", (arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3, " err ", err)
 
 
 ## Arrays holding only the vertices `idx` uses, re-indexed.

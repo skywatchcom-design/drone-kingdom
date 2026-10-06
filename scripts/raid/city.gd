@@ -78,11 +78,11 @@ func _add_compound(pad_cells: Array) -> void:
 	var pads := []
 	for cell in pad_cells:
 		pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.surface("concrete", Color(0.58, 0.56, 0.5), 0.95, 0.0, true), pads)
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD, PAD_H, PAD)), MeshKit.surface("concrete", Color(0.6, 0.58, 0.54), 0.95, 0.0, true), pads)
 	var borders := []
 	for t: Transform3D in pads:
 		borders.append(Transform3D(Basis(), t.origin + Vector3(0, -0.02, 0)))
-	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color(0.47, 0.46, 0.4), 0.95, 0.0, true), borders)
+	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color(0.46, 0.45, 0.41), 0.95, 0.0, true), borders)
 	_add_tufts(pad_cells)
 
 
@@ -91,9 +91,9 @@ func _add_tufts(pad_cells: Array) -> void:
 	var blade := MeshKit.cyl(0.02, 0.1, 0.6, 4)
 	var xfs := []
 	var colors := []
-	var shades := [Color(0.33, 0.47, 0.2), Color(0.39, 0.53, 0.23), Color(0.48, 0.56, 0.27), Color(0.3, 0.44, 0.19)]
+	var shades := [Color(0.2, 0.32, 0.12), Color(0.25, 0.37, 0.14), Color(0.3, 0.4, 0.16), Color(0.18, 0.28, 0.1)]
 	var tries := 0
-	while xfs.size() < 3600 and tries < 12000:
+	while xfs.size() < 2200 and tries < 12000:
 		tries += 1
 		var p := Vector3(_rng.randf_range(-YARD - 30.0, YARD + 30.0), 0, _rng.randf_range(-YARD - 30.0, YARD + 30.0))
 		var on_pad := false

@@ -16,8 +16,8 @@ func _build() -> void:
 	var tubes := 3 if level >= 5 else (2 if level >= 3 else 1)
 	for i in tubes:
 		var x := (i - (tubes - 1) / 2.0) * 0.8
-		MeshKit.add(model, MeshKit.cyl(0.35, 0.35, 0.08, 12), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(x, 0.05, 0))
-		var tube := MeshKit.add(model, MeshKit.cyl(0.11, 0.13, 1.4, 12), MeshKit.mat(UnitModels.OLIVE_DARK, 0.6, 0.3), Vector3(x, 0.65, 0.2))
+		MeshKit.add(model, MeshKit.cyl(0.35, 0.35, 0.08, 12), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(x, 0.05, 0))
+		var tube := MeshKit.add(model, MeshKit.cyl(0.11, 0.13, 1.4, 12), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.6, 0.3), Vector3(x, 0.65, 0.2))
 		tube.rotation.x = 0.5
 		var muzzle := Node3D.new()
 		muzzle.position = Vector3(x, 1.25, 0.55)

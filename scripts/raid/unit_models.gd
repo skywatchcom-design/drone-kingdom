@@ -24,8 +24,11 @@ static func build(kind: String, root: Node3D, level: int = 1) -> Dictionary:
 	var p: Dictionary
 	match kind:
 		"armor":
-			p = _tank(root)
-			_tank_level(root, p, level)
+			if ResourceLoader.exists(AI_MODEL % "tank" + ".res"):
+				p = _ai_tank(root, level)
+			else:
+				p = _tank(root)
+				_tank_level(root, p, level)
 		"engineers":
 			p = _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
 			_engineer_level(root, p, level)
@@ -55,6 +58,57 @@ static func _ai_parts(name: String, darken: float) -> Array:
 		m.roughness = 0.9
 		_ai_cache[key] = [load(AI_MODEL % name + ".res"), m]
 	return _ai_cache[key]
+
+
+## The generated tank (1 unit long, front along +Z) comes in two meshes: the hull and the turret
+## with its gun, which turns on its own. Levels: Lv2 stripes in the level color along the
+## skirts; Lv3 a roof machine gun and a stripe on the turret; Lv4 darker paint and add-on armor
+## blocks on the glacis; Lv5 near-black paint and glowing sensor pods.
+const AI_TANK_LENGTH := 6.6
+const AI_TANK_PIVOT := Vector3(0, 0, -0.12)
+
+
+static func _ai_tank(root: Node3D, level: int) -> Dictionary:
+	var darken: float = [0.0, 0.0, 0.05, 0.3, 0.55][clampi(level, 1, 5) - 1]
+	var hull_parts := _ai_parts("tank", darken)
+	var k := AI_TANK_LENGTH
+	var hull := MeshInstance3D.new()
+	hull.mesh = hull_parts[0]
+	hull.material_override = hull_parts[1]
+	hull.scale = Vector3.ONE * k
+	root.add_child(hull)
+	var turret := Node3D.new()
+	turret.position = AI_TANK_PIVOT * k
+	root.add_child(turret)
+	var top := MeshInstance3D.new()
+	top.mesh = load(AI_MODEL % "tank" + "_turret.res")
+	top.material_override = hull_parts[1]
+	top.scale = Vector3.ONE * k
+	turret.add_child(top)
+	var gun := Node3D.new()
+	gun.position.z = 1.0
+	turret.add_child(gun)
+	var muzzle := Node3D.new()
+	muzzle.position = Vector3(0, 0.217, 0.62) * k
+	turret.add_child(muzzle)
+	var mark := level_material(level)
+	if level >= 2:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.06, 0.12, 3.8)), mark, Vector3(sx * 1.36, 0.78, -0.2))
+	if level >= 3:
+		var steel := MeshKit.mat(Color(0.1, 0.1, 0.11), 0.45, 0.5)
+		MeshKit.add(turret, MeshKit.box(Vector3(0.14, 0.18, 0.5)), steel, Vector3(0.45, 2.25, -0.2))
+		MeshKit.add(turret, MeshKit.cyl(0.03, 0.03, 0.7, 6), steel, Vector3(0.45, 2.28, 0.35)).rotation.x = PI / 2.0
+		MeshKit.add(turret, MeshKit.box(Vector3(1.9, 0.08, 0.3)), mark, Vector3(0, 1.75, -0.9))
+	if level >= 4:
+		var tile := MeshKit.surface("camo", SINAI_DARK.darkened(darken), 0.8)
+		for i in 4:
+			MeshKit.add(root, MeshKit.box(Vector3(0.45, 0.14, 0.3)), tile, Vector3(-0.75 + i * 0.5, 0.95, 2.35)).rotation.x = 0.5
+	if level >= 5:
+		for sx in [-1.0, 1.0]:
+			MeshKit.add(turret, MeshKit.box(Vector3(0.3, 0.3, 0.3)), MeshKit.mat(Color(0.15, 0.16, 0.18), 0.5, 0.4), Vector3(sx * 0.8, 1.95, -0.6))
+			MeshKit.add(turret, MeshKit.box(Vector3(0.22, 0.18, 0.04)), MeshKit.glow(Color(0.37, 0.88, 1.0)), Vector3(sx * 0.8, 1.95, -0.44))
+	return {"hips": [], "torso": null, "helmet": null, "muzzle": muzzle, "wheels": [], "turret": turret, "gun": gun}
 
 
 ## The generated soldier is one rigid mesh. It rides on the torso node, so the walk bob, lean,

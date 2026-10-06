@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ekuvawwsmhkn"
-path.s3tc="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex"
-path.etc2="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"
+uid="uid://gfx33sqtvhq5"
+path.s3tc="res://.godot/imported/dirt.jpg-eb4f7b21298ca3bfea99ac51b4ec8125.s3tc.ctex"
+path.etc2="res://.godot/imported/dirt.jpg-eb4f7b21298ca3bfea99ac51b4ec8125.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/infantry_albedo.webp"
-dest_files=["res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex", "res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"]
+source_file="res://assets/textures/dirt.jpg"
+dest_files=["res://.godot/imported/dirt.jpg-eb4f7b21298ca3bfea99ac51b4ec8125.s3tc.ctex", "res://.godot/imported/dirt.jpg-eb4f7b21298ca3bfea99ac51b4ec8125.etc2.ctex"]
 
 [params]
 

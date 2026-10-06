@@ -15,8 +15,8 @@ var _recoil := 0.0
 
 
 func _build() -> void:
-	var olive := MeshKit.mat(UnitModels.OLIVE, 0.7, 0.2)
-	var metal := MeshKit.mat(UnitModels.METAL, 0.5, 0.5)
+	var olive := MeshKit.surface("camo", UnitModels.OLIVE, 0.7, 0.2)
+	var metal := MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.5)
 	if level >= 3:
 		MeshKit.add(model, MeshKit.cyl(1.7, 1.9, 0.4, 20), MeshKit.surface("concrete", StructureModels.CONCRETE, 0.9), Vector3(0, 0.2, 0))
 		StructureModels.sandbags(model, 2.2, 1)
@@ -31,7 +31,7 @@ func _build() -> void:
 			trail.rotation.y = s * 0.2
 			MeshKit.add(_pivot, MeshKit.cyl(0.45, 0.45, 0.22, 16), MeshKit.mat(Color(0.13, 0.13, 0.13), 0.9), Vector3(s * 0.85, 0.45, 0.1)).rotation.z = PI / 2.0
 		MeshKit.add(_pivot, MeshKit.box(Vector3(1.6, 0.9, 0.08)), olive, Vector3(0, 0.85, 0.35))
-		MeshKit.add(_gun, MeshKit.box(Vector3(0.4, 0.35, 0.9)), MeshKit.mat(UnitModels.OLIVE_DARK, 0.7), Vector3(0, 0.75, 0))
+		MeshKit.add(_gun, MeshKit.box(Vector3(0.4, 0.35, 0.9)), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.7), Vector3(0, 0.75, 0))
 		var length := 3.0 if level >= 3 else 2.4
 		MeshKit.add(_gun, MeshKit.cyl(0.08, 0.1, length, 12), metal, Vector3(0, 0.8, length / 2.0 + 0.3)).rotation.x = PI / 2.0
 		MeshKit.add(_gun, MeshKit.cyl(0.14, 0.12, 0.3, 12), metal, Vector3(0, 0.8, length + 0.3)).rotation.x = PI / 2.0
@@ -41,7 +41,7 @@ func _build() -> void:
 		if level >= 3:
 			MeshKit.add(_pivot, MeshKit.box(Vector3(0.2, 0.12, 0.6)), MeshKit.mat(StructureModels.RUST, 0.6), Vector3(0.5, 0.5, -0.3))
 	else:
-		var sinai := MeshKit.mat(UnitModels.SINAI, 0.8, 0.1)
+		var sinai := MeshKit.surface("camo", UnitModels.SINAI, 0.8, 0.1)
 		MeshKit.add(_pivot, MeshKit.cyl(1.0, 1.2, 0.6, 16), sinai, Vector3(0, 0.3, 0))
 		MeshKit.add(_pivot, MeshKit.box(Vector3(1.6, 0.8, 1.8)), sinai, Vector3(0, 0.95, 0))
 		MeshKit.add(_pivot, MeshKit.box(Vector3(1.5, 0.15, 1.7)), MeshKit.mat(StructureModels.RUST, 0.6), Vector3(0, 1.42, 0))

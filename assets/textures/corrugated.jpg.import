@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ekuvawwsmhkn"
-path.s3tc="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex"
-path.etc2="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"
+uid="uid://0grlnyswn1rx"
+path.s3tc="res://.godot/imported/corrugated.jpg-11aca6d01f104989e0ddf8e8031eb995.s3tc.ctex"
+path.etc2="res://.godot/imported/corrugated.jpg-11aca6d01f104989e0ddf8e8031eb995.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/infantry_albedo.webp"
-dest_files=["res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex", "res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"]
+source_file="res://assets/textures/corrugated.jpg"
+dest_files=["res://.godot/imported/corrugated.jpg-11aca6d01f104989e0ddf8e8031eb995.s3tc.ctex", "res://.godot/imported/corrugated.jpg-11aca6d01f104989e0ddf8e8031eb995.etc2.ctex"]
 
 [params]
 

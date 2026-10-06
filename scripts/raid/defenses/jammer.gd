@@ -10,8 +10,8 @@ var _t := 0.0
 
 
 func _build() -> void:
-	var metal := MeshKit.mat(UnitModels.METAL, 0.6, 0.4)
-	MeshKit.add(model, MeshKit.box(Vector3(1.6, 1.1, 1.2)), MeshKit.mat(UnitModels.OLIVE, 0.75), Vector3(0, 0.55, 0))
+	var metal := MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4)
+	MeshKit.add(model, MeshKit.box(Vector3(1.6, 1.1, 1.2)), MeshKit.surface("camo", UnitModels.OLIVE, 0.75), Vector3(0, 0.55, 0))
 	MeshKit.add(model, MeshKit.box(Vector3(1.62, 0.12, 1.22)), MeshKit.mat(StructureModels.RUST, 0.6), Vector3(0, 0.95, 0))
 	var masts := 3 if level >= 5 else (2 if level >= 3 else 1)
 	var arms := 4 if level >= 2 else 3

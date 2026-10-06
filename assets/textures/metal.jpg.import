@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ekuvawwsmhkn"
-path.s3tc="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex"
-path.etc2="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"
+uid="uid://siomm588uuav"
+path.s3tc="res://.godot/imported/metal.jpg-6fb2873a3573f5cb28744eab6921e65e.s3tc.ctex"
+path.etc2="res://.godot/imported/metal.jpg-6fb2873a3573f5cb28744eab6921e65e.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/infantry_albedo.webp"
-dest_files=["res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex", "res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"]
+source_file="res://assets/textures/metal.jpg"
+dest_files=["res://.godot/imported/metal.jpg-6fb2873a3573f5cb28744eab6921e65e.s3tc.ctex", "res://.godot/imported/metal.jpg-6fb2873a3573f5cb28744eab6921e65e.etc2.ctex"]
 
 [params]
 

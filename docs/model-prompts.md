@@ -16,7 +16,8 @@ Import step (Claude): pull the albedo texture out of the GLB (resized to 1024, s
 `assets/models/<name>_albedo.webp`), then slim the mesh:
 `godot --headless --path . -s scripts/dev/slim_model.gd -- res://assets/models/incoming/<name>.glb res://assets/models/<name>.res 6000 1.0`
 (Godot's LODs first, then vertex clustering that keeps texture seams). The source GLBs stay out of
-git. Done so far: `infantry` (7,350 triangles, from 297,000).
+git. Done so far: `infantry` (7,350 triangles, from 297,000) and `tank` (hull 10,073 + turret 4,046,
+split with `90 -0.035 0.12 0` so the turret turns on its own).
 
 Claude imports them and keeps the five level looks by adding level parts and colors in code, so
 each item needs only one model. The free Hugging Face GPU time is limited per day; signing in

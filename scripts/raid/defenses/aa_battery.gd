@@ -16,8 +16,8 @@ var _shots := 0
 
 
 func _build() -> void:
-	var olive := MeshKit.mat(UnitModels.OLIVE, 0.7)
-	var metal := MeshKit.mat(UnitModels.METAL, 0.5, 0.5)
+	var olive := MeshKit.surface("camo", UnitModels.OLIVE, 0.7)
+	var metal := MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.5)
 	MeshKit.add(model, MeshKit.cyl(1.3, 1.5, 0.5, 20), MeshKit.surface("concrete", StructureModels.CONCRETE, 0.9), Vector3(0, 0.25, 0))
 	_pivot = Node3D.new()
 	_pivot.position.y = 0.5
@@ -46,7 +46,7 @@ func _build() -> void:
 		dish.rotation.x = -0.3
 	if level >= 5:
 		for s in [-1.0, 1.0]:
-			MeshKit.add(_pivot, MeshKit.box(Vector3(0.45, 0.45, 1.2)), MeshKit.mat(UnitModels.SINAI_DARK, 0.7), Vector3(s * 1.0, 1.0, 0))
+			MeshKit.add(_pivot, MeshKit.box(Vector3(0.45, 0.45, 1.2)), MeshKit.surface("camo", UnitModels.SINAI_DARK, 0.7), Vector3(s * 1.0, 1.0, 0))
 	if level >= 2:
 		StructureModels.crate(model, 1.5, -1.3)
 	if level >= 4:

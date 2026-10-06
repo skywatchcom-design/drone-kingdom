@@ -2,9 +2,9 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ekuvawwsmhkn"
-path.s3tc="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex"
-path.etc2="res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"
+uid="uid://dced0mints1u8"
+path.s3tc="res://.godot/imported/concrete_n.jpg-8a6205fa5bbd925f4df29136edb612ff.s3tc.ctex"
+path.etc2="res://.godot/imported/concrete_n.jpg-8a6205fa5bbd925f4df29136edb612ff.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
@@ -12,8 +12,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/infantry_albedo.webp"
-dest_files=["res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.s3tc.ctex", "res://.godot/imported/infantry_albedo.webp-9dc2afa9551bfd050409380f09e54174.etc2.ctex"]
+source_file="res://assets/textures/concrete_n.jpg"
+dest_files=["res://.godot/imported/concrete_n.jpg-8a6205fa5bbd925f4df29136edb612ff.s3tc.ctex", "res://.godot/imported/concrete_n.jpg-8a6205fa5bbd925f4df29136edb612ff.etc2.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1

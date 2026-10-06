@@ -62,32 +62,88 @@ static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 	return label
 
 
-## Command Tower (sketch Th5mNJUuSD5d77XEMeRnqE): navy block, glowing band, gold roof, red-tipped
-## antenna. Lv2 a flag; Lv3 taller and wider with three antennas; Lv4 a satellite dish; Lv5 a
-## radar dome and a gold band.
+## Command Tower in B+ (sketch Nuz6m9sM5wrPz3wBAAZUaf): a reinforced concrete post that keeps
+## the approved identity (Th5mNJUuSD5d77XEMeRnqE): a band of cyan-lit windows, a gold roof cap,
+## red-tipped antennas. Navy steel door with steps and a lamp, a parapet, an air conditioner and
+## a cable down the wall. Lv2 a flag; Lv3 taller and wider with three antennas and sandbags at
+## the corners; Lv4 a satellite dish; Lv5 a radar dome, a gold band and T-wall panels behind.
 static func _hq(root: Node3D, level: int) -> float:
 	var h: float = [2.6, 3.2, 4.2, 4.8, 5.8][clampi(level, 1, 5) - 1]
 	var w := 4.0 if level >= 3 else 3.6
-	var metal := MeshKit.mat(Color(0.2, 0.2, 0.22), 0.5, 0.6)
-	MeshKit.add(root, MeshKit.box(Vector3(w, h, w)), MeshKit.mat(Color(0.2, 0.23, 0.28), 0.4, 0.5), Vector3(0, h / 2.0, 0))
-	MeshKit.add(root, MeshKit.box(Vector3(w + 0.06, 0.3, w + 0.06)), MeshKit.glow(Color(0.5, 0.9, 1.0)), Vector3(0, h * 0.62, 0))
-	MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.38, w + 0.3)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h + 0.19, 0))
+	var concrete := MeshKit.surface("concrete", Color(0.84, 0.81, 0.74), 0.9)
+	var pillar := MeshKit.surface("concrete", CONCRETE, 0.9)
+	var navy := MeshKit.mat(Color(0.2, 0.23, 0.28), 0.5, 0.5)
+	var gold := MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8)
+	var metal := MeshKit.surface("metal", Color(0.2, 0.2, 0.22), 0.5, 0.6)
+	var base := 0.3
+	MeshKit.add(root, MeshKit.box(Vector3(w + 0.5, base, w + 0.5)), pillar, Vector3(0, base / 2.0, 0))
+	MeshKit.add(root, MeshKit.box(Vector3(w, h, w)), concrete, Vector3(0, base + h / 2.0, 0))
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.3, h, 0.3)), pillar, Vector3(sx * w / 2.0, base + h / 2.0, sz * w / 2.0))
+	# The lit window band on every side, with navy mullions and a concrete sill.
+	var wy := base + h * 0.62
+	for side in 4:
+		var band := Node3D.new()
+		band.rotation.y = side * PI / 2.0
+		band.position = Vector3(0, wy, 0)
+		root.add_child(band)
+		MeshKit.add(band, MeshKit.box(Vector3(w - 0.5, 0.4, 0.04)), MeshKit.glow(Color(0.5, 0.9, 1.0)), Vector3(0, 0, w / 2.0 + 0.01))
+		for i in 5:
+			MeshKit.add(band, MeshKit.box(Vector3(0.07, 0.46, 0.08)), navy, Vector3(-w / 2.0 + 0.25 + i * (w - 0.5) / 4.0, 0, w / 2.0 + 0.03))
+		MeshKit.add(band, MeshKit.box(Vector3(w - 0.4, 0.08, 0.16)), pillar, Vector3(0, -0.26, w / 2.0 + 0.06))
+	# Navy steel door with a lamp above and two steps.
+	MeshKit.add(root, MeshKit.box(Vector3(0.9, 1.4, 0.06)), navy, Vector3(0.7, base + 0.7, w / 2.0 + 0.03))
+	MeshKit.add(root, MeshKit.box(Vector3(1.05, 0.08, 0.14)), pillar, Vector3(0.7, base + 1.45, w / 2.0 + 0.06))
+	MeshKit.add(root, MeshKit.box(Vector3(0.22, 0.1, 0.3)), metal, Vector3(0.7, base + 1.7, w / 2.0 + 0.12))
+	MeshKit.add(root, MeshKit.sphere(0.08, 8), MeshKit.glow(Color(1.0, 0.94, 0.75)), Vector3(0.7, base + 1.62, w / 2.0 + 0.18))
+	for i in 2:
+		MeshKit.add(root, MeshKit.box(Vector3(1.1, 0.15, 0.35)), pillar, Vector3(0.7, 0.08 + i * 0.15, w / 2.0 + 0.55 - i * 0.3))
+	# Gold roof cap with a parapet, an air conditioner and a cable down the side.
+	var top := base + h
+	MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.24, w + 0.3)), gold, Vector3(0, top + 0.12, 0))
+	for side in 4:
+		var rim := MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.3, 0.12)), gold, Vector3(0, top + 0.39, 0))
+		rim.rotation.y = side * PI / 2.0
+		rim.position = Vector3(sin(side * PI / 2.0), 0, cos(side * PI / 2.0)) * (w + 0.3) / 2.0 + Vector3(0, top + 0.39, 0)
+	MeshKit.add(root, MeshKit.box(Vector3(0.8, 0.45, 0.6)), MeshKit.mat(Color(0.89, 0.88, 0.85), 0.6, 0.3), Vector3(1.0, top + 0.47, -0.9))
+	MeshKit.add(root, MeshKit.cyl(0.2, 0.2, 0.04, 14), metal, Vector3(1.0, top + 0.71, -0.9))
+	var cable := MeshKit.add(root, MeshKit.cyl(0.04, 0.04, h, 6), MeshKit.mat(Color(0.12, 0.12, 0.12), 0.6), Vector3(-w / 2.0 - 0.08, base + h / 2.0, -0.7))
+	cable.rotation.z = 0.03
 	if level >= 2:
 		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 3.0, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(w / 2.0 + 0.5, 1.5, w / 2.0 + 0.5))
-		MeshKit.add(root, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
-		MeshKit.add(root, MeshKit.box(Vector3(0.031, 0.2, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
+		MeshKit.add(root, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
+		for y in [2.55, 2.85]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.031, 0.08, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(w / 2.0 + 0.5, y, w / 2.0 + 1.0))
 	var antennas := 3 if level >= 3 else 1
 	for i in antennas:
 		var ah := 2.2 + i * 0.5
-		MeshKit.add(root, MeshKit.cyl(0.06, 0.06, ah, 6), metal, Vector3(-0.8 + i * 0.8, h + 0.38 + ah / 2.0, -0.5))
-	MeshKit.add(root, MeshKit.sphere(0.16, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(-0.8, h + 2.7, -0.5))
+		var x := -0.8 + i * 0.8
+		MeshKit.add(root, MeshKit.cyl(0.04, 0.07, ah, 6), metal, Vector3(x, top + 0.24 + ah / 2.0, -0.5))
+		for k in 2:
+			MeshKit.add(root, MeshKit.box(Vector3(0.4, 0.03, 0.03)), metal, Vector3(x, top + 0.9 + k * 0.5, -0.5))
+		MeshKit.add(root, MeshKit.sphere(0.1, 8), MeshKit.glow(Color(1.0, 0.25, 0.2)), Vector3(x, top + 0.3 + ah, -0.5))
+	if level >= 3:
+		# Sandbag walls round the front corners.
+		var bags := []
+		for corner: float in [-1.0, 1.0]:
+			for row in 2:
+				for i in 5:
+					var a := PI / 2.0 + corner * (0.55 + i * 0.16) + (row % 2) * 0.08
+					var r := w / 2.0 + 0.75
+					bags.append(Transform3D(Basis(Vector3.UP, -a).scaled(Vector3(1.15, 0.5, 0.78)), Vector3(cos(a) * r, 0.25 + row * 0.27, sin(a) * r)))
+		MeshKit.multi(root, MeshKit.sphere(0.32, 8), MeshKit.surface("canvas", BAG, 0.95), bags)
 	if level >= 4:
-		MeshKit.add(root, MeshKit.cyl(0.6, 0.15, 0.25, 16), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3), Vector3(0.9, h + 0.75, 0.8)).rotation.x = -0.9
+		MeshKit.add(root, MeshKit.cyl(0.06, 0.06, 0.6, 6), metal, Vector3(0.9, top + 0.55, 0.8))
+		MeshKit.add(root, MeshKit.cyl(0.65, 0.15, 0.25, 16), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3), Vector3(0.9, top + 0.95, 0.8)).rotation.x = -0.9
 	if level >= 5:
-		MeshKit.add(root, MeshKit.sphere(0.95, 16), MeshKit.mat(Color(0.91, 0.9, 0.87), 0.5, 0.2), Vector3(0, h + 1.3, 0.5))
-		MeshKit.add(root, MeshKit.box(Vector3(w + 0.5, 0.2, 0.4)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(0, h * 0.3, w / 2.0 + 0.12))
+		MeshKit.add(root, MeshKit.cyl(0.8, 0.9, 0.35, 18), pillar, Vector3(0, top + 0.42, 0.5))
+		MeshKit.add(root, MeshKit.sphere(0.95, 16), MeshKit.mat(Color(0.91, 0.9, 0.87), 0.5, 0.2), Vector3(0, top + 1.3, 0.5))
+		MeshKit.add(root, MeshKit.box(Vector3(w + 0.5, 0.2, 0.4)), gold, Vector3(0, base + h * 0.3, w / 2.0 + 0.12))
+		for i in 3:
+			MeshKit.add(root, MeshKit.box(Vector3(1.2, 2.0, 0.3)), pillar, Vector3(-1.4 + i * 1.3, 1.0, -w / 2.0 - 0.45))
 	chevrons(root, level, Vector3(2.3, 0, 2.3))
-	return h + 2.9
+	return top + 2.9
 
 
 ## Solar generator: more panels with level. Lv1 two; Lv2 three; Lv3 four and a battery bank;
@@ -139,11 +195,11 @@ static func _storage(root: Node3D, level: int) -> float:
 		MeshKit.add(root, MeshKit.sphere(r, 20), shell, Vector3(x, h + 0.1, 0)).scale = Vector3(1, 0.5, 1)
 		MeshKit.add(root, MeshKit.cyl(0.35, 0.35, 0.12, 16), gold, Vector3(x, h + 0.1 + r * 0.5, 0))
 	if level >= 2:
-		MeshKit.add(root, MeshKit.box(Vector3(0.28, h, 0.05)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3((-1.2 if count == 2 else 0.0) + 1.0, h / 2.0 + 0.1, 1.0)).rotation.y = -0.8
+		MeshKit.add(root, MeshKit.box(Vector3(0.28, h, 0.05)), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3((-1.2 if count == 2 else 0.0) + 1.0, h / 2.0 + 0.1, 1.0)).rotation.y = -0.8
 	if level >= 4:
 		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.3, 1.8)), gold, Vector3(1.9, 0.6, 1.4)).rotation.x = 0.4
 	if level >= 5:
-		MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.2, 0.4)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(0, h - 0.2, 0))
+		MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.2, 0.4)), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(0, h - 0.2, 0))
 	chevrons(root, level, Vector3(2.3, 0, -1.8))
 	return h + 1.2
 
@@ -154,7 +210,7 @@ static func _hangar(root: Node3D, level: int) -> float:
 	var w: float = [3.2, 3.5, 3.9, 4.2, 4.8][clampi(level, 1, 5) - 1]
 	var d := 3.2 if level >= 3 else 2.6
 	MeshKit.add(root, MeshKit.box(Vector3(w, 1.4, d)), MeshKit.mat(Color(0.78, 0.8, 0.82), 0.5, 0.4), Vector3(0, 0.7, -0.6))
-	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, d, 16), MeshKit.mat(Color(0.35, 0.45, 0.55), 0.4, 0.5), Vector3(0, 1.4, -0.6))
+	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, d, 16), MeshKit.surface("corrugated", Color(0.35, 0.45, 0.55), 0.5, 0.5), Vector3(0, 1.4, -0.6))
 	roof.rotation.x = PI / 2.0
 	roof.scale = Vector3(1, 1, 0.42)
 	MeshKit.add(root, MeshKit.box(Vector3(w * 0.6, 1.1, 0.05)), MeshKit.mat(Color(0.12, 0.13, 0.15), 0.6), Vector3(0, 0.55, d / 2.0 - 0.58))
@@ -171,7 +227,7 @@ static func _hangar(root: Node3D, level: int) -> float:
 		for k in 6:
 			MeshKit.add(root, MeshKit.sphere(0.07, 6), MeshKit.glow(Color(0.5, 0.9, 1.0) if k % 2 else Color(1, 1, 1)), Vector3(1.6 + cos(k) * 0.95, 0.14, 1.8 + sin(k) * 0.95))
 	if level >= 5:
-		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 1.5, 6), MeshKit.mat(UnitModels.METAL, 0.5, 0.6), Vector3(-w / 2.0 + 0.4, 2.2, -0.6))
+		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 1.5, 6), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.6), Vector3(-w / 2.0 + 0.4, 2.2, -0.6))
 		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.15, 0.5)), MeshKit.mat(Color(0.93, 0.93, 0.93), 0.4), Vector3(1.6, 0.4, 1.8))
 	chevrons(root, level, Vector3(-2.3, 0, 1.0))
 	return 2.4
@@ -180,7 +236,7 @@ static func _hangar(root: Node3D, level: int) -> float:
 ## Fuel pump (approved sketch): a pumpjack whose head nods. Lv1 one pumpjack; Lv2 a fence of
 ## barrels; Lv3 bigger, with a pipe to a collection drum; Lv4 a second drum; Lv5 two pumpjacks.
 static func _pump(root: Node3D, level: int) -> float:
-	var metal := MeshKit.mat(UnitModels.METAL, 0.6, 0.4)
+	var metal := MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4)
 	var fuel := MeshKit.mat(FUEL, 0.5, 0.2)
 	var count := 2 if level >= 5 else 1
 	var size := 1.25 if level >= 3 else 1.0
@@ -216,7 +272,7 @@ static func _pump(root: Node3D, level: int) -> float:
 static func _tank(root: Node3D, level: int) -> float:
 	var shell := MeshKit.mat(Color(0.89, 0.88, 0.85), 0.45, 0.3)
 	var band := MeshKit.mat(FUEL, 0.5, 0.2)
-	var metal := MeshKit.mat(UnitModels.METAL, 0.6, 0.4)
+	var metal := MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4)
 	var count := 2 if level >= 5 else 1
 	var h := 2.4 if level >= 3 else 1.6
 	for i in count:
@@ -244,7 +300,7 @@ static func _tank(root: Node3D, level: int) -> float:
 ## Lv2 a sign board; Lv3 an obstacle course (wall, tires, rope frame); Lv4 a bench of weights;
 ## Lv5 a brick barracks and a watchtower.
 static func _camp(root: Node3D, level: int) -> float:
-	var wood := MeshKit.mat(WOOD, 0.9)
+	var wood := MeshKit.surface("wood", WOOD, 0.9)
 	MeshKit.add(root, MeshKit.box(Vector3(5.2, 0.1, 5.2)), MeshKit.mat(Color(0.79, 0.73, 0.56), 0.95), Vector3(0, 0.05, 0))
 	MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 3.2, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(1.9, 1.6, -1.9))
 	var flag := Node3D.new()
@@ -254,8 +310,8 @@ static func _camp(root: Node3D, level: int) -> float:
 	MeshKit.add(flag, MeshKit.box(Vector3(0.021, 0.16, 0.8)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(0, 0, 0.42))
 	_loop_rotate(flag, "rotation:y", 0.3, 1.3)
 	if level < 5:
-		MeshKit.add(root, MeshKit.box(Vector3(1.8, 1.1, 1.3)), MeshKit.mat(UnitModels.OLIVE, 0.8), Vector3(-1.3, 0.6, -1.5))
-		MeshKit.add(root, MeshKit.box(Vector3(1.9, 0.1, 1.4)), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), Vector3(-1.3, 1.2, -1.5))
+		MeshKit.add(root, MeshKit.box(Vector3(1.8, 1.1, 1.3)), MeshKit.surface("camo", UnitModels.OLIVE, 0.8), Vector3(-1.3, 0.6, -1.5))
+		MeshKit.add(root, MeshKit.box(Vector3(1.9, 0.1, 1.4)), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), Vector3(-1.3, 1.2, -1.5))
 	else:
 		MeshKit.add(root, MeshKit.box(Vector3(2.6, 1.8, 1.6)), MeshKit.mat(Color(0.73, 0.64, 0.48), 0.85), Vector3(-1.0, 0.95, -1.6))
 		MeshKit.add(root, MeshKit.box(Vector3(2.7, 0.15, 1.7)), MeshKit.mat(Color(0.48, 0.29, 0.2), 0.8), Vector3(-1.0, 1.9, -1.6))
@@ -268,7 +324,7 @@ static func _camp(root: Node3D, level: int) -> float:
 			for b in [-1.0, 1.0]:
 				MeshKit.add(tower, MeshKit.box(Vector3(0.1, 2.6, 0.1)), wood, Vector3(a * 0.4, 1.3, b * 0.4))
 		MeshKit.add(tower, MeshKit.box(Vector3(1.1, 0.1, 1.1)), wood, Vector3(0, 2.6, 0))
-		MeshKit.add(tower, MeshKit.cyl(0.0, 0.8, 0.6, 4), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), Vector3(0, 3.2, 0)).rotation.y = PI / 4.0
+		MeshKit.add(tower, MeshKit.cyl(0.0, 0.8, 0.6, 4), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), Vector3(0, 3.2, 0)).rotation.y = PI / 4.0
 	var posts := 3 if level >= 3 else 2
 	for i in posts:
 		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.8, 0.12)), wood, Vector3(-0.2 + i * 0.6, 0.4, 1.4))
@@ -283,7 +339,7 @@ static func _camp(root: Node3D, level: int) -> float:
 	if level >= 4:
 		MeshKit.add(root, MeshKit.box(Vector3(1.0, 0.3, 0.35)), wood, Vector3(-1.8, 0.15, 2.0))
 		for k in [-1.0, 1.0]:
-			MeshKit.add(root, MeshKit.cyl(0.18, 0.18, 0.08, 12), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(-1.8 + k * 0.45, 0.45, 2.0)).rotation.z = PI / 2.0
+			MeshKit.add(root, MeshKit.cyl(0.18, 0.18, 0.08, 12), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(-1.8 + k * 0.45, 0.45, 2.0)).rotation.z = PI / 2.0
 	chevrons(root, level, Vector3(2.3, 0, 0.6))
 	return 3.4
 
@@ -297,7 +353,7 @@ static func _quarters(root: Node3D, level: int) -> float:
 		for i in tents:
 			var x := -1.2 + (i % 2) * 2.4
 			var z := -1.1 + int(i / 2.0) * 2.2
-			var tent := MeshKit.add(root, MeshKit.cyl(0.0, 1.1, 1.3, 4), MeshKit.mat(UnitModels.OLIVE, 0.9), Vector3(x, 0.65, z))
+			var tent := MeshKit.add(root, MeshKit.cyl(0.0, 1.1, 1.3, 4), MeshKit.surface("camo", UnitModels.OLIVE, 0.9), Vector3(x, 0.65, z))
 			tent.rotation.y = PI / 4.0
 			tent.scale.z = 0.75
 			MeshKit.add(root, MeshKit.box(Vector3(0.4, 0.5, 0.02)), MeshKit.mat(Color(0.13, 0.15, 0.1), 0.9), Vector3(x, 0.3, z + 0.8))
@@ -307,10 +363,10 @@ static func _quarters(root: Node3D, level: int) -> float:
 		for i in 2:
 			var z := -1.2 + i * 2.4
 			MeshKit.add(root, MeshKit.box(Vector3(4.2, 1.3, 1.6)), MeshKit.mat(Color(0.84, 0.81, 0.74), 0.85), Vector3(0, 0.7, z))
-			MeshKit.add(root, MeshKit.box(Vector3(4.3, 0.12, 1.7)), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), Vector3(0, 1.4, z))
+			MeshKit.add(root, MeshKit.box(Vector3(4.3, 0.12, 1.7)), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), Vector3(0, 1.4, z))
 			for k in 4:
 				MeshKit.add(root, MeshKit.box(Vector3(0.45, 0.35, 0.03)), MeshKit.mat(Color(0.19, 0.22, 0.25), 0.3, 0.4), Vector3(-1.5 + k, 0.85, z + 0.81))
-			MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.9, 0.03)), MeshKit.mat(UnitModels.OLIVE, 0.7), Vector3(1.85, 0.5, z + 0.81))
+			MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.9, 0.03)), MeshKit.surface("camo", UnitModels.OLIVE, 0.7), Vector3(1.85, 0.5, z + 0.81))
 	if level >= 2:
 		for k in 6:
 			var a := k / 6.0 * TAU
@@ -329,8 +385,8 @@ static func _garage(root: Node3D, level: int) -> float:
 	MeshKit.add(root, MeshKit.box(Vector3(5.2, 0.1, 5.2)), MeshKit.mat(Color(0.5, 0.5, 0.47), 0.9), Vector3(0, 0.05, 0))
 	var w := 4.6 if level >= 5 else (3.8 if level >= 3 else 3.0)
 	var h := 2.6 if level >= 5 else (2.1 if level >= 3 else 1.7)
-	MeshKit.add(root, MeshKit.box(Vector3(w, h, 2.8)), MeshKit.mat(UnitModels.SINAI_DARK, 0.8), Vector3(0, h / 2.0, -0.6))
-	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, 2.9, 16), MeshKit.mat(Color(0.37, 0.42, 0.35), 0.7, 0.2), Vector3(0, h, -0.6))
+	MeshKit.add(root, MeshKit.box(Vector3(w, h, 2.8)), MeshKit.surface("camo", UnitModels.SINAI_DARK, 0.8), Vector3(0, h / 2.0, -0.6))
+	var roof := MeshKit.add(root, MeshKit.cyl(w / 2.0, w / 2.0, 2.9, 16), MeshKit.surface("corrugated", Color(0.37, 0.42, 0.35), 0.7, 0.2), Vector3(0, h, -0.6))
 	roof.rotation.x = PI / 2.0
 	roof.scale = Vector3(1, 1, 0.35)
 	var doors := 2 if level >= 5 else 1
@@ -348,13 +404,13 @@ static func _garage(root: Node3D, level: int) -> float:
 		var yellow := MeshKit.mat(Color(0.88, 0.64, 0.23), 0.6, 0.2)
 		MeshKit.add(crane, MeshKit.box(Vector3(0.15, 2.6, 0.15)), yellow, Vector3(0, 1.3, 0))
 		MeshKit.add(crane, MeshKit.box(Vector3(1.8, 0.15, 0.15)), yellow, Vector3(-0.8, 2.6, 0))
-		var hook := MeshKit.add(crane, MeshKit.box(Vector3(0.06, 0.9, 0.06)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(-1.5, 2.1, 0))
+		var hook := MeshKit.add(crane, MeshKit.box(Vector3(0.06, 0.9, 0.06)), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(-1.5, 2.1, 0))
 		_loop_rotate(hook, "position:y", 0.45, 2.4)
 	if level >= 4:
 		MeshKit.add(root, MeshKit.cyl(0.35, 0.35, 0.9, 12), MeshKit.mat(FUEL, 0.5, 0.2), Vector3(-2.2, 0.55, 2.2)).rotation.z = PI / 2.0
 	if level >= 5:
-		MeshKit.add(root, MeshKit.box(Vector3(1.2, 0.5, 0.9)), MeshKit.mat(UnitModels.SINAI, 0.8), Vector3(-1.4, 0.3, 1.8))
-		MeshKit.add(root, MeshKit.box(Vector3(0.9, 0.35, 0.7)), MeshKit.mat(UnitModels.SINAI, 0.8), Vector3(-1.4, 0.7, 1.75))
+		MeshKit.add(root, MeshKit.box(Vector3(1.2, 0.5, 0.9)), MeshKit.surface("camo", UnitModels.SINAI, 0.8), Vector3(-1.4, 0.3, 1.8))
+		MeshKit.add(root, MeshKit.box(Vector3(0.9, 0.35, 0.7)), MeshKit.surface("camo", UnitModels.SINAI, 0.8), Vector3(-1.4, 0.7, 1.75))
 	crate(root, 1.9, 2.0, 0.8)
 	chevrons(root, level, Vector3(-2.3, 0, 2.3))
 	return h + 0.9
@@ -367,7 +423,7 @@ static func _support(root: Node3D, level: int) -> float:
 	MeshKit.add(root, MeshKit.box(Vector3(5.2, 0.08, 5.2)), MeshKit.mat(Color(0.25, 0.26, 0.26), 0.9), Vector3(0, 0.04, 0))
 	for i in 5:
 		MeshKit.add(root, MeshKit.box(Vector3(0.5, 0.02, 0.12)), MeshKit.mat(Color(0.95, 0.76, 0.2), 0.6), Vector3(-2.0 + i * 1.0, 0.09, 1.9))
-	var sinai := MeshKit.mat(UnitModels.SINAI, 0.8)
+	var sinai := MeshKit.surface("camo", UnitModels.SINAI, 0.8)
 	if level < 5:
 		MeshKit.add(root, MeshKit.box(Vector3(1.4, 1.1, 1.2)), sinai, Vector3(-1.7, 0.6, -1.8))
 		MeshKit.add(root, MeshKit.box(Vector3(1.5, 0.12, 1.3)), MeshKit.mat(RUST, 0.6), Vector3(-1.7, 1.2, -1.8))
@@ -380,13 +436,13 @@ static func _support(root: Node3D, level: int) -> float:
 	sock.rotation.x = PI / 2.0
 	for r in (2 if level >= 4 else 1):
 		for k in 3:
-			MeshKit.add(root, MeshKit.cyl(0.08, 0.08, 0.8, 8), MeshKit.mat(UnitModels.OLIVE_DARK, 0.6, 0.3), Vector3(1.4 + r * 0.7, 0.45, 0.2 + k * 0.25)).rotation.z = -0.7
-		MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.25, 0.9)), MeshKit.mat(UnitModels.OLIVE, 0.7), Vector3(1.6 + r * 0.7, 0.15, 0.45))
+			MeshKit.add(root, MeshKit.cyl(0.08, 0.08, 0.8, 8), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.6, 0.3), Vector3(1.4 + r * 0.7, 0.45, 0.2 + k * 0.25)).rotation.z = -0.7
+		MeshKit.add(root, MeshKit.box(Vector3(0.7, 0.25, 0.9)), MeshKit.surface("camo", UnitModels.OLIVE, 0.7), Vector3(1.6 + r * 0.7, 0.15, 0.45))
 	if level >= 2:
 		for k in 3:
 			MeshKit.add(root, MeshKit.cyl(0.22, 0.22, 0.6, 10), MeshKit.mat(FUEL, 0.5, 0.2), Vector3(-2.2 + k * 0.5, 0.3, 2.2))
 	if level >= 3:
-		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 2.0, 6), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(2.3, 1.0, 1.9))
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 2.0, 6), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(2.3, 1.0, 1.9))
 		var radar := Node3D.new()
 		radar.position = Vector3(2.3, 2.1, 1.9)
 		root.add_child(radar)
@@ -437,17 +493,18 @@ const WOOD := Color(0.48, 0.35, 0.22)
 static func sandbags(parent: Node3D, r: float, rows: int) -> void:
 	var transforms := []
 	for row in rows:
-		var n := roundi(r * 5.2)
+		# Packed tight like a real sandbag wall.
+		var n := roundi(r * 9.5)
 		for i in n:
 			var a := (i + (row % 2) * 0.5) / n * TAU
-			var b := Basis(Vector3.UP, -a).scaled(Vector3(1.25, 0.55, 0.8))
+			var b := Basis(Vector3.UP, -a).scaled(Vector3(1.15, 0.5, 0.78))
 			transforms.append(Transform3D(b, Vector3(cos(a) * r, 0.2 + row * 0.3, sin(a) * r)))
 	MeshKit.multi(parent, MeshKit.sphere(0.32, 8), MeshKit.surface("canvas", BAG, 0.95), transforms)
 
 
 ## An olive ammo crate with a yellow band.
 static func crate(parent: Node3D, x: float, z: float, s: float = 1.0) -> void:
-	MeshKit.add(parent, MeshKit.box(Vector3(0.7, 0.5, 0.5) * s), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), Vector3(x, 0.25 * s, z))
+	MeshKit.add(parent, MeshKit.box(Vector3(0.7, 0.5, 0.5) * s), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), Vector3(x, 0.25 * s, z))
 	MeshKit.add(parent, MeshKit.box(Vector3(0.72, 0.06, 0.52) * s), MeshKit.mat(Color(0.85, 0.76, 0.48), 0.6), Vector3(x, 0.35 * s, z))
 
 
@@ -459,12 +516,12 @@ static func camo_net(parent: Node3D, w: float, d: float, y: float) -> void:
 	net.subdivide_depth = 6
 	MeshKit.add(parent, net, MeshKit.surface("net", Color(0.33, 0.38, 0.23), 1.0), Vector3(0, y, 0))
 	for i in 4:
-		MeshKit.add(parent, MeshKit.cyl(0.05, 0.05, y, 6), MeshKit.mat(WOOD, 0.9), Vector3((-1 if i < 2 else 1) * w * 0.45, y / 2.0, (-1 if i % 2 else 1) * d * 0.45))
+		MeshKit.add(parent, MeshKit.cyl(0.05, 0.05, y, 6), MeshKit.surface("wood", WOOD, 0.9), Vector3((-1 if i < 2 else 1) * w * 0.45, y / 2.0, (-1 if i % 2 else 1) * d * 0.45))
 
 
 ## A small plate on the pad with one gold chevron per level, so every level looks different.
 static func chevrons(parent: Node3D, level: int, pos: Vector3) -> void:
-	MeshKit.add(parent, MeshKit.box(Vector3(0.5, 0.06, 0.2 + level * 0.14)), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), pos + Vector3(0, 0.15, -level * 0.07))
+	MeshKit.add(parent, MeshKit.box(Vector3(0.5, 0.06, 0.2 + level * 0.14)), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), pos + Vector3(0, 0.15, -level * 0.07))
 	for i in level:
 		var c := Node3D.new()
 		c.position = pos + Vector3(0, 0.2, -i * 0.14)
@@ -493,7 +550,7 @@ static func wall(parent: Node3D, edge: Array, level: int) -> Node3D:
 	var length := City.SPACING / WALL_SCALE
 	var segs := 3
 	var seg := length / segs
-	var wood := MeshKit.mat(WOOD, 0.9)
+	var wood := MeshKit.surface("wood", WOOD, 0.9)
 	var wire := MeshKit.mat(Color(0.6, 0.6, 0.6), 0.4, 0.7)
 	for i in segs:
 		var x := (i - (segs - 1) / 2.0) * seg
@@ -512,7 +569,7 @@ static func wall(parent: Node3D, edge: Array, level: int) -> Node3D:
 				for k in 3:
 					MeshKit.add(root, MeshKit.box(Vector3(seg / 3.0 - 0.02, 0.28, 0.42)), MeshKit.surface("canvas", BAG, 0.95), Vector3(x - seg / 3.0 + k * seg / 3.0 + (r % 2) * 0.12, 0.15 + r * 0.27, 0))
 			if level == 4:
-				MeshKit.add(root, MeshKit.box(Vector3(0.08, 1.4, 0.08)), MeshKit.mat(UnitModels.METAL, 0.6, 0.4), Vector3(x - seg / 2.0 + 0.05, 0.7, 0))
+				MeshKit.add(root, MeshKit.box(Vector3(0.08, 1.4, 0.08)), MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4), Vector3(x - seg / 2.0 + 0.05, 0.7, 0))
 				_wire_coil(root, wire, x, 1.05, seg)
 		else:
 			MeshKit.add(root, MeshKit.box(Vector3(seg - 0.06, 0.3, 1.0)), MeshKit.surface("concrete", CONCRETE, 0.9), Vector3(x, 0.15, 0))

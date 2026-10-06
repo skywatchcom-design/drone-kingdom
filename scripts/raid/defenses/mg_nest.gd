@@ -31,13 +31,13 @@ func _build() -> void:
 		var x := 0.0 if guns == 1 else (0.22 if i == 1 else -0.22)
 		MeshKit.add(_pivot, MeshKit.box(Vector3(0.18, 0.2, 1.1)), gun_mat, Vector3(x, 0.35, 0.25))
 		MeshKit.add(_pivot, MeshKit.cyl(0.04, 0.04, 0.7, 8), gun_mat, Vector3(x, 0.38, 1.1)).rotation.x = PI / 2.0
-		MeshKit.add(_pivot, MeshKit.box(Vector3(0.24, 0.22, 0.2)), MeshKit.mat(UnitModels.OLIVE_DARK, 0.8), Vector3(x - 0.18, 0.3, 0))
+		MeshKit.add(_pivot, MeshKit.box(Vector3(0.24, 0.22, 0.2)), MeshKit.surface("camo", UnitModels.OLIVE_DARK, 0.8), Vector3(x - 0.18, 0.3, 0))
 		var muzzle := Node3D.new()
 		muzzle.position = Vector3(x, 0.38, 1.45)
 		_pivot.add_child(muzzle)
 		_muzzles.append(muzzle)
 	if level >= 3:
-		MeshKit.add(_pivot, MeshKit.box(Vector3(1.0, 0.6, 0.06)), MeshKit.mat(UnitModels.OLIVE, 0.7, 0.2), Vector3(0, 0.55, 0.65))
+		MeshKit.add(_pivot, MeshKit.box(Vector3(1.0, 0.6, 0.06)), MeshKit.surface("camo", UnitModels.OLIVE, 0.7, 0.2), Vector3(0, 0.55, 0.65))
 	if level >= 2:
 		StructureModels.crate(model, 1.1, -0.9)
 	if level >= 4:
