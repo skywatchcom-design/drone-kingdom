@@ -1,25 +1,20 @@
-# Tripo prompts (3D models)
+# 3D model prompts
 
-The owner generates these on tripo3d.ai (free plan) and drops the GLB files into
-`assets/models/incoming/`. Claude imports them into the game and keeps the five level looks by
-adding level parts and colors in code, so each item needs only one model.
+Tripo's free plan does not allow exporting (7.10.2026), so models come from Microsoft TRELLIS.2
+(MIT license, free for commercial use) on Hugging Face: https://huggingface.co/spaces/microsoft/TRELLIS.2
+TRELLIS turns one picture into a 3D model, so each model takes two steps:
 
-Free plan: models are public, CC BY 4.0 with Tripo's "non-commercial" wording. The owner chose to
-stay on the free plan (7.10.2026); the credits screen must name Tripo. Before launch, check the
-license again.
+1. Make a picture with any AI image tool the owner already uses (Gemini, ChatGPT, Copilot):
+   the image prompt below plus this ending:
+   > 3/4 view from slightly above, the whole object visible, plain white background, soft even
+   > light, no shadows on the background, stylized realistic military mobile game art, Boom Beach
+   > style, no text, no real insignia
+2. Upload the picture to the TRELLIS.2 space, generate, and download the GLB.
+   Save the picture and the GLB into `assets/models/incoming/` with the name from the list.
 
-## Settings for every model
-- Mode: Text to 3D (or Image to 3D if a sketch picture is attached).
-- Texture: on, PBR if offered. Style: none / realistic.
-- Topology: low poly or "smart mesh" if offered, about 5,000-10,000 faces (phones).
-- Download: GLB.
-- File name: the name in the list below (for example `infantry.glb`).
-
-Add this ending to every prompt:
-
-> stylized realistic military mobile game asset, Boom Beach style, clean readable shapes,
-> PBR textures, game ready, single object centered, no ground, no base, no text, no flags,
-> no real insignia
+Claude imports them and keeps the five level looks by adding level parts and colors in code, so
+each item needs only one model. The free Hugging Face GPU time is limited per day; signing in
+with a free Hugging Face account gives more.
 
 ## The list, in priority order
 1. `infantry.glb` – A modern soldier standing, olive camouflage uniform, covered helmet with
