@@ -42,6 +42,7 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _support(root, level)
 		"hangar":
 			height = _hangar(root, level)
+	_details(root, type, level)
 	MeshKit.grime_root = null
 	if type not in PAD_SIZED:
 		chevrons(root, level, Vector3(1.7, 0, 1.7))
@@ -120,9 +121,14 @@ static func _hq(root: Node3D, level: int) -> float:
 	cable.rotation.z = 0.03
 	if level >= 2:
 		MeshKit.add(root, MeshKit.cyl(0.04, 0.04, 3.0, 6), MeshKit.mat(Color(0.75, 0.75, 0.77), 0.4, 0.6), Vector3(w / 2.0 + 0.5, 1.5, w / 2.0 + 0.5))
-		MeshKit.add(root, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 1.0))
-		for y in [2.55, 2.85]:
-			MeshKit.add(root, MeshKit.box(Vector3(0.031, 0.08, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(w / 2.0 + 0.5, y, w / 2.0 + 1.0))
+		# Flag on a pivot at the pole, so it flaps gently in the wind.
+		var flag := Node3D.new()
+		flag.position = Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 0.5)
+		root.add_child(flag)
+		MeshKit.add(flag, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(0, 0, 0.5))
+		for y in [-0.15, 0.15]:
+			MeshKit.add(flag, MeshKit.box(Vector3(0.031, 0.08, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(0, y, 0.5))
+		_loop_rotate(flag, "rotation:y", 0.22, 1.7)
 	var antennas := 3 if level >= 3 else 1
 	for i in antennas:
 		var ah := 2.2 + i * 0.5
@@ -534,6 +540,72 @@ static func camo_net(parent: Node3D, w: float, d: float, y: float) -> void:
 	MeshKit.add(parent, net, MeshKit.surface("net", Color(0.33, 0.38, 0.23), 1.0), Vector3(0, y, 0))
 	for i in 4:
 		MeshKit.add(parent, MeshKit.cyl(0.05, 0.05, y, 6), MeshKit.surface("wood", WOOD, 0.9), Vector3((-1 if i < 2 else 1) * w * 0.45, y / 2.0, (-1 if i % 2 else 1) * d * 0.45))
+
+
+## The approved B+ details (sketch Nuz6m9sM5wrPz3wBAAZUaf) that sit on the ground around a
+## building: oil stains, jerrycans, a concrete bund wall round the fuel tanks, a tire pile at
+## the garage, a warning sign, lamps. Cheap extras that make the yard look lived-in. The
+## command tower builds its own, so it is skipped here.
+static func _details(root: Node3D, type: String, level: int) -> void:
+	match type:
+		"tank":
+			# A low concrete bund wall round the fuel tanks, a pipe, a stain and a warning sign.
+			for e in [[Vector3(5.0, 0.35, 0.2), Vector3(0, 0.17, 2.45)], [Vector3(5.0, 0.35, 0.2), Vector3(0, 0.17, -2.45)],
+					[Vector3(0.2, 0.35, 5.0), Vector3(2.45, 0.17, 0)], [Vector3(0.2, 0.35, 5.0), Vector3(-2.45, 0.17, 0)]]:
+				MeshKit.add(root, MeshKit.box(e[0]), MeshKit.surface("concrete", CONCRETE, 0.9), e[1])
+			MeshKit.add(root, MeshKit.cyl(0.1, 0.1, 3.6, 10), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.4), Vector3(0, 0.45, 1.9)).rotation.z = PI / 2.0
+			for k in [-1.0, 0.0, 1.0]:
+				MeshKit.add(root, _torus(0.14, 0.03), MeshKit.mat(RUST, 0.6), Vector3(k * 1.1, 0.45, 2.02))
+			_oil_stain(root, 1.6, -1.6, 0.5)
+			MeshKit.add(root, MeshKit.box(Vector3(0.45, 0.45, 0.03)), MeshKit.mat(Color(0.95, 0.76, 0.1), 0.5), Vector3(-2.1, 0.75, 2.49))
+		"pump":
+			MeshKit.add(root, MeshKit.box(Vector3(3.4, 0.14, 1.8)), MeshKit.surface("concrete", CONCRETE, 0.9), Vector3(0, 0.1, 0))
+			_oil_stain(root, 0.9, 0.3, 0.9)
+			_oil_stain(root, -0.6, -0.5, 0.5)
+			_jerrycan(root, -2.0, 1.6)
+			_jerrycan(root, -1.6, 1.85)
+		"storage":
+			MeshKit.add(root, MeshKit.cyl(1.55, 1.6, 0.2, 24), MeshKit.surface("concrete", CONCRETE, 0.9), Vector3(0, 0.1, 0))
+			_oil_stain(root, 1.5, 1.6, 0.4)
+		"generator":
+			_ground_lamp(root, 1.9, 0.85, 2.18)
+			_oil_stain(root, 1.6, 1.4, 0.5)
+			for k in 3:
+				MeshKit.add(root, MeshKit.box(Vector3(0.03, 0.45, 0.4)), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.4), Vector3(2.2, 0.4, 1.75 + k * 0.15))
+		"garage":
+			_oil_stain(root, 0.0, 1.5, 0.8)
+			_oil_stain(root, 1.1, 1.9, 0.4)
+			for i in 3:
+				var tire := MeshKit.add(root, _torus(0.3, 0.12), MeshKit.mat(Color(0.1, 0.1, 0.1), 0.9), Vector3(2.2, 0.12 + i * 0.24, -0.2))
+				tire.rotation.x = PI / 2.0
+			_ground_lamp(root, 0.0, 1.9, 0.86)
+		"hangar":
+			_ground_lamp(root, 0.0, 1.25, 1.0)
+			_oil_stain(root, 0.0, 1.2, 0.6)
+
+
+## A dark oil patch on the ground.
+static func _oil_stain(root: Node3D, x: float, z: float, r: float) -> void:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(0.08, 0.07, 0.06, 0.4)
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(r * 2.0, r * 1.4)
+	var mi := MeshKit.add(root, quad, m, Vector3(x, 0.09, z))
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## An olive jerrycan.
+static func _jerrycan(root: Node3D, x: float, z: float) -> void:
+	MeshKit.add(root, MeshKit.box(Vector3(0.3, 0.42, 0.16)), MeshKit.surface("camo", UnitModels.OLIVE, 0.7), Vector3(x, 0.33, z))
+	MeshKit.add(root, MeshKit.box(Vector3(0.08, 0.06, 0.1)), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.5), Vector3(x, 0.57, z))
+
+
+## A small work lamp on a short post.
+static func _ground_lamp(root: Node3D, x: float, y: float, z: float) -> void:
+	MeshKit.add(root, MeshKit.box(Vector3(0.16, 0.08, 0.22)), MeshKit.surface("metal", UnitModels.METAL, 0.5, 0.5), Vector3(x, y, z))
+	MeshKit.add(root, MeshKit.sphere(0.06, 8), MeshKit.glow(Color(1.0, 0.94, 0.72)), Vector3(x, y - 0.06, z + 0.04))
 
 
 ## A small plate on the pad with one gold chevron per level, so every level looks different.
