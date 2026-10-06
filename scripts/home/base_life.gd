@@ -1,9 +1,9 @@
 class_name BaseLife
 extends Node3D
-## Life in the home base (approved sketch Wh6JXRFwid3cJxTbP8DZsG): two soldiers patrol the
-## inner edge of the compound, a jeep laps the outside kicking up dust, a worker hammers at
-## every building site, smoke rises from the campfire and the workshop pipe, antenna lights
-## blink, a patrol drone circles and a flock of birds wheels overhead.
+## Life in the home base (approved sketch Wh6JXRFwid3cJxTbP8DZsG): two soldiers patrol side by
+## side round the inner edge of the compound, a jeep laps the outside kicking up dust, a worker
+## hammers at every building site, smoke rises from the campfire and the workshop pipe,
+## antenna lights blink, a patrol drone circles and a flock of birds wheels overhead.
 ## Cheap on purpose: a handful of nodes moved in _process, no physics.
 
 const PATROL_EDGE := 34.0
@@ -32,7 +32,7 @@ func setup(world: Node, sites: Array) -> void:
 		var u := GroundUnit.new()
 		u.configure(Catalog.unit_stats("infantry", 1))
 		u.set_meta("home", Vector3.ZERO)
-		u.position = _patrol_point(0.02 * i)
+		u.position = _patrol_point(0.0, i)
 		add_child(u)
 		_soldiers.append(u)
 	_jeep = _make_jeep()
@@ -60,12 +60,12 @@ func _scan(node: Node) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	# Patrol: the second soldier walks a few steps behind the first.
+	# Patrol: the two soldiers walk side by side, each in its own lane, chasing a point just
+	# ahead so they turn the corners smoothly.
 	for i in _soldiers.size():
 		var u := _soldiers[i]
-		var t := fposmod(_time * 0.0045 - i * 0.012, 1.0)
-		var goal := _patrol_point(t + 0.01)
-		u.walk((goal - u.position).normalized() * 1.1, delta)
+		var goal := _patrol_point(_time * 0.0045 + 0.005, i)
+		u.walk((goal - u.position).limit_length(1.0) * 1.3, delta)
 	# Jeep: laps a rounded square outside the lawn.
 	var a := _jeep_point(fposmod(_time * 0.022, 1.0))
 	var b := _jeep_point(fposmod(_time * 0.022 + 0.004, 1.0))
@@ -99,8 +99,9 @@ func _process(delta: float) -> void:
 		(_wings[i][1] as Node3D).rotation.z = -flap
 
 
-func _patrol_point(t: float) -> Vector3:
-	return _square(fposmod(t, 1.0), PATROL_EDGE, 0.0)
+## Lane 0 runs on the inside, lane 1 a little over a meter further out.
+func _patrol_point(t: float, lane: int) -> Vector3:
+	return _square(fposmod(t, 1.0), PATROL_EDGE + lane * 1.3, 3.0 + lane * 1.3)
 
 
 func _jeep_point(t: float) -> Vector3:
