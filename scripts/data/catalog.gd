@@ -65,6 +65,12 @@ const SHORT := {
 	"aa": "Shoots down drones.",
 	"mortar": "Hits groups of soldiers from afar.",
 	"jammer": "Scrambles drones in its field.",
+	"infantry": "Cheap and quick; they come in numbers.",
+	"engineers": "Blow holes in walls and plant charges.",
+	"armor": "Very tough; takes out defenses first.",
+	"courier": "All-round drone; hits what is closest.",
+	"scout": "Very fast; goes straight for loot.",
+	"heavy": "Tough drone; hits defenses first.",
 }
 
 ## vs: damage multiplier against soldiers, tanks and drones. Each defense is best against one.
@@ -141,7 +147,7 @@ const GROUND := {
 	"infantry": {"name": "Infantry Squad", "role": "Cheap and quick, they come in numbers. Each soldier attacks the closest building.",
 		"squad": 4, "health": 70.0, "speed": 4.5, "dps": 9.0, "fire": 0.4, "range": 6.0, "housing": 3, "prefers": "any",
 		"color": Color(0.61, 0.67, 0.42), "garage": 1, "unlock": 0, "train_fuel": 40, "train_seconds": 20.0},
-	"engineers": {"name": "Combat Engineers", "role": "Blow a hole in the fence, then plant charges on buildings. They open the way for everyone else.",
+	"engineers": {"name": "Combat Engineers", "role": "Blow holes in walls, then plant charges on buildings. They open the way for everyone else.",
 		"squad": 2, "health": 80.0, "speed": 5.0, "dps": 22.0, "fire": 1.2, "range": 1.0, "housing": 2, "prefers": "fence",
 		"color": Color(0.88, 0.64, 0.23), "garage": 2, "unlock": 300, "train_fuel": 50, "train_seconds": 25.0},
 	"armor": {"name": "Heavy Tank", "role": "Slow and very tough, fires heavy shells. Soaks up fire and takes out defenses first.",

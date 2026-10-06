@@ -33,6 +33,8 @@ var open_cell: Array = []
 var open_wall: Array = []
 ## The Shop tab opened last.
 var shop_tab := "army"
+## The open Army window, so its queue timer can tick.
+var army_box: Control
 ## Which sheet is open besides a structure's ("army", "hangar", "garage" or ""), so it can
 ## be refreshed as training moves on.
 var open_sheet := ""
@@ -54,6 +56,7 @@ var focus := Vector3(0, 10, 0)
 func _ready() -> void:
 	Engine.time_scale = 1.0
 	Audio.hum(0.0)
+	Audio.music(true)
 	cam = WorldSetup.create(self, VIEW_SIZE)
 	hud = HomeHud.new()
 	add_child(hud)
@@ -151,7 +154,7 @@ func _spawn(s: Dictionary) -> void:
 		var bubble := CoinBubble.new()
 		bubble.cell = s["cell"]
 		bubble.fuel = type == "pump"
-		bubble.position = city.roof_top(s["cell"]) + Vector3(0, 4.2, 0)
+		bubble.position = city.roof_top(s["cell"]) + Vector3(0, 3.4, 0)
 		level.add_child(bubble)
 		coins.append(bubble)
 
@@ -220,8 +223,11 @@ func _tick_second() -> void:
 	_refresh_header()
 	if not open_cell.is_empty() and hud.actions_open() and GameState.is_busy(GameState.structure_at(open_cell)):
 		_open_cell(open_cell)
-	elif open_sheet == "army" and hud.panel_open() and (trained > 0 or not GameState.training.is_empty()):
-		_open_army()
+	elif open_sheet == "army" and hud.modal_open() and army_box != null and is_instance_valid(army_box):
+		if trained > 0:
+			_open_army()
+		else:
+			ShopUI.update_army_timer(army_box)
 	elif open_sheet == "support" and hud.panel_open() and not GameState.support_queue.is_empty():
 		_open_support()
 
@@ -295,7 +301,7 @@ func _try_collect(screen_pos: Vector2) -> bool:
 		if got > 0:
 			hud.toast(I18n.t("+%d fuel") % got if bubble.fuel else I18n.t("+%d coins") % got)
 			bubble.pop()
-			Audio.play("coin")
+			Audio.play("coin", -8.0)
 			Audio.buzz(20)
 		elif bubble.fuel:
 			hud.toast(I18n.t("Fuel tanks are full. Build or upgrade a Fuel Tank."))
@@ -646,6 +652,11 @@ func _open_settings() -> void:
 		GameState.set_sound(not GameState.sound_on)
 		Audio.set_enabled(GameState.sound_on)
 		sound.text = I18n.t("Sound on") if GameState.sound_on else I18n.t("Sound off"))
+	var music := HomeHud.make_button(grid, I18n.t("Music on") if GameState.music_on else I18n.t("Music off"), 24, 80)
+	music.pressed.connect(func() -> void:
+		GameState.set_music(not GameState.music_on)
+		Audio.refresh_music()
+		music.text = I18n.t("Music on") if GameState.music_on else I18n.t("Music off"))
 	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
 	if GameState.dev_tools_available():
 		var dev := HomeHud.make_button(grid, I18n.t("DEV: free ON") if GameState.infinite_coins else I18n.t("DEV: free OFF"), 24, 80)
@@ -706,109 +717,55 @@ func _hq_unlocks(lvl: int) -> String:
 
 # ---------------------------------------------------------------- army and training
 
-## The Army sheet: what is trained and waiting, the training queue, and a card per unit to
-## train more. Opens from the Army button, the Training Camp and the Quarters.
+## The Army window (Shop style): space, the training queue and a picture card per unit with
+## its price; "!" opens what the unit does. Opens from the Army button, the Training Camp and
+## the Quarters.
 func _open_army() -> void:
 	open_cell = []
 	open_sheet = "army"
 	marker.visible = false
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 18)
-	box.add_child(head)
-	var space := HomeHud.make_label(head, I18n.t("Army %d / %d space") % [GameState.army_used(), GameState.army_capacity()], 28, GOLD)
-	space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if GameState.queued_space() > 0:
-		HomeHud.make_label(head, I18n.t("+%d in training") % GameState.queued_space(), 24, SOFT)
-	_wrap(HomeHud.make_label(box, _army_summary(), 22))
-
-	if not GameState.training.is_empty():
-		var queue := _card(true)
-		box.add_child(queue)
-		var qbox := VBoxContainer.new()
-		qbox.add_theme_constant_override("separation", 10)
-		queue.add_child(qbox)
-		var now_type: String = GameState.training[0]
-		var line := I18n.t("Training %s  ·  %s") % [Catalog.display_name(now_type), HomeHud.clock(GameState.train_head_left())]
-		if GameState.training.size() > 1:
-			line += "  ·  " + I18n.t("%d more after it") % (GameState.training.size() - 1)
-		_wrap(HomeHud.make_label(qbox, line, 24))
-		var gems := GameState.training_speedup_cost()
-		var fast := HomeHud.make_button(qbox, I18n.t("Finish training now  ·  %d gems") % gems, 24, 72)
-		var can := GameState.infinite_coins or GameState.gems >= gems
-		fast.disabled = not can
-		_gold(fast, can)
-		fast.pressed.connect(func() -> void:
-			if GameState.speed_up_training():
-				Audio.play("build")
-				_refresh_header()
-				_open_army())
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	box.add_child(grid)
-	for type in Catalog.UNIT_ORDER:
-		grid.add_child(_train_card(type))
-	hud.show_content(I18n.t("Army"), box)
-
-
-## "Infantry Squad x2  ·  Courier x2", or a hint when the army is empty.
-func _army_summary() -> String:
-	var parts := []
-	for type in Catalog.UNIT_ORDER:
-		if int(GameState.army.get(type, 0)) > 0:
-			parts.append("%s x%d" % [Catalog.display_name(type), int(GameState.army[type])])
-	if parts.is_empty():
-		return I18n.t("No army yet. Train units below; they wait in the Quarters for the next attack.")
-	return I18n.t("Ready: %s") % "  ·  ".join(parts)
-
-
-func _train_card(type: String) -> Control:
-	var def := Catalog.unit_def(type)
-	var owned: bool = GameState.units.has(type)
-	var card := _card(owned)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
-	card.add_child(box)
-	HomeHud.make_label(box, Catalog.display_name(type), 26, def["color"] if owned else Color(0.6, 0.62, 0.66))
-	if not owned:
-		var where := I18n.t("Unlock it in the Garage") if Catalog.is_ground(type) else I18n.t("Unlock it in the Hangar")
-		_wrap(HomeHud.make_label(box, where, 20, SOFT))
-		return card
-	HomeHud.make_label(box, I18n.t("%d space  ·  %d fuel  ·  %s") % [int(def["housing"]), Catalog.train_fuel(type), HomeHud.clock(Catalog.train_seconds(type, GameState.camp_level()))], 20, SOFT)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	box.add_child(row)
-	var queued := GameState.training.count(type)
-	var minus := HomeHud.make_button(row, "-", 30, 64)
-	minus.custom_minimum_size.x = 64
-	minus.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	minus.disabled = queued <= 0
-	minus.pressed.connect(func() -> void:
-		GameState.cancel_training(type)
-		_refresh_header()
-		_open_army())
-	var count := HomeHud.make_label(row, I18n.t("Queued %d") % queued, 22)
-	count.custom_minimum_size.x = 110
-	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	count.size_flags_vertical = Control.SIZE_FILL
-	var reason := GameState.train_block_reason(type)
-	var plus := HomeHud.make_button(row, I18n.t("Train"), 24, 64)
-	plus.disabled = reason != ""
-	_gold(plus, reason == "")
-	plus.pressed.connect(func() -> void:
+	_deselect()
+	hud.hide_panel()
+	var train := func(type: String) -> void:
 		if GameState.train(type):
 			Audio.play("click")
 			_refresh_header()
-			_open_army())
-	if reason != "":
-		_wrap(HomeHud.make_label(box, reason, 19, BAD))
-	return card
+			_open_army()
+		else:
+			hud.toast(GameState.train_block_reason(type))
+	var cancel := func(type: String) -> void:
+		GameState.cancel_training(type)
+		_refresh_header()
+		_open_army()
+	var speedup := func() -> void:
+		if GameState.speed_up_training():
+			Audio.play("build")
+			_refresh_header()
+			_open_army()
+	army_box = ShopUI.army(train, cancel, _open_unit_info, speedup)
+	hud.show_modal(army_box, Vector2(1180, 480))
+
+
+## What a unit does and its numbers at its current level.
+func _open_unit_info(type: String) -> void:
+	var lvl := int(GameState.units.get(type, 1))
+	var st := Catalog.unit_stats(type, lvl)
+	var def := Catalog.unit_def(type)
+	var rows := []
+	if Catalog.is_ground(type) and int(def.get("squad", 1)) > 1:
+		rows.append([I18n.t("Per card"), I18n.t("%d soldiers") % int(def["squad"])])
+	rows.append([I18n.t("Health"), str(int(st["health"]))])
+	rows.append([I18n.t("Damage per second"), str(int(st["dps"]))])
+	rows.append([I18n.t("Speed"), str(snappedf(float(st["speed"]), 0.1))])
+	if st.has("range"):
+		rows.append([I18n.t("Range"), str(snappedf(float(st["range"]), 0.1))])
+	rows.append([I18n.t("Army space"), str(int(def["housing"]))])
+	var targets := {"any": I18n.t("Whatever is closest"), "loot": I18n.t("Generators, silos and the Command Tower"),
+		"defense": I18n.t("Defenses first"), "fence": I18n.t("Walls, then buildings")}
+	rows.append([I18n.t("Targets"), targets.get(def.get("prefers", "any"), "")])
+	var back := {"text": I18n.t("Back"), "call": _open_army}
+	var title := Catalog.display_name(type) + "  ·  " + I18n.t("Lv %d") % lvl
+	hud.show_modal(ShopUI.info_window(title, type, lvl, rows, I18n.t(def["role"]), [back]), Vector2(900, 520))
 
 
 # ---------------------------------------------------------------- support base

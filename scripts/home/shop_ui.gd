@@ -160,6 +160,190 @@ static func _card(type: String, on_buy: Callable, on_info: Callable) -> Control:
 	return card
 
 
+# ---------------------------------------------------------------- army
+
+## The Army window, laid out like the Shop: space used at the top, the training queue, then a
+## picture card per unit with its role, space, time and a Train button that shows the fuel
+## price. `on_train(type)`, `on_cancel(type)`, `on_info(type)`, `on_speedup()`. The queue line
+## is kept as meta "timer" so it can tick without rebuilding the window.
+static func army(on_train: Callable, on_cancel: Callable, on_info: Callable, on_speedup: Callable) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	var title := HomeHud.make_label(box, I18n.t("Army"), 30)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	head.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(head)
+	head.add_child(Icons.rect("army", 30))
+	var used := GameState.army_used()
+	var cap := GameState.army_capacity()
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = Vector2(320, 26)
+	bar.show_percentage = false
+	bar.max_value = maxi(1, cap)
+	bar.value = used
+	var bg := HomeHud.flat(Color(0, 0, 0, 0.45))
+	bg.set_corner_radius_all(8)
+	var fill := HomeHud.flat(Color(0.95, 0.72, 0.18))
+	fill.set_corner_radius_all(8)
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fill)
+	head.add_child(bar)
+	HomeHud.make_label(head, I18n.t("%d / %d space") % [used, cap], 22)
+	if GameState.queued_space() > 0:
+		HomeHud.make_label(head, I18n.t("+%d in training") % GameState.queued_space(), 20, Color(0.8, 0.85, 0.78))
+	if not GameState.training.is_empty():
+		var q := HBoxContainer.new()
+		q.alignment = BoxContainer.ALIGNMENT_CENTER
+		q.add_theme_constant_override("separation", 14)
+		box.add_child(q)
+		var line := HomeHud.make_label(q, "", 20)
+		box.set_meta("timer", line)
+		var gems := GameState.training_speedup_cost()
+		var fast := Button.new()
+		fast.text = I18n.t("Finish now  ·  %d") % gems
+		fast.icon = Icons.tex("gem", 48)
+		fast.add_theme_constant_override("icon_max_width", 22)
+		fast.add_theme_font_size_override("font_size", 18)
+		fast.custom_minimum_size = Vector2(0, 40)
+		var can := GameState.infinite_coins or GameState.gems >= gems
+		fast.disabled = not can
+		HomeHud._style_button(fast, Color(0.3, 0.55, 0.4) if can else Color(0.42, 0.42, 0.4), 8)
+		fast.pressed.connect(func() -> void:
+			Audio.play("click", -6.0)
+			on_speedup.call())
+		q.add_child(fast)
+		update_army_timer(box)
+	var scroll := ScrollContainer.new()
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(row)
+	for type in Catalog.UNIT_ORDER:
+		row.add_child(_unit_card(type, on_train, on_cancel, on_info))
+	return box
+
+
+## The queue line: what is training now, how long is left and how many follow.
+static func update_army_timer(box: Control) -> void:
+	if not box.has_meta("timer") or GameState.training.is_empty():
+		return
+	var line: Label = box.get_meta("timer")
+	var now_type: String = GameState.training[0]
+	var text := I18n.t("Training %s  ·  %s") % [Catalog.display_name(now_type), HomeHud.clock(GameState.train_head_left())]
+	if GameState.training.size() > 1:
+		text += "  ·  " + I18n.t("%d more after it") % (GameState.training.size() - 1)
+	line.text = text
+
+
+static func _unit_card(type: String, on_train: Callable, on_cancel: Callable, on_info: Callable) -> Control:
+	var def := Catalog.unit_def(type)
+	var owned: bool = GameState.units.has(type)
+	var lvl := int(GameState.units.get(type, 1))
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(178, 0)
+	card.add_theme_stylebox_override("panel", HomeHud._box(CARD_GREY, 12, CARD_LINE, 3))
+	if not owned:
+		card.modulate = Color(0.75, 0.75, 0.75, 0.85)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	card.add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var name_label := HomeHud.ink(head, Catalog.display_name(type), 18)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	var i := Button.new()
+	i.icon = Icons.tex("info", 48)
+	i.expand_icon = true
+	i.custom_minimum_size = Vector2(30, 30)
+	i.flat = true
+	i.pressed.connect(func() -> void:
+		Audio.play("click", -6.0)
+		on_info.call(type))
+	head.add_child(i)
+	var pic_holder := Control.new()
+	pic_holder.custom_minimum_size = Vector2(0, 150)
+	box.add_child(pic_holder)
+	var drone := Catalog.DRONES.has(type)
+	var pic := picture(type, lvl, Color(0.36, 0.44, 0.52) if drone else Color(0.45, 0.5, 0.33))
+	pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pic_holder.add_child(pic)
+	var ready := int(GameState.army.get(type, 0))
+	var queued := GameState.training.count(type)
+	if owned:
+		var lv := HomeHud.make_label(pic_holder, I18n.t("Lv %d") % lvl, 15)
+		lv.add_theme_stylebox_override("normal", HomeHud._box(UnitModels.LEVEL_COLORS[clampi(lvl, 1, 5) - 1].darkened(0.2), 6))
+		lv.position = Vector2(6, 6)
+		if ready > 0 or queued > 0:
+			var text := "x%d" % ready
+			if queued > 0:
+				text += "  +%d" % queued
+			var count := HomeHud.make_label(pic_holder, text, 18)
+			count.add_theme_stylebox_override("normal", HomeHud._box(Color(0.1, 0.1, 0.1, 0.65), 6))
+			count.position = Vector2(6, 118)
+	var line := HomeHud.ink(box, I18n.t(Catalog.SHORT[type]), 14, Color(0.3, 0.29, 0.24))
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.custom_minimum_size.y = 38
+	var meta := HBoxContainer.new()
+	meta.add_theme_constant_override("separation", 4)
+	box.add_child(meta)
+	meta.add_child(Icons.rect("army", 18))
+	HomeHud.ink(meta, str(int(def["housing"])), 15)
+	meta.add_child(Icons.rect("clock", 18))
+	HomeHud.ink(meta, HomeHud.clock(Catalog.train_seconds(type, GameState.camp_level())), 15)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 4)
+	box.add_child(buttons)
+	if not owned:
+		var where := Button.new()
+		where.text = I18n.t("Unlock it in the Garage") if Catalog.is_ground(type) else I18n.t("Unlock it in the Hangar")
+		where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		where.add_theme_font_size_override("font_size", 13)
+		where.custom_minimum_size = Vector2(0, 44)
+		where.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		where.disabled = true
+		HomeHud._style_button(where, Color(0.42, 0.42, 0.4), 8)
+		buttons.add_child(where)
+		return card
+	if queued > 0:
+		var minus := Button.new()
+		minus.text = "-"
+		minus.custom_minimum_size = Vector2(40, 44)
+		minus.add_theme_font_size_override("font_size", 24)
+		HomeHud._style_button(minus, Color(0.55, 0.3, 0.25), 8)
+		minus.pressed.connect(func() -> void:
+			Audio.play("click", -6.0)
+			on_cancel.call(type))
+		buttons.add_child(minus)
+	var why := GameState.train_block_reason(type)
+	var train := Button.new()
+	train.custom_minimum_size = Vector2(0, 44)
+	train.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	train.add_theme_font_size_override("font_size", 18)
+	if why == "":
+		train.text = str(Catalog.train_fuel(type))
+		train.icon = Icons.tex("fuel", 48)
+		train.add_theme_constant_override("icon_max_width", 24)
+		HomeHud._style_button(train, Color(0.25, 0.29, 0.24), 8)
+	else:
+		train.text = why
+		train.add_theme_font_size_override("font_size", 12)
+		train.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		train.disabled = true
+		HomeHud._style_button(train, Color(0.42, 0.42, 0.4), 8)
+		train.add_theme_color_override("font_disabled_color", Color(1.0, 0.86, 0.8))
+	train.pressed.connect(func() -> void:
+		on_train.call(type))
+	buttons.add_child(train)
+	return card
+
+
 # ---------------------------------------------------------------- upgrade and info
 
 ## The upgrade window: the structure at its next level on one side, and bars for each stat

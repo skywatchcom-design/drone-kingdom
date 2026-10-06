@@ -111,8 +111,8 @@ static func _ai_tank(root: Node3D, level: int) -> Dictionary:
 	return {"hips": [], "torso": null, "helmet": null, "muzzle": muzzle, "wheels": [], "turret": turret, "gun": gun}
 
 
-## The generated soldier is one rigid mesh. It rides on the torso node, so the walk bob, lean,
-## kneel and recoil still work; the hips are empty pivots. Levels add parts and darker armor:
+## The generated soldier rides on the torso node, so the walk bob, lean and recoil still work;
+## its legs are skinned to a small skeleton that walks and kneels (the hips are empty pivots). Levels add parts and darker armor:
 ## Lv2 level patches; Lv3 a light machine gun with a drum and a helmet band; Lv4 dark armor
 ## and a radio antenna; Lv5 near-black armor and a glowing visor.
 static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
@@ -127,12 +127,16 @@ static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
 	root.add_child(torso)
 	var darken: float = [0.0, 0.0, 0.08, 0.35, 0.55][clampi(level, 1, 5) - 1]
 	var parts := _ai_parts(name, darken)
+	# The legs walk on a small skeleton: hips and knees, weights painted by height.
+	var skeleton := _leg_skeleton()
+	skeleton.scale = Vector3.ONE * 1.2
+	skeleton.position.y = -0.5
+	torso.add_child(skeleton)
 	var body := MeshInstance3D.new()
-	body.mesh = parts[0]
+	body.mesh = _skinned(name)
 	body.material_override = parts[1]
-	body.scale = Vector3.ONE * 1.2
-	body.position.y = -0.5
-	torso.add_child(body)
+	skeleton.add_child(body)
+	body.skeleton = NodePath("..")
 	var helmet := Node3D.new()
 	helmet.position = Vector3(0, 0.6, 0)
 	torso.add_child(helmet)
@@ -154,7 +158,67 @@ static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
 		MeshKit.add(torso, MeshKit.cyl(0.006, 0.006, 0.8, 4), MeshKit.mat(Color(0.1, 0.1, 0.1), 0.5), Vector3(-0.1, 0.75, -0.2))
 	if level >= 5:
 		MeshKit.add(torso, MeshKit.box(Vector3(0.17, 0.04, 0.03)), MeshKit.glow(Color(0.37, 0.88, 1.0)), Vector3(0, 0.55, 0.11))
-	return {"hips": hips, "torso": torso, "helmet": helmet, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null, "rigid": true}
+	return {"hips": hips, "torso": torso, "helmet": helmet, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null, "skeleton": skeleton}
+
+
+## Joints of a generated soldier 1 unit tall: hips at 0.45, knees at 0.26, legs 0.07 off center.
+const HIP_Y := 0.45
+const KNEE_Y := 0.26
+const LEG_X := 0.07
+## Bone order: body, left thigh, right thigh, left shin, right shin.
+const LEG_BONES := ["body", "thigh_l", "thigh_r", "shin_l", "shin_r"]
+
+
+static func _leg_skeleton() -> Skeleton3D:
+	var sk := Skeleton3D.new()
+	for b in LEG_BONES:
+		sk.add_bone(b)
+	sk.set_bone_parent(1, 0)
+	sk.set_bone_parent(2, 0)
+	sk.set_bone_parent(3, 1)
+	sk.set_bone_parent(4, 2)
+	sk.set_bone_rest(1, Transform3D(Basis(), Vector3(-LEG_X, HIP_Y, 0)))
+	sk.set_bone_rest(2, Transform3D(Basis(), Vector3(LEG_X, HIP_Y, 0)))
+	sk.set_bone_rest(3, Transform3D(Basis(), Vector3(0, KNEE_Y - HIP_Y, 0)))
+	sk.set_bone_rest(4, Transform3D(Basis(), Vector3(0, KNEE_Y - HIP_Y, 0)))
+	sk.reset_bone_poses()
+	return sk
+
+
+## The soldier mesh with bone weights: the body above the hips, each leg's thigh and shin
+## below, blended across the hip and knee so the cloth bends instead of tearing.
+static func _skinned(name: String) -> ArrayMesh:
+	var key := name + "@skin"
+	if _ai_cache.has(key):
+		return _ai_cache[key]
+	var src: ArrayMesh = load(AI_MODEL % name + ".res")
+	var arrays := src.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	bones.resize(verts.size() * 4)
+	weights.resize(verts.size() * 4)
+	for i in verts.size():
+		var v := verts[i]
+		var left := v.x < 0.0
+		var thigh := 1 if left else 2
+		var shin := 3 if left else 4
+		var leg := smoothstep(HIP_Y + 0.06, HIP_Y - 0.04, v.y)
+		var low := smoothstep(KNEE_Y + 0.04, KNEE_Y - 0.03, v.y)
+		bones[i * 4] = 0
+		bones[i * 4 + 1] = thigh
+		bones[i * 4 + 2] = shin
+		bones[i * 4 + 3] = 0
+		weights[i * 4] = 1.0 - leg
+		weights[i * 4 + 1] = leg * (1.0 - low)
+		weights[i * 4 + 2] = leg * low
+		weights[i * 4 + 3] = 0.0
+	arrays[Mesh.ARRAY_BONES] = bones
+	arrays[Mesh.ARRAY_WEIGHTS] = weights
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_ai_cache[key] = am
+	return am
 
 
 ## Swaps one exact color for another on every mesh under `node` (each mesh has its own material).

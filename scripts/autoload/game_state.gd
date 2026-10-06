@@ -52,6 +52,7 @@ const SETTINGS_PATH := "user://settings.json"
 ## where OS.is_debug_build() is false, so players can never get it.
 var infinite_coins := false
 var sound_on := true
+var music_on := true
 
 
 func _ready() -> void:
@@ -75,6 +76,11 @@ func set_sound(on: bool) -> void:
 	save_settings()
 
 
+func set_music(on: bool) -> void:
+	music_on = on
+	save_settings()
+
+
 func set_language(lang: String) -> void:
 	I18n.lang = lang
 	save_settings()
@@ -89,6 +95,7 @@ func load_settings() -> void:
 		I18n.lang = data.get("lang", I18n.lang)
 		infinite_coins = bool(data.get("infinite_coins", true)) and dev_tools_available()
 		sound_on = bool(data.get("sound", true))
+		music_on = bool(data.get("music", true))
 
 
 func save_settings() -> void:
@@ -96,7 +103,7 @@ func save_settings() -> void:
 		return
 	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"lang": I18n.lang, "infinite_coins": infinite_coins, "sound": sound_on}))
+		file.store_string(JSON.stringify({"lang": I18n.lang, "infinite_coins": infinite_coins, "sound": sound_on, "music": music_on}))
 
 
 ## Pays for something. With infinite coins on, nothing is taken.

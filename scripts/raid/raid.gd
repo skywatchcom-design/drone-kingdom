@@ -95,6 +95,7 @@ var autoplay := false
 
 
 func _ready() -> void:
+	Audio.music(false)
 	Engine.time_scale = 1.0
 	autoplay = OS.get_cmdline_user_args().has("--autoplay")
 	cam = WorldSetup.create(self, VIEW_SIZE)

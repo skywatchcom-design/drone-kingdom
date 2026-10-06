@@ -23,6 +23,18 @@ static func buzz(ms: int) -> void:
 		sfx.buzz(ms)
 
 
+static func music(on: bool) -> void:
+	var sfx = _sfx()
+	if sfx != null:
+		sfx.music(on)
+
+
+static func refresh_music() -> void:
+	var sfx = _sfx()
+	if sfx != null:
+		sfx.refresh_music()
+
+
 static func set_enabled(on: bool) -> void:
 	var sfx = _sfx()
 	if sfx != null:

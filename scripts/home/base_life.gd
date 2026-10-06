@@ -63,9 +63,9 @@ func _process(delta: float) -> void:
 	# Patrol: the second soldier walks a few steps behind the first.
 	for i in _soldiers.size():
 		var u := _soldiers[i]
-		var t := fposmod(_time * 0.008 - i * 0.012, 1.0)
+		var t := fposmod(_time * 0.0045 - i * 0.012, 1.0)
 		var goal := _patrol_point(t + 0.01)
-		u.walk((goal - u.position).normalized() * 2.0, delta)
+		u.walk((goal - u.position).normalized() * 1.1, delta)
 	# Jeep: laps a rounded square outside the lawn.
 	var a := _jeep_point(fposmod(_time * 0.022, 1.0))
 	var b := _jeep_point(fposmod(_time * 0.022 + 0.004, 1.0))

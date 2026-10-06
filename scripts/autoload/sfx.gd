@@ -4,6 +4,8 @@ extends Node
 ##   Sfx.play("coin")          one-shot sound
 ##   Sfx.set_hum(0.6)          rotor hum volume during a battle (0 = silent)
 ##   Sfx.buzz(30)              short vibration on phones
+##   Sfx.music(true)           the calm base theme (assets/audio/base_theme.ogg, an original
+##                             piece composed in code by tools/make_music.py)
 
 const RATE := 22050
 const VOICES := 12
@@ -13,6 +15,9 @@ var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _hum: AudioStreamPlayer
+var _music: AudioStreamPlayer
+var _music_wanted := false
+const MUSIC_DB := -15.0
 var _last_played := {}
 
 
@@ -28,6 +33,10 @@ func _ready() -> void:
 	_hum.stream = _streams["hum"]
 	_hum.volume_db = -80.0
 	add_child(_hum)
+	_music = AudioStreamPlayer.new()
+	_music.stream = load("res://assets/audio/base_theme.ogg")
+	_music.volume_db = MUSIC_DB
+	add_child(_music)
 
 
 ## Plays a sound. Repeats of the same sound within `min_gap` seconds are skipped,
@@ -63,6 +72,24 @@ func buzz(ms: int) -> void:
 		Input.vibrate_handheld(ms)
 
 
+## Starts or fades out the base theme. It plays only while wanted and music is on.
+func music(on: bool) -> void:
+	_music_wanted = on
+	var play := on and GameState.music_on
+	if play and not _music.playing:
+		_music.volume_db = -40.0
+		_music.play()
+		create_tween().tween_property(_music, "volume_db", MUSIC_DB, 1.5)
+	elif not play and _music.playing:
+		var tween := create_tween()
+		tween.tween_property(_music, "volume_db", -40.0, 0.6)
+		tween.tween_callback(_music.stop)
+
+
+func refresh_music() -> void:
+	music(_music_wanted)
+
+
 func set_enabled(on: bool) -> void:
 	enabled = on
 	if not on:
@@ -90,7 +117,8 @@ func _build_library() -> void:
 	_streams["jet"] = _mix([_noise(1.6, 0.5, 0.05), _tone(420.0, 160.0, 1.6, "saw", 0.12)])
 	_streams["flare"] = _mix([_noise(0.5, 0.35, 0.4), _tone(900.0, 2400.0, 0.4, "sine", 0.15)])
 	_streams["tank_down"] = _mix([_noise(0.8, 0.7, 0.1), _tone(110.0, 40.0, 0.7, "saw", 0.4)])
-	_streams["coin"] = _concat([_tone(1320.0, 1320.0, 0.07, "sine", 0.4), _tone(1760.0, 1760.0, 0.16, "sine", 0.4)])
+	# A soft, round two-note chime (was a sharp beep).
+	_streams["coin"] = _concat([_tone(784.0, 784.0, 0.06, "sine", 0.22), _tone(1046.0, 1046.0, 0.14, "sine", 0.18)])
 	_streams["build"] = _concat([_tone(523.0, 523.0, 0.08, "square", 0.2), _tone(784.0, 784.0, 0.14, "square", 0.2)])
 	_streams["star"] = _concat([_tone(784.0, 784.0, 0.09, "sine", 0.45), _tone(1047.0, 1047.0, 0.09, "sine", 0.45), _tone(1568.0, 1568.0, 0.25, "sine", 0.45)])
 	_streams["hum"] = _hum_loop()

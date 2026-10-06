@@ -18,6 +18,7 @@ var selected := 0
 
 
 func _ready() -> void:
+	Audio.music(true)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	Audio.hum(0.0)
 	_art = Control.new()

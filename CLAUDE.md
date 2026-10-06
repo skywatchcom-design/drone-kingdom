@@ -97,4 +97,8 @@ In game (7.10.2026): Poly Haven CC0 photo textures in `assets/textures` used by 
 in `assets/models/incoming` (git-ignored), slimmed by `scripts/dev/slim_model.gd` into
 `assets/models/<name>.res` + `<name>_albedo.webp`; see `docs/model-prompts.md`. Done: infantry, tank
 (hull + turret). Tripo's free plan cannot export, so it is not used.
+7.10.2026 (owner feedback): AI soldiers walk on a 5-bone leg skeleton (`UnitModels._leg_skeleton`,
+weights painted by height in `_skinned`); small coin/fuel markers with no number; softer coin chime;
+calm base music `assets/audio/base_theme.ogg` composed by `tools/make_music.py` (Sfx.music, settings
+toggle, off in battles); Army window in Shop style (`ShopUI.army`, unit info with "!").
 Still waiting on the owner: Apple Developer and Google Play accounts.

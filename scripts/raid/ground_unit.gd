@@ -160,11 +160,24 @@ func _animate_soldier(delta: float) -> void:
 	var torso: Node3D = _parts["torso"]
 	torso.position.y = 0.5 + absf(sin(_phase)) * 0.03 * amount - 0.2 * k
 	torso.rotation.x = 0.05 * k + 0.12 * amount
-	# A rigid generated model has no legs to swing: it rocks side to side as it walks.
-	if _parts.get("rigid", false):
-		torso.rotation.z = sin(_phase) * 0.09 * amount
+	# A generated soldier walks on its leg skeleton: thighs swing, the knee of the leg going
+	# back bends, and kneeling folds one leg forward and the other down.
+	var sk: Skeleton3D = _parts.get("skeleton")
+	if sk != null:
+		# Full stride from a slow walk up: the step length should not depend on top speed.
+		amount = clampf(speed / 0.9, 0.0, 1.0)
+		var swing := sin(_phase) * 0.6 * amount
+		_leg(sk, 1, -swing - 1.3 * k)
+		_leg(sk, 2, swing + 0.35 * k)
+		_leg(sk, 3, maxf(0.0, cos(_phase)) * 0.6 * amount + 1.3 * k)
+		_leg(sk, 4, maxf(0.0, -cos(_phase)) * 0.6 * amount + 1.6 * k)
+		torso.position.y = 0.5 + absf(sin(_phase)) * 0.03 * amount - 0.15 * k
 	_recoil = maxf(0.0, _recoil - delta * 8.0)
 	torso.position.z = -0.03 * _recoil
+
+
+func _leg(sk: Skeleton3D, bone: int, angle: float) -> void:
+	sk.set_bone_pose_rotation(bone, Quaternion(Vector3.RIGHT, angle))
 
 
 func _animate_tank(delta: float) -> void:
