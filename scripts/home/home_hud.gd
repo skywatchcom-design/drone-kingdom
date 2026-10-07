@@ -35,6 +35,7 @@ var _left: HBoxContainer
 var _dock: HBoxContainer
 var _shop_badge: Label
 var _missions: Button
+var _commander: Label
 var _missions_badge: Label
 var _panel: PanelContainer
 var _panel_title: Label
@@ -83,7 +84,7 @@ func _ready() -> void:
 	names.add_theme_constant_override("separation", -4)
 	names.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player.add_child(names)
-	make_label(names, I18n.t("Commander"), 24)
+	_commander = make_label(names, I18n.t("Commander"), 24)
 	_rank = make_label(names, "", 17, Color(0.88, 0.92, 0.88))
 	_missions = _small_button(column, "tasks", I18n.t("Missions"))
 	_missions.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -414,6 +415,11 @@ func set_header(hq_level: int, target_name: String, infinite: bool = false) -> v
 
 
 ## How many new things the Shop has (structures there is room to build); 0 hides the badge.
+## The name under the badge: the signed-in commander, or just "Commander".
+func set_commander(name: String) -> void:
+	_commander.text = name if name != "" else I18n.t("Commander")
+
+
 ## The red count of rewards waiting on the Missions button; the button hides during Noa's
 ## tutorial.
 func set_missions(count: int, shown: bool) -> void:

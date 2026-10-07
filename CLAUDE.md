@@ -127,7 +127,13 @@ Approved 7.10.2026: missions and sign-up sketch (https://claude.ai/artifact/Tnvw
 missions picked by date from a pool, +10 gems for all three; 7-day login gift), progress in `GameState`
 (`stats` counters, `mission_progress`, `claim_*`), window `MissionsUI` behind the HUD "Missions" button
 (red badge = rewards waiting; hidden during Noa). "Go" opens the place where a mission is done. Dev:
-`--screenshot-missions|--screenshot-daily`. Next: sign-up (name + password, no email) after Noa, on
-Supabase (needs the owner to connect the Supabase connector or save an access token in tmp/).
+`--screenshot-missions|--screenshot-daily`. Sign-up (7.10.2026): `Cloud` autoload
+(`scripts/autoload/cloud.gd`) signs up/in on Supabase with a commander name + password; the auth email is
+made up from a hash of the name (`players.skywatch.invalid`, email confirmation off, nothing is sent); the
+name is unique in `public.players` (`name_available` RPC; schema changes in `supabase/migrations/`). The
+save (`GameState.save_data/apply_save`) goes to the player's row 3 s after a change; signing in replaces
+the local base. `AccountUI` opens after Noa ("Later" allowed) and from Settings. Dev check:
+`godot --headless --path . res://scenes/dev/cloud_check.tscn` (delete its test user afterwards). The
+owner's Management API token sits in `tmp/supabase_token.txt` (git-ignored); `tmp/sb/sql.py` runs SQL.
 The owner considered a Clash Royale-style concept (7.10.2026) and decided to stay with this one.
 Still waiting on the owner: Apple Developer and Google Play accounts.

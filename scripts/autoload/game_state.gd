@@ -1110,7 +1110,17 @@ func save_game() -> void:
 	if file == null:
 		push_warning("Could not write save file")
 		return
-	file.store_string(JSON.stringify({
+	file.store_string(JSON.stringify(save_data()))
+	file.close()
+	# A signed-in player's base also goes to the cloud (a few seconds later, in one go).
+	var cloud := get_node_or_null("/root/Cloud") if is_inside_tree() else null
+	if cloud != null:
+		cloud.queue_push()
+
+
+## Everything the save holds, as plain data (the save file and the cloud copy).
+func save_data() -> Dictionary:
+	return {
 		"version": SAVE_VERSION, "coins": coins, "fuel": fuel, "gems": gems, "workers": workers,
 		"structures": structures, "units": units, "army": army, "training": training, "walls": walls,
 		"abilities": abilities, "support_ready": support_ready, "support_queue": support_queue, "support_started": support_started,
@@ -1118,13 +1128,17 @@ func save_game() -> void:
 		"syndicate_stars": syndicate_stars, "syndicate_mission": syndicate_mission,
 		"tutorial": -1 if tutorial_replay else tutorial,
 		"stats": stats, "starter_claimed": starter_claimed, "daily": daily, "login": login,
-	}))
+	}
 
 
 func load_game() -> bool:
 	if not persist or not FileAccess.file_exists(SAVE_PATH):
 		return false
-	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	return apply_save(JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH)))
+
+
+## Loads a save (from the file or the cloud). False, and nothing changed, when it isn't one.
+func apply_save(data: Variant) -> bool:
 	# Version 4 saves (before ground units) load too: their drones become units.
 	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, SAVE_VERSION]:
 		return false

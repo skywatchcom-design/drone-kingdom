@@ -83,6 +83,7 @@ func _ready() -> void:
 	hud.mode_done.connect(_end_wall_mode)
 	hud.missions_pressed.connect(func() -> void: _open_missions())
 	GameState.missions_changed.connect(_refresh_header)
+	Cloud.account_changed.connect(_refresh_header)
 	GameState.finish_ready()
 	GameState.process_training()
 	_rebuild()
@@ -99,8 +100,12 @@ func _ready() -> void:
 			Audio.play("star")
 			GameState.tutorial_gift = 0
 			_refresh_header()
-			# Right after Noa, the missions take over.
-			get_tree().create_timer(1.6).timeout.connect(func() -> void: _open_missions("starter")))
+			# Right after Noa: save the base (sign up), then the missions take over.
+			get_tree().create_timer(1.6).timeout.connect(func() -> void:
+				if Cloud.signed_in():
+					_open_missions("starter")
+				else:
+					_open_account("signup")))
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
 		_open_cell([1, 3])
@@ -126,6 +131,8 @@ func _ready() -> void:
 		_open_missions("starter")
 	elif args.has("--screenshot-daily"):
 		_open_missions("daily")
+	elif args.has("--screenshot-signup"):
+		_open_account("signup")
 	elif GameState.tutorial < 0 and GameState.login_ready():
 		# The day's first visit opens the login gift.
 		_open_missions("daily")
@@ -275,6 +282,7 @@ func _refresh_header() -> void:
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	hud.set_header(GameState.hq_level(), target["name"], GameState.infinite_coins)
 	hud.set_shop_badge(ShopUI.new_count())
+	hud.set_commander(Cloud.commander)
 	hud.set_missions(GameState.missions_ready(), GameState.tutorial < 0 or GameState.tutorial_replay)
 	for bubble in coins:
 		if bubble.scale.x > 0.99:
@@ -677,6 +685,55 @@ func _open_shop(tab: String = "") -> void:
 	hud.show_modal(content, Vector2(1180, 610))
 
 
+# ---------------------------------------------------------------- account
+
+## Sign up ("signup") or sign in ("signin") with a commander name and password.
+func _open_account(mode: String) -> void:
+	_deselect()
+	hud.hide_panel()
+	open_sheet = "account"
+	var later := func() -> void:
+		hud.hide_modal()
+		_open_missions("starter")
+	var content := AccountUI.window(mode, _submit_account, later, func(m: String) -> void: _open_account(m))
+	hud.show_modal(content, Vector2(900, 640 if mode == "signup" else 520))
+
+
+func _submit_account(name: String, password: String, mode: String, window: Control) -> void:
+	AccountUI.set_busy(window)
+	var why: String = await Cloud.sign_up(name, password) if mode == "signup" else await Cloud.sign_in(name, password)
+	if not is_instance_valid(window):
+		return
+	if why != "":
+		AccountUI.show_error(window, why)
+		return
+	Audio.play("star")
+	if mode == "signin":
+		# The base from the cloud replaced this one: draw it again.
+		get_tree().reload_current_scene()
+		return
+	hud.hide_modal()
+	hud.toast(I18n.t("Base saved, Commander %s!") % Cloud.commander)
+	_refresh_header()
+	get_tree().create_timer(1.2).timeout.connect(func() -> void: _open_missions("starter"))
+
+
+## Settings > account: who is signed in and Log out, or the sign-up window.
+func _open_account_settings() -> void:
+	if not Cloud.signed_in():
+		_open_account("signup")
+		return
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	HomeHud.make_label(box, I18n.t("Signed in as %s") % Cloud.commander, 28, GOLD)
+	_wrap(HomeHud.make_label(box, I18n.t("Your base is saved in the cloud. Log in with this name and password on any device."), 21, SOFT))
+	HomeHud.make_button(box, I18n.t("Log out"), 24, 72).pressed.connect(func() -> void:
+		Cloud.sign_out()
+		hud.hide_panel()
+		hud.toast(I18n.t("Logged out")))
+	hud.show_content(I18n.t("Account"), box)
+
+
 # ---------------------------------------------------------------- missions
 
 ## The Missions window on `tab` (the last one used, or Starter until those are all done).
@@ -858,6 +915,8 @@ func _open_settings() -> void:
 		Audio.refresh_music()
 		music.text = I18n.t("Music on") if GameState.music_on else I18n.t("Music off"))
 	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
+	var account := I18n.t("Account: %s") % Cloud.commander if Cloud.signed_in() else I18n.t("Save my base")
+	HomeHud.make_button(grid, account, 24, 80).pressed.connect(_open_account_settings)
 	HomeHud.make_button(grid, I18n.t("Replay tutorial"), 24, 80).pressed.connect(func() -> void:
 		hud.hide_panel()
 		GameState.replay_tutorial()
