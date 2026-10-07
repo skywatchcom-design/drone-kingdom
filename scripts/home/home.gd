@@ -1276,7 +1276,7 @@ func _open_attack_choice() -> void:
 		hud.hide_modal()
 		_go_raid("enemy")
 	var choices := [
-		["syndicate", I18n.t("Syndicate campaign"), I18n.t("Stars %d / %d") % [GameState.syndicate_total_stars(), Syndicate.COUNT * 3], to_map],
+		["syndicate", I18n.t("Iron Fang campaign"), I18n.t("Stars %d / %d") % [GameState.syndicate_total_stars(), Syndicate.COUNT * 3], to_map],
 		["swords", I18n.t("Raid a base"), target["name"], to_raid],
 	]
 	for c: Array in choices:

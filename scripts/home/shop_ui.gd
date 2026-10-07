@@ -493,7 +493,32 @@ static func info_window(title: String, type: String, level: int, rows: Array, de
 ## A picture of a structure (or wall) at a level, rendered once into a small 3D stage.
 ## A small 3D picture of a structure, wall or unit at `level`. Units stand alone on a
 ## plain background of color `bg` (the battle cards); structures stand on their pad.
+## Where the baked picture of a structure or unit at a level lives (see bake_pictures.gd).
+static func baked_path(type: String, level: int) -> String:
+	return "res://assets/textures/pictures/%s_%d.webp" % [type, level]
+
+
+## A picture of a structure or unit at a level on a `bg` backdrop: the baked image when there is
+## one (Safari on iPad leaves live 3D pictures blank), otherwise a live 3D render.
 static func picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33)) -> Control:
+	var path := baked_path(type, level)
+	if not ResourceLoader.exists(path):
+		return live_picture(type, level, bg)
+	var box := ColorRect.new()
+	box.color = bg
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tex := TextureRect.new()
+	tex.texture = load(path)
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(tex)
+	return box
+
+
+## The picture drawn live in a small 3D stage.
+static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33)) -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE

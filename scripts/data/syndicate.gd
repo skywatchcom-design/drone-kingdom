@@ -29,7 +29,7 @@ const MISSIONS := [
 		"reward": {"coins": 1200, "gems": 30}, "taunt": "Send your little drones. I collect them."},
 	{"name": "Broadcast Tower", "hq": 5, "level": 4, "build": ["mg", "mg", "at", "aa", "mortar", "jammer", "quarters", "quarters", "storage", "tank"],
 		"walls": [[0, 4, []], [1, 4, [6]], [2, 3, [1, 13]]], "reward": {"coins": 1500, "fuel": 1000}, "taunt": "The whole region hears you lose tonight."},
-	{"name": "Syndicate Fortress", "hq": 5, "level": 5, "build": ["mg", "mg", "at", "at", "aa", "aa", "mortar", "mortar", "jammer", "quarters", "quarters", "storage", "tank"],
+	{"name": "Iron Fang Fortress", "hq": 5, "level": 5, "build": ["mg", "mg", "at", "at", "aa", "aa", "mortar", "mortar", "jammer", "quarters", "quarters", "storage", "tank"],
 		"walls": [[0, 5, []], [1, 5, []], [2, 4, [10]]], "reward": {"coins": 3000, "fuel": 2000, "gems": 100},
 		"taunt": "You got this far because I let you. Now the game ends."},
 ]

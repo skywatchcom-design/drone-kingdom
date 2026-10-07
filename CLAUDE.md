@@ -117,4 +117,9 @@ steps end on `GameState.tutorial_event(...)`. New players start without the MG N
 get a free speed-up and a coin top-up for the HQ upgrade, and 100 gems at the end. Settings has
 "Replay tutorial" (tap-through only). Dev: `-- --fresh` (new player, real save untouched),
 `--tutorial N` (jump to a step), `--tutorial-bot` (plays the tutorial by tapping and saves pictures to tmp/bot).
+7.10.2026 (owner): the enemy faction is called **Iron Fang** (Hebrew: ניב הברזל) on screen; code names stay
+`Syndicate`. Unit and structure pictures (battle cards, shop, upgrade/info windows) are baked images in
+`assets/textures/pictures/<type>_<level>.webp`, because Safari on iPad left live 3D pictures blank. After a
+model changes, rebake: `godot --path . res://scenes/dev/bake_pictures.tscn` then `python tools/bake_pictures.py`
+(renders over black and white to get true transparency). On the web Noa's first line waits for the first tap.
 Still waiting on the owner: Apple Developer and Google Play accounts.

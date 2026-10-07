@@ -30,7 +30,7 @@ const LINES := {
 	"place": "Pick a free pad. The blinking one.",
 	"speed": "Building takes time... but this one's on me! Tap to finish now.",
 	"train": "An army doesn't train itself. Open the Training Camp and train an Infantry Squad.",
-	"attack": "We've got trouble. Razor's Syndicate is stealing coins around here. Time to take them back! Tap Attack.",
+	"attack": "We've got trouble. Razor's Iron Fang gang is stealing coins around here. Time to take them back! Tap Attack.",
 	"deploy": "Tap the ground to send in your troops. Just not right next to buildings.",
 	"win": "Victory! The loot is on its way home. Razor won't like this.",
 	"upgrade": "Now upgrade your Command Tower. A taller tower unlocks new buildings.",

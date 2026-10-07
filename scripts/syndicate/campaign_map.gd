@@ -61,7 +61,7 @@ func _ready() -> void:
 	trow.add_theme_constant_override("separation", 10)
 	title.add_child(trow)
 	trow.add_child(Icons.rect("syndicate", 40))
-	HomeHud.make_label(trow, I18n.t("Syndicate Operation"), 26)
+	HomeHud.make_label(trow, I18n.t("Iron Fang Campaign"), 26)
 
 	var stars := HBoxContainer.new()
 	stars.add_theme_constant_override("separation", 6)
