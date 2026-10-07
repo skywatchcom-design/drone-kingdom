@@ -17,6 +17,9 @@ const EMAIL_AGE := 13
 const TERMS_VERSION := "2026-10-07"
 const TERMS_URL := "https://skywatchcom-design.github.io/drone-kingdom/legal/terms-%s.html"
 const PRIVACY_URL := "https://skywatchcom-design.github.io/drone-kingdom/legal/privacy-%s.html"
+## Where the password-reset email sends the player to pick a new password.
+const RESET_URL := "https://skywatchcom-design.github.io/drone-kingdom/account/reset.html"
+const SUPPORT_EMAIL := "skywatchcom@gmail.com"
 ## Names nobody may take (checked without case), on top of the database's uniqueness.
 const RESERVED := ["noa", "razor", "admin", "skywatch", "ironfang", "commander", "moderator"]
 const BLOCKED := ["fuck", "shit", "sex", "porn", "nazi", "hitler", "זונה", "כוס", "זין", "מניאק", "שרמוטה"]
@@ -126,6 +129,20 @@ func sign_in(login: String, password: String) -> String:
 		if GameState.apply_save(row["save"]):
 			GameState.save_game()
 	account_changed.emit()
+	return ""
+
+
+## Asks Supabase to email a password-reset link. The answer is the same whether or not the
+## email has an account, so nobody can use it to find out who plays.
+func request_reset(email: String) -> String:
+	var why := email_problem(email)
+	if why != "":
+		return why
+	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/recover?redirect_to=" + RESET_URL.uri_encode(), {"email": email.strip_edges().to_lower()}, false)
+	if r["code"] == 0 or r["code"] >= 500:
+		return I18n.t("No connection. Try again in a moment.")
+	if r["code"] == 429:
+		return I18n.t("Too many requests. Try again in a few minutes.")
 	return ""
 
 

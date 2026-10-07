@@ -17,6 +17,7 @@ signal gems_pressed
 signal mode_done
 signal actions_closed
 signal missions_pressed
+signal profile_pressed
 
 const COIN := Color(0.96, 0.77, 0.26)
 const FUEL := Color(0.93, 0.35, 0.55)
@@ -36,6 +37,7 @@ var _dock: HBoxContainer
 var _shop_badge: Label
 var _missions: Button
 var _commander: Label
+var _player: Control
 var _missions_badge: Label
 var _panel: PanelContainer
 var _panel_title: Label
@@ -67,7 +69,14 @@ func _ready() -> void:
 	# Commander badge and Command Tower level, top left.
 	var player := HBoxContainer.new()
 	player.add_theme_constant_override("separation", 10)
-	player.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Tapping the badge or the name opens the commander's profile.
+	player.mouse_filter = Control.MOUSE_FILTER_STOP
+	player.gui_input.connect(func(e: InputEvent) -> void:
+		if (e is InputEventMouseButton and not e.pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) \
+				or (e is InputEventScreenTouch and not e.pressed):
+			Audio.play("click", -6.0)
+			profile_pressed.emit())
+	_player = player
 	# The badge, with the Missions button under it.
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
@@ -603,7 +612,7 @@ func show_mode(text: String) -> void:
 func blocks(pos: Vector2) -> bool:
 	if _dim.visible:
 		return true
-	for c: Control in [_mode, _panel, _left, _dock, _workers, _actions, _missions, _bars["gems"]["bar"]]:
+	for c: Control in [_mode, _panel, _left, _dock, _workers, _actions, _missions, _player, _bars["gems"]["bar"]]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false

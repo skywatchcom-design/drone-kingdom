@@ -136,7 +136,13 @@ the local base. Sign-up fields (owner, 7.10.2026): commander name, birth month +
 (neutral age screen), email only from 13 (COPPA; under 13 keep the made-up address and sign in by name),
 password twice, and a terms checkbox (`Cloud.TERMS_VERSION`; drafts in `web/legal/`, published with the
 web build to `/legal/terms-he.html` etc.). Settings > Account has Delete account (`delete_my_account` RPC;
-stores require it). `AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:
+stores require it). Forgot password: the sign-in window asks Supabase to email a link
+(`Cloud.request_reset`) to `web/account/reset.html` (published at /account/reset.html, supabase-js from
+jsdelivr) where the new password is set; real emails need custom SMTP (Gmail of skywatchcom@gmail.com,
+pending the owner's app password; the bilingual recovery template can only be set after that). Tapping the
+badge/name opens `ProfileUI` (record, army and building levels). Contact for docs: skywatchcom@gmail.com,
+operator "SkyWatch". The web build busts caches per publish (`?v=` on index.pck and index.js).
+`AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:
 `godot --headless --path . res://scenes/dev/cloud_check.tscn` (delete its test user afterwards). The
 owner's Management API token sits in `tmp/supabase_token.txt` (git-ignored); `tmp/sb/sql.py` runs SQL.
 The owner considered a Clash Royale-style concept (7.10.2026) and decided to stay with this one.

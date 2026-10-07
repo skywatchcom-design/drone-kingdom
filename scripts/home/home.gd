@@ -82,6 +82,7 @@ func _ready() -> void:
 	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
 	hud.mode_done.connect(_end_wall_mode)
 	hud.missions_pressed.connect(func() -> void: _open_missions())
+	hud.profile_pressed.connect(_open_profile)
 	GameState.missions_changed.connect(_refresh_header)
 	Cloud.account_changed.connect(_refresh_header)
 	GameState.finish_ready()
@@ -136,6 +137,8 @@ func _ready() -> void:
 		_open_account("signup")
 	elif args.has("--screenshot-signin"):
 		_open_account("signin")
+	elif args.has("--screenshot-profile"):
+		_open_profile()
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
@@ -699,7 +702,7 @@ func _open_account(mode: String) -> void:
 	hud.hide_panel()
 	open_sheet = "account"
 	var content := AccountUI.window(mode, _submit_account, func(m: String) -> void: _open_account(m))
-	hud.show_modal(content, Vector2(980, 600 if mode == "signup" else 470), not Cloud.signed_in())
+	hud.show_modal(content, Vector2(980, {"signup": 600, "signin": 500, "reset": 440}[mode]), not Cloud.signed_in())
 
 
 func _submit_account(data: Dictionary, mode: String, window: Control) -> void:
@@ -707,6 +710,12 @@ func _submit_account(data: Dictionary, mode: String, window: Control) -> void:
 	var why: String
 	if mode == "signup":
 		why = await Cloud.sign_up(data["name"], data["password"], data["email"], int(data["year"]), int(data["month"]))
+	elif mode == "reset":
+		why = await Cloud.request_reset(data["login"])
+		if why == "":
+			AccountUI.show_error(window, I18n.t("If this email has a base, a link is on its way. Check your inbox (and spam)."))
+			(window.get_meta("error") as Label).add_theme_color_override("font_color", AccountUI.GOOD)
+			return
 	else:
 		why = await Cloud.sign_in(data["login"], data["password"])
 	if not is_instance_valid(window):
@@ -768,6 +777,19 @@ func _confirm_delete_account() -> void:
 		get_tree().reload_current_scene())
 	hud.hide_panel()
 	hud.show_modal(box, Vector2(720, 300))
+
+
+# ---------------------------------------------------------------- profile
+
+## The commander's profile: name, Command Tower level, campaign stars, battle record, what has
+## been built, and every unit at its level.
+func _open_profile() -> void:
+	_deselect()
+	hud.hide_panel()
+	open_sheet = "profile"
+	hud.show_modal(ProfileUI.window(func() -> void:
+		hud.hide_modal()
+		_open_account_settings()), Vector2(1120, 600))
 
 
 # ---------------------------------------------------------------- missions

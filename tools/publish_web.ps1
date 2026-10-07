@@ -13,8 +13,16 @@ $pages = "$env:TEMP\skywatch-pages"
 if (Test-Path $pages) { Remove-Item -Recurse -Force $pages }
 New-Item -ItemType Directory -Force $pages | Out-Null
 Copy-Item build\web\* $pages
+# Every build gets its own file addresses, so browsers never run a cached older game.
+$stamp = Get-Date -Format "yyyyMMddHHmmss"
+$html = Get-Content "$pages\index.html" -Raw
+$html = $html.Replace('"executable":"index"', '"executable":"index","mainPack":"index.pck?v=' + $stamp + '"')
+$html = $html.Replace('<script src="index.js">', '<script src="index.js?v=' + $stamp + '">')
+Set-Content "$pages\index.html" $html -Encoding utf8 -NoNewline
 # The terms of use and privacy policy the sign-up window links to.
 Copy-Item -Recurse web\legal "$pages\legal"
+# The page the password-reset email links to.
+Copy-Item -Recurse webccount "$pagesccount"
 New-Item -ItemType File "$pages\.nojekyll" | Out-Null
 Set-Location $pages
 git init -q -b gh-pages

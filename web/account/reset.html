@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkyWatch – סיסמה חדשה</title>
+<link rel="stylesheet" href="../legal/legal.css">
+<style>
+  form { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+  input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: #fffdf5; color: #24261f; direction: ltr; }
+  button { font: inherit; font-weight: 700; padding: 12px; border-radius: 10px; border: 0; background: #3fa05a; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { min-height: 1.5em; font-weight: 700; }
+  .bad { color: #c0392b; } .good { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1 data-he="סיסמה חדשה" data-en="New password">סיסמה חדשה</h1>
+<p id="intro" data-he="בחרו סיסמה חדשה לבסיס שלכם ב-SkyWatch." data-en="Choose a new password for your SkyWatch base.">בחרו סיסמה חדשה לבסיס שלכם ב-SkyWatch.</p>
+<form id="form" hidden>
+  <label for="p1" data-he="סיסמה חדשה (לפחות 6 תווים)" data-en="New password (at least 6 characters)">סיסמה חדשה (לפחות 6 תווים)</label>
+  <input id="p1" type="password" autocomplete="new-password" minlength="6" required>
+  <label for="p2" data-he="שוב את הסיסמה" data-en="Password again">שוב את הסיסמה</label>
+  <input id="p2" type="password" autocomplete="new-password" minlength="6" required>
+  <button id="save" type="submit" data-he="שמירת הסיסמה" data-en="Save password">שמירת הסיסמה</button>
+</form>
+<p id="msg" class="msg"></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// The link in the reset email lands here with a one-time session; the player picks a new
+// password, then goes back to the game and logs in with it.
+const en = new URLSearchParams(location.search).get("lang") === "en" || !navigator.language.startsWith("he");
+if (en) { document.documentElement.lang = "en"; document.documentElement.dir = "ltr"; }
+document.querySelectorAll("[data-he]").forEach(el => el.textContent = en ? el.dataset.en : el.dataset.he);
+const T = (he, eng) => en ? eng : he;
+const msg = (text, cls) => { const m = document.getElementById("msg"); m.textContent = text; m.className = "msg " + (cls || ""); };
+
+const client = supabase.createClient("https://nlaylfcbijvdwbbcuqhj.supabase.co", "sb_publishable_Lny9jk7SBYa5xtWGeG-xHw_yT8o8Nst");
+const form = document.getElementById("form");
+let ready = false;
+client.auth.onAuthStateChange((event, session) => {
+  if (session && !ready) { ready = true; form.hidden = false; msg(""); }
+});
+setTimeout(() => { if (!ready) msg(T("הקישור לא תקף או שפג תוקפו. בקשו קישור חדש מהמשחק.", "This link is not valid or has expired. Ask for a new one in the game."), "bad"); }, 3500);
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const p1 = document.getElementById("p1").value, p2 = document.getElementById("p2").value;
+  if (p1.length < 6) return msg(T("הסיסמה קצרה מדי", "The password is too short"), "bad");
+  if (p1 !== p2) return msg(T("הסיסמאות לא זהות", "The passwords don't match"), "bad");
+  document.getElementById("save").disabled = true;
+  const { error } = await client.auth.updateUser({ password: p1 });
+  if (error) { document.getElementById("save").disabled = false; return msg(T("משהו השתבש, נסו שוב.", "Something went wrong. Try again."), "bad"); }
+  form.hidden = true;
+  await client.auth.signOut();
+  msg(T("הסיסמה נשמרה! חזרו למשחק והתחברו עם הסיסמה החדשה.", "Password saved! Go back to the game and log in with the new password."), "good");
+});
+</script>
+</body>
+</html>
