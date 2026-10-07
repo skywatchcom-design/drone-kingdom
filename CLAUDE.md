@@ -8,12 +8,25 @@ and the fictional "Syndicate". Light, humorous tone; fictional army with subtle 
 The full product spec is `docs/GDD.md`; market research is in `docs/market-research.md`.
 Read the GDD before changing gameplay: it records every product decision made with the owner.
 
-## Working with the owner
-- The owner (Nitay) writes in Hebrew; answer in Hebrew. Code, commits and comments stay in English.
-- Visual changes go through a live sketch first (Artifact page), and are built in the game only after
-  the owner approves. Show screenshots of in-game results.
-- Ask before big direction changes; the owner likes multiple-choice questions.
-- Keep development and server costs near zero (Godot, Supabase free tier, async PvP only).
+## Working with the owner (agreed 7.10.2026)
+- **Every line to the owner is in Hebrew**, including short status lines and final summaries. Code,
+  commits and comments stay in English.
+- **After every change, without asking** (skill `/ship`): import + tests, an in-game screenshot for
+  anything visible, update this file, commit (message via a file), `git push origin main`, publish
+  the web build (`tools/publish_web.ps1`), then a short Hebrew summary with the iPad link
+  (`?v=N`, private tab for a new player) and what still needs the owner.
+- **Sketch first only for new screens, characters and big design changes** (skill `/sketch`): 2-3
+  working directions over real game screenshots, the owner picks. Small UI fixes go straight into
+  the game, shown with a screenshot.
+- Ask before big direction changes; the owner likes multiple-choice questions. Give an honest
+  opinion when asked (e.g. against switching to a Clash Royale concept).
+- Keep development and server costs near zero (Godot, Supabase free tier, Gemini free tier, Gmail SMTP,
+  GitHub Pages, async PvP only).
+- Secrets live only in `tmp/` (git-ignored): `gemini_key.txt`, `supabase_token.txt`,
+  `smtp_password.txt`. Never commit them or put them in the game. The owner checks on an iPad
+  (Safari) through the web build.
+- Skills in `.claude/skills/`: `/ship`, `/sketch`, `/noa-voice` (Noa's lines, `tools/voice/noa_line.py`),
+  `/supabase` (migrations and checks, `tools/supabase_sql.py`).
 
 ## Stack and commands
 - Godot 4.7.2, GDScript. Godot binary (winget):
