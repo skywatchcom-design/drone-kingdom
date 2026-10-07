@@ -100,7 +100,8 @@ func _ready() -> void:
 			Audio.play("star")
 			GameState.tutorial_gift = 0
 			_refresh_header()
-			# Right after Noa: save the base (sign up), then the missions take over.
+		# Once Noa is done (finished or skipped): sign up, then the missions take over.
+		if GameState.tutorial < 0:
 			get_tree().create_timer(1.6).timeout.connect(func() -> void:
 				if Cloud.signed_in():
 					_open_missions("starter")
@@ -132,6 +133,9 @@ func _ready() -> void:
 	elif args.has("--screenshot-daily"):
 		_open_missions("daily")
 	elif args.has("--screenshot-signup"):
+		_open_account("signup")
+	elif GameState.tutorial < 0 and not Cloud.signed_in():
+		# Playing on needs an account.
 		_open_account("signup")
 	elif GameState.tutorial < 0 and GameState.login_ready():
 		# The day's first visit opens the login gift.
@@ -692,11 +696,8 @@ func _open_account(mode: String) -> void:
 	_deselect()
 	hud.hide_panel()
 	open_sheet = "account"
-	var later := func() -> void:
-		hud.hide_modal()
-		_open_missions("starter")
-	var content := AccountUI.window(mode, _submit_account, later, func(m: String) -> void: _open_account(m))
-	hud.show_modal(content, Vector2(900, 640 if mode == "signup" else 520))
+	var content := AccountUI.window(mode, _submit_account, func(m: String) -> void: _open_account(m))
+	hud.show_modal(content, Vector2(900, 640 if mode == "signup" else 520), not Cloud.signed_in())
 
 
 func _submit_account(name: String, password: String, mode: String, window: Control) -> void:
@@ -730,7 +731,8 @@ func _open_account_settings() -> void:
 	HomeHud.make_button(box, I18n.t("Log out"), 24, 72).pressed.connect(func() -> void:
 		Cloud.sign_out()
 		hud.hide_panel()
-		hud.toast(I18n.t("Logged out")))
+		hud.toast(I18n.t("Logged out"))
+		_open_account("signup"))
 	hud.show_content(I18n.t("Account"), box)
 
 

@@ -10,8 +10,9 @@ const BAD := Color(0.75, 0.22, 0.14)
 
 
 ## `mode` is "signup" or "signin". `on_submit(name, password, mode, window)` does the work and
-## calls show_error(window, text) when it fails; `on_later` closes; `on_switch(mode)` flips.
-static func window(mode: String, on_submit: Callable, on_later: Callable, on_switch: Callable) -> Control:
+## calls show_error(window, text) when it fails; `on_switch(mode)` flips. There is no way to skip:
+## an account is required to keep playing (owner, 7.10.2026).
+static func window(mode: String, on_submit: Callable, on_switch: Callable) -> Control:
 	var signup := mode == "signup"
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -56,8 +57,6 @@ static func window(mode: String, on_submit: Callable, on_later: Callable, on_swi
 	HomeHud._style_button(go, Color(0.25, 0.63, 0.35), 12, Color.WHITE, 3)
 	row.add_child(go)
 	box.set_meta("submit", go)
-	if signup:
-		_link(row, I18n.t("Later")).pressed.connect(on_later)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)

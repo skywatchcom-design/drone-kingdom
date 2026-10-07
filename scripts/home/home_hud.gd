@@ -49,6 +49,9 @@ var _actions: VBoxContainer
 ## The middle window: a dimmed screen with a parchment window over it.
 var _dim: ColorRect
 var _modal: Control
+var _modal_close: Button
+## A locked window has no close button and ignores taps outside it (sign-up is required).
+var _modal_locked := false
 var _modal_body: MarginContainer
 
 
@@ -210,7 +213,7 @@ func _ready() -> void:
 	_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dim.visible = false
 	_dim.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and not _modal_locked:
 			hide_modal())
 	root.add_child(_dim)
 	_modal = Control.new()
@@ -243,6 +246,7 @@ func _ready() -> void:
 		Audio.play("click", -6.0)
 		hide_modal())
 	_modal.add_child(x)
+	_modal_close = x
 
 	_toast = make_label(root, "", 34)
 	_toast.anchor_right = 1.0
@@ -555,8 +559,11 @@ func actions_open() -> bool:
 
 # ---------------------------------------------------------------- middle window
 
-## Opens `content` in the parchment window in the middle, `size` pixels big.
-func show_modal(content: Control, size: Vector2) -> void:
+## Opens `content` in the parchment window in the middle, `size` pixels big. A `locked` window
+## can only be closed by the game (hide_modal), not by the player.
+func show_modal(content: Control, size: Vector2, locked: bool = false) -> void:
+	_modal_locked = locked
+	_modal_close.visible = not locked
 	for child in _modal_body.get_children():
 		child.queue_free()
 	_modal_body.add_child(content)
@@ -569,6 +576,7 @@ func show_modal(content: Control, size: Vector2) -> void:
 
 
 func hide_modal() -> void:
+	_modal_locked = false
 	_dim.visible = false
 	_modal.visible = false
 
