@@ -152,13 +152,14 @@ web build to `/legal/terms-he.html` etc.). Settings > Account has Delete account
 stores require it). Forgot password: the sign-in window asks Supabase to email a link
 (`Cloud.request_reset`) to `web/account/reset.html` (published at /account/reset.html, supabase-js from
 jsdelivr) where the new password is set; emails go through Gmail SMTP (skywatchcom@gmail.com, app password in
-tmp/smtp_password.txt) with the game-styled bilingual template `supabase/templates/recovery.html`
-(Noa picture from web/email). Approved 7.10.2026: sign-up look B "two steps" (https://claude.ai/artifact/Aoa9vgoFSHQ9wN4f6Vf9aQ)
+tmp/smtp_password.txt) with the bilingual template `supabase/templates/recovery.html`, approved 7.10.2026
+direction A "a picture from the game" (https://claude.ai/artifact/GdxsmW8DHjzNvreCKDLjVL): a real base
+screenshot banner with Noa (`web/email/banner.jpg`), the game's green button, signed by Noa. Approved 7.10.2026: sign-up look B "two steps" (https://claude.ai/artifact/Aoa9vgoFSHQ9wN4f6Vf9aQ)
 in `AccountUI` (bright card, Noa bubble, step chips, white fields, green button; `show_modal(..., bare)`). Tapping the
 badge/name opens `ProfileUI` (record, army and building levels). Contact for docs: skywatchcom@gmail.com,
 operator "SkyWatch". The web build busts caches per publish (`?v=` on index.pck and index.js).
 `AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:
 `godot --headless --path . res://scenes/dev/cloud_check.tscn` (delete its test user afterwards). The
-owner's Management API token sits in `tmp/supabase_token.txt` (git-ignored); `tmp/sb/sql.py` runs SQL.
+owner's Management API token sits in `tmp/supabase_token.txt` (git-ignored); `tools/supabase_sql.py` runs SQL.
 The owner considered a Clash Royale-style concept (7.10.2026) and decided to stay with this one.
 Still waiting on the owner: Apple Developer and Google Play accounts.

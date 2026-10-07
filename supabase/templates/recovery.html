@@ -1,31 +1,22 @@
-<!-- Password-reset email (Supabase recovery template), in the game's look. Inline styles and
-     tables only, so it shows the same in Gmail, Outlook and phone mail apps. Set with tmp/sb. -->
-<div style="margin:0;padding:24px 0;background:#1d2419;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;border-collapse:separate;font-family:Arial,Helvetica,sans-serif;">
-  <tr><td style="background:#2f3b27;border:3px solid #e9a21f;border-bottom:0;border-radius:18px 18px 0 0;padding:20px 24px;text-align:center;">
-    <div style="font-size:30px;font-weight:900;letter-spacing:2px;color:#ffd76a;">SKYWATCH</div>
-    <div style="font-size:13px;letter-spacing:3px;color:#b9c79a;margin-top:2px;">COMMAND HQ</div>
+<!-- Password-reset email (Supabase recovery template), approved direction A "a picture from the game"
+     (sketch https://claude.ai/artifact/GdxsmW8DHjzNvreCKDLjVL): a real base screenshot with Noa on top,
+     the game's green button, a short note signed by Noa. Inline styles and tables only, so it shows
+     the same in Gmail, Outlook and phone mail apps. The banner is published from web/email. -->
+<div style="margin:0;padding:20px 0;background:#ffffff;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse;">
+  <tr><td><img src="https://skywatchcom-design.github.io/drone-kingdom/email/banner.jpg" width="600" alt="SkyWatch" style="display:block;width:100%;max-width:600px;height:auto;border:0;border-radius:12px 12px 0 0;"></td></tr>
+  <tr><td dir="rtl" style="background:#f6f1e3;padding:26px 28px 8px;text-align:right;color:#2b2921;">
+    <p style="margin:0 0 6px;font-size:22px;font-weight:bold;">היי מפקד/ת,</p>
+    <p style="margin:0 0 18px;font-size:16px;line-height:1.6;">ביקשתם סיסמה חדשה לבסיס. לחצו על הכפתור, בחרו סיסמה, וחוזרים למשחק.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#3fa05a;border-radius:12px;border-bottom:5px solid #23642f;">
+      <a href="{{ .ConfirmationURL }}" style="display:block;padding:13px 30px;color:#ffffff;font-size:18px;font-weight:bold;text-decoration:none;">בחירת סיסמה חדשה</a>
+    </td></tr></table>
+    <p style="margin:18px 0 0;font-size:14px;color:#6b6656;line-height:1.6;">הקישור עובד פעם אחת. אם לא ביקשתם את זה, לא צריך לעשות כלום.</p>
+    <p style="margin:12px 0 0;font-size:15px;">נועה, קצינת המבצעים</p>
   </td></tr>
-  <tr><td style="background:#f4ecd6;border:3px solid #e9a21f;border-top:0;border-radius:0 0 18px 18px;padding:0 24px 24px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td dir="rtl" style="text-align:right;vertical-align:middle;padding-top:18px;">
-          <div style="font-size:24px;font-weight:900;color:#2b2921;">סיסמה חדשה לבסיס</div>
-          <div style="font-size:16px;line-height:1.6;color:#4a4636;margin-top:6px;">היי מפקד/ת! נועה כאן. ביקשתם סיסמה חדשה, אז הנה הקישור:</div>
-        </td>
-        <td width="120" style="vertical-align:bottom;padding-top:12px;"><img src="https://skywatchcom-design.github.io/drone-kingdom/email/noa.png" width="110" alt="Noa" style="display:block;border:0;"></td>
-      </tr>
-    </table>
-    <div style="text-align:center;margin:18px 0 8px;">
-      <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#f2b232;background-image:linear-gradient(#ffe48f,#f2b232 55%,#d98f12);color:#3a2604;font-size:20px;font-weight:900;text-decoration:none;padding:14px 34px;border-radius:14px;border:2px solid #fff3c4;box-shadow:0 5px 0 #7a4f06;">בחירת סיסמה חדשה &nbsp;·&nbsp; Choose a new password</a>
-    </div>
-    <div dir="rtl" style="text-align:right;font-size:14px;color:#6b6656;margin-top:16px;">הקישור עובד פעם אחת ולזמן קצר. אם לא ביקשתם סיסמה חדשה, אפשר להתעלם מהמייל, והבסיס נשאר מוגן.</div>
-    <div style="height:2px;background:#e3d7b6;margin:18px 0;"></div>
-    <div style="text-align:left;">
-      <div style="font-size:20px;font-weight:900;color:#2b2921;">A new password for your base</div>
-      <div style="font-size:15px;line-height:1.6;color:#4a4636;margin-top:6px;">Hi Commander! Noa here. You asked for a new password, so press the gold button above. The link works once and for a short time. If you didn't ask for it, ignore this email and your base stays safe.</div>
-    </div>
+  <tr><td dir="ltr" style="background:#f6f1e3;padding:16px 28px 22px;text-align:left;color:#4a4636;border-top:1px solid #e3d9bd;font-size:14px;line-height:1.6;">
+    Hi Commander, you asked for a new password. Press the green button to choose one. The link works once; if you didn't ask, ignore this email. – Noa
   </td></tr>
-  <tr><td style="text-align:center;padding:14px;font-size:12px;color:#8d967c;">SkyWatch · skywatchcom@gmail.com</td></tr>
+  <tr><td style="padding:14px;text-align:center;font-size:12px;color:#8a8f80;">SkyWatch · skywatchcom@gmail.com</td></tr>
 </table>
 </div>
