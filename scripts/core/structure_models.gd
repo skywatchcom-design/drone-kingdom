@@ -70,8 +70,13 @@ static func mark(parent: Node3D, kind: String, pos: Vector3) -> void:
 	parent.add_child(m)
 
 
+## False in battle, where the "Lv" labels would only clutter the fight (the look shows the level).
+static var show_levels := true
+
+
 static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 	var label := Label3D.new()
+	label.visible = show_levels
 	label.text = I18n.t("Lv %d") % level
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true

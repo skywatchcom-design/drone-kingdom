@@ -167,6 +167,7 @@ func _rebuild() -> void:
 	level.add_child(city)
 	city.build(GameState.city_seed, all_cells)
 	StructureModels.skin = GameState.cosmetics_worn
+	StructureModels.show_levels = true
 	for s in GameState.structures:
 		_spawn(s)
 	for w in GameState.walls:

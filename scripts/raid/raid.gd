@@ -62,6 +62,9 @@ var flare_pos := Vector3.ZERO
 var flare_left := 0.0
 var flare_node: Node3D
 var _flare_smoke := 0.0
+## Burning ruins: {pos, left (seconds of smoke), next (seconds to the next puff)}.
+var _smouldering: Array = []
+var _burn_tick := 0.0
 var army := {}
 var _pinch := Pinch.new()
 ## The red squares shown for a moment after a tap too close to a building.
@@ -100,6 +103,9 @@ func _ready() -> void:
 	Engine.time_scale = 1.0
 	autoplay = OS.get_cmdline_user_args().has("--autoplay")
 	cam = WorldSetup.create(self, VIEW_SIZE)
+	# Dev: `--view N` sets how many meters tall the view is (for pictures and sketches).
+	if OS.get_cmdline_user_args().has("--view"):
+		cam.size = float(OS.get_cmdline_user_args()[OS.get_cmdline_user_args().find("--view") + 1])
 	hud = RaidHud.new()
 	add_child(hud)
 	hud.unit_selected.connect(_on_unit_selected)
@@ -108,6 +114,9 @@ func _ready() -> void:
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAP_SCENE if GameState.raid_target == "syndicate" else HOME_SCENE))
 	hud.ability_pressed.connect(_on_ability)
 	_start()
+	_frame_base()
+	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fx-demo"):
+		_fx_demo()
 	if GameState.raid_target == "syndicate":
 		GameState.tutorial_event("raid_start")
 	Tutorial.attach(self)
@@ -133,6 +142,7 @@ func _start() -> void:
 	city = City.new()
 	level.add_child(city)
 	city.build(int(base["seed"]), reserved)
+	StructureModels.show_levels = false
 	# Only the player's own base wears their cosmetics.
 	StructureModels.skin = GameState.cosmetics_worn if GameState.raid_target == "self" else {}
 
@@ -417,6 +427,7 @@ func _autoplay_deploy() -> void:
 # ---------------------------------------------------------------- battle loop
 
 func _process(delta: float) -> void:
+	_burn(delta)
 	if _zones != null:
 		_zone_flash = maxf(0.0, _zone_flash - delta)
 		var a := minf(1.0, _zone_flash / 0.5)
@@ -1424,20 +1435,81 @@ func _update_bars() -> void:
 	hud.update_bars(entries)
 
 
+## Opens the battle centred on the enemy base, zoomed to fit it with a margin for deploying.
+func _frame_base() -> void:
+	if targets.is_empty():
+		return
+	var center := Vector3.ZERO
+	for t in targets:
+		center += Vector3(t["top"].x, 0.0, t["top"].z)
+	center /= targets.size()
+	var reach := 0.0
+	for t in targets:
+		reach = maxf(reach, Vector2(t["top"].x - center.x, t["top"].z - center.z).length())
+	focus = Vector3(center.x, focus.y, center.z)
+	WorldSetup.place_camera(cam, focus)
+	if not OS.get_cmdline_user_args().has("--view"):
+		cam.size = clampf(reach + 12.0, 28.0, VIEW_SIZE)
+
+
+## Dev: `--fx-demo` leaves buildings damaged (so they burn) and sets off explosions on them, to
+## look at the battle effects without a whole battle.
+func _fx_demo() -> void:
+	for i in targets.size():
+		targets[i]["hp"] = float(targets[i]["max_hp"]) * (0.2 if i % 2 == 0 else 0.45)
+	var t := create_tween().set_loops()
+	t.tween_interval(1.4)
+	t.tween_callback(func() -> void:
+		var alive := []
+		for i in targets.size():
+			if not targets[i]["destroyed"]:
+				alive.append(i)
+		if alive.is_empty():
+			return
+		var i: int = alive[randi() % alive.size()]
+		Fx.boom(level, targets[i]["top"] + Vector3(randf_range(-1, 1), 0.5, randf_range(-1, 1)), 1.3)
+		if randf() < 0.3:
+			_damage_target(i, float(targets[i]["max_hp"])))
+
+
+## Damaged buildings burn: under half health they smoke, under a quarter they also show
+## flames. Ruins keep smouldering for a while after they fall.
+func _burn(delta: float) -> void:
+	_burn_tick -= delta
+	if _burn_tick <= 0.0:
+		_burn_tick = 0.16
+		for t in targets:
+			if t["destroyed"]:
+				continue
+			var k := float(t["hp"]) / maxf(1.0, float(t["max_hp"]))
+			if k >= 0.5 or randf() > (0.35 if k > 0.25 else 0.7):
+				continue
+			var top: Vector3 = t["top"]
+			var spot := top + Vector3(randf_range(-1.2, 1.2), 1.8 + randf() * 1.2, randf_range(-1.2, 1.2))
+			Fx.smoke(level, spot, 1.8 if k > 0.25 else 2.4, 0.0, Color(0.22, 0.21, 0.2))
+			if k <= 0.25:
+				Fx.flame(level, spot - Vector3(0, 0.8, 0), randf_range(2.2, 3.0))
+				Fx.flame(level, spot + Vector3(randf_range(-0.8, 0.8), -0.8, randf_range(-0.8, 0.8)), randf_range(1.6, 2.4))
+	for s in _smouldering:
+		s["left"] -= delta
+		s["next"] -= delta
+		if s["next"] <= 0.0 and s["left"] > 0.0:
+			s["next"] = 0.35
+			Fx.smoke(level, s["pos"] + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)), 1.6 + 1.4 * s["left"] / 14.0, 0.0, Color(0.2, 0.19, 0.18))
+	_smouldering = _smouldering.filter(func(s: Dictionary) -> bool: return s["left"] > 0.0)
+
+
 func _rubble(top: Vector3) -> void:
+	var ground := Vector3(top.x, 0.0, top.z)
 	var dark := MeshKit.mat(Color(0.25, 0.24, 0.23), 0.95)
-	for i in 6:
-		var chunk := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.6, 1.4), randf_range(0.3, 0.8), randf_range(0.6, 1.4))), dark,
-			top + Vector3(randf_range(-2.0, 2.0), 0.3, randf_range(-2.0, 2.0)))
+	var scorched := MeshKit.mat(Color(0.12, 0.11, 0.1), 0.95)
+	for i in 9:
+		var chunk := MeshKit.add(level, MeshKit.box(Vector3(randf_range(0.5, 1.4), randf_range(0.25, 0.7), randf_range(0.5, 1.4))), dark if i % 3 else scorched,
+			top + Vector3(randf_range(-2.2, 2.2), 0.25, randf_range(-2.2, 2.2)))
 		chunk.rotation = Vector3(randf() * 0.5, randf() * TAU, randf() * 0.5)
-	var smoke := MeshKit.add(level, MeshKit.sphere(1.0, 12), MeshKit.glow(Color(0.35, 0.35, 0.36), 0.6), top + Vector3(0, 1.5, 0))
-	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(smoke, "scale", Vector3.ONE * 4.0, 1.2)
-	tween.tween_property(smoke, "position:y", smoke.position.y + 3.0, 1.2)
-	tween.tween_property(smoke.material_override, "albedo_color:a", 0.0, 1.2)
-	tween.chain().tween_callback(smoke.queue_free)
+	Fx.boom(level, top + Vector3(0, 0.5, 0), 1.6)
+	Fx.scorch(level, ground, 3.4)
+	_smouldering.append({"pos": top + Vector3(0, 0.6, 0), "left": 14.0, "next": 0.0})
 
 
 func _float_text(pos: Vector3, text: String, color: Color) -> void:

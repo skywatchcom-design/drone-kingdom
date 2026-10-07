@@ -171,4 +171,10 @@ money. Real payments need the store accounts: release/web builds say "purchases 
 stores", dev builds grant the purchase to test. Free-gem videos (13+) wait for an ad network. Tapping the Command Tower shows a Skins action
 (`_open_skins`, `StoreUI.skins_window`): classic + every tower skin and flag, wear or buy there. Cosmetic pictures:
 `skin_<id>.webp`, baked with `bake_pictures.tscn -- --skins`.
+Approved 7.10.2026 (from an in-game prototype video, https://claude.ai/artifact/Pqa146jhWERmPaHPQSH9gt; painted
+sketches of effects were rejected as looking bad, so judge effects from real recordings): battle opens centred on
+the enemy base and zoomed to fit (`raid._frame_base`), no "Lv" labels in battle (`StructureModels.show_levels`),
+`Fx` v2 (soft camera-facing puffs from code textures: fireball, black smoke, flames, sparks, flying debris, dust
+ring, scorch marks, camera shake via h/v offsets), burning damaged buildings and smouldering ruins
+(`raid._burn`). Dev: raid `--view N` (camera height), `--fx-demo` (damaged base + repeated explosions).
 Still waiting on the owner: Apple Developer and Google Play accounts.
