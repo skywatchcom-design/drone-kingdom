@@ -178,6 +178,51 @@ static func _cosmetic(id: String, on_gems: Callable, on_wear: Callable) -> Contr
 	return parts[0]
 
 
+## The Command Tower's skins window: for each slot (tower, flag) the classic look and every
+## cosmetic, with Wear / Worn / gems / "in the starter pack". `on_wear(id)` takes a cosmetic id or
+## "default_<slot>"; `on_buy(id)` buys with gems; `on_store` opens the gem shop.
+static func skins_window(hq_level: int, on_wear: Callable, on_buy: Callable, on_store: Callable) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	var title := HomeHud.ink(box, I18n.t("Command Tower skins"), 30)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for slot: String in ["hq", "flag"]:
+		_section(box, I18n.t("Tower") if slot == "hq" else I18n.t("Flag"), I18n.t("Changes only how it looks"))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		box.add_child(row)
+		row.add_child(_classic(slot, hq_level, on_wear))
+		for id: String in Store.COSMETIC_ORDER:
+			if Store.COSMETICS[id]["slot"] == slot:
+				row.add_child(_cosmetic(id, on_buy, on_wear))
+		if slot == "flag" and hq_level < 2:
+			HomeHud.ink(box, I18n.t("The flag shows from Command Tower Lv 2."), 16, MUTED)
+	var more := _button(box, I18n.t("More in the store"), BLUE)
+	more.icon = Icons.tex("gem", 48)
+	more.add_theme_constant_override("icon_max_width", 22)
+	more.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	more.custom_minimum_size.x = 260
+	more.pressed.connect(on_store)
+	return box
+
+
+## The classic (no skin) card for a slot.
+static func _classic(slot: String, hq_level: int, on_wear: Callable) -> Control:
+	var parts := _card()
+	var v: VBoxContainer = parts[1]
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(0, 116)
+	v.add_child(holder)
+	var pic := ShopUI.picture("hq", maxi(hq_level, 2) if slot == "flag" else hq_level, Color(0.56, 0.64, 0.43))
+	pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(pic)
+	var n := HomeHud.ink(v, I18n.t("Classic"), 18)
+	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var worn := not GameState.cosmetics_worn.has(slot)
+	_button(v, I18n.t("Worn ✓") if worn else I18n.t("Wear"), GREY if worn else GREEN).pressed.connect(func() -> void: on_wear.call("default_" + slot))
+	return parts[0]
+
+
 ## Players under 13 are pointed to the missions; older players get short videos once an ad
 ## network is in.
 static func _free() -> Control:

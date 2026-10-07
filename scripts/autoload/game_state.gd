@@ -371,6 +371,12 @@ func wear_cosmetic(id: String) -> void:
 	save_game()
 
 
+## Back to the classic look in a slot.
+func wear_default(slot: String) -> void:
+	cosmetics_worn.erase(slot)
+	save_game()
+
+
 ## Gives what a real-money purchase pays for (called once the store confirms the payment).
 func grant_purchase(product: String) -> void:
 	if product == Store.STARTER["id"]:

@@ -468,6 +468,13 @@ const HE := {
 	"Cancel": "ביטול",
 	"Buy": "קנייה",
 	"Not right. A parent needs to answer.": "לא נכון. הורה צריך לענות.",
+	"Skins": "סקינים",
+	"Command Tower skins": "סקינים למגדל הפיקוד",
+	"Tower": "המגדל",
+	"Flag": "הדגל",
+	"Classic": "קלאסי",
+	"More in the store": "עוד בחנות",
+	"The flag shows from Command Tower Lv 2.": "הדגל מופיע ממגדל פיקוד ברמה 2.",
 	# Missions
 	"Missions": "משימות",
 	"Starter": "מתחילים",

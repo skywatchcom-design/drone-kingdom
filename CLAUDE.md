@@ -168,6 +168,7 @@ with gems: Desert/Night/Snow Command Tower skins via `StructureModels.skin` + `H
 (opened from the gems "+" and the Shop's first "Gems" tab), `GameState.cosmetics_owned/worn`, `buy_cosmetic`,
 `grant_purchase`. Players under 13 (`Cloud.child`) pass a parent gate (number in words → digits) before real
 money. Real payments need the store accounts: release/web builds say "purchases open when SkyWatch is in the
-stores", dev builds grant the purchase to test. Free-gem videos (13+) wait for an ad network. Cosmetic pictures:
+stores", dev builds grant the purchase to test. Free-gem videos (13+) wait for an ad network. Tapping the Command Tower shows a Skins action
+(`_open_skins`, `StoreUI.skins_window`): classic + every tower skin and flag, wear or buy there. Cosmetic pictures:
 `skin_<id>.webp`, baked with `bake_pictures.tscn -- --skins`.
 Still waiting on the owner: Apple Developer and Google Play accounts.

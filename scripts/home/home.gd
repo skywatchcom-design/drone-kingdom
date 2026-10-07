@@ -141,6 +141,8 @@ func _ready() -> void:
 		_open_profile()
 	elif args.has("--screenshot-store"):
 		_open_store()
+	elif args.has("--screenshot-skins"):
+		_open_skins()
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
@@ -489,6 +491,8 @@ func _own_action(type: String, cell: Array) -> Dictionary:
 			return {"icon": "plane", "label": I18n.t("Prepare"), "call": _open_support}
 		"generator", "pump":
 			return {"icon": "coin" if type == "generator" else "fuel", "label": I18n.t("Collect"), "call": func() -> void: _collect(cell)}
+		"hq":
+			return {"icon": "brush", "label": I18n.t("Skins"), "call": _open_skins}
 	return {}
 
 
@@ -813,6 +817,33 @@ func _open_store() -> void:
 	hud.show_modal(StoreUI.window(_buy_real, gems, wear), Vector2(1180, 640))
 
 
+## The Command Tower's looks (from its own Skins button): classic plus every tower skin and
+## flag, worn with one tap when owned and bought with gems when not.
+func _open_skins() -> void:
+	_deselect()
+	open_sheet = "skins"
+	var wear := func(id: String) -> void:
+		if id.begins_with("default_"):
+			GameState.wear_default(id.trim_prefix("default_"))
+		elif GameState.cosmetics_worn.get(Store.COSMETICS[id]["slot"], "") != id:
+			GameState.wear_cosmetic(id)
+		Audio.play("click")
+		_rebuild()
+		_open_skins()
+	var buy := func(id: String) -> void:
+		var why := GameState.cosmetic_block_reason(id)
+		if why != "":
+			hud.toast(why)
+			return
+		_confirm(I18n.t("Buy \"%s\" for %d gems?") % [I18n.t(Store.COSMETICS[id]["name"]), int(Store.COSMETICS[id]["gems"])], func() -> void:
+			if GameState.buy_cosmetic(id):
+				Audio.play("build")
+				_rebuild()
+				_refresh_header()
+			_open_skins(), _open_skins)
+	hud.show_modal(StoreUI.skins_window(GameState.hq_level(), wear, buy, _open_store), Vector2(1100, 640))
+
+
 ## Real money: players under 13 first pass the parent gate.
 func _buy_real(product: String) -> void:
 	if Cloud.child:
@@ -863,8 +894,8 @@ func _parent_gate(on_pass: Callable) -> void:
 	hud.show_modal(box, Vector2(720, 380))
 
 
-## A small yes/no window over the store.
-func _confirm(question: String, on_yes: Callable) -> void:
+## A small yes/no window over the store (or over `back`, which No returns to).
+func _confirm(question: String, on_yes: Callable, back: Callable = Callable()) -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 16)
 	var q := HomeHud.ink(box, question, 26)
@@ -873,7 +904,7 @@ func _confirm(question: String, on_yes: Callable) -> void:
 	row.add_theme_constant_override("separation", 12)
 	box.add_child(row)
 	HomeHud.make_button(row, I18n.t("Buy"), 22, 60).pressed.connect(on_yes)
-	HomeHud.make_button(row, I18n.t("Cancel"), 22, 60).pressed.connect(_open_store)
+	HomeHud.make_button(row, I18n.t("Cancel"), 22, 60).pressed.connect(back if back.is_valid() else _open_store)
 	hud.show_modal(box, Vector2(680, 260))
 
 
