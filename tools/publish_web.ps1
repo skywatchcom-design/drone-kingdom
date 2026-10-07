@@ -23,6 +23,8 @@ Set-Content "$pages\index.html" $html -Encoding utf8 -NoNewline
 Copy-Item -Recurse web\legal "$pages\legal"
 # The page the password-reset email links to.
 Copy-Item -Recurse web\account "$pages\account"
+# Pictures the account emails show.
+Copy-Item -Recurse web\email "$pages\email"
 New-Item -ItemType File "$pages\.nojekyll" | Out-Null
 Set-Location $pages
 git init -q -b gh-pages

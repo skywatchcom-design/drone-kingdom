@@ -52,6 +52,7 @@ var _actions: VBoxContainer
 var _dim: ColorRect
 var _modal: Control
 var _modal_close: Button
+var _modal_sheet: PanelContainer
 ## A locked window has no close button and ignores taps outside it (sign-up is required).
 var _modal_locked := false
 var _modal_body: MarginContainer
@@ -232,6 +233,7 @@ func _ready() -> void:
 	_modal.visible = false
 	root.add_child(_modal)
 	var sheet := PanelContainer.new()
+	_modal_sheet = sheet
 	sheet.add_theme_stylebox_override("panel", _box(PARCHMENT, 16, Color(0.11, 0.12, 0.1), 4))
 	sheet.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_modal.add_child(sheet)
@@ -569,9 +571,13 @@ func actions_open() -> bool:
 # ---------------------------------------------------------------- middle window
 
 ## Opens `content` in the parchment window in the middle, `size` pixels big. A `locked` window
-## can only be closed by the game (hide_modal), not by the player.
-func show_modal(content: Control, size: Vector2, locked: bool = false) -> void:
+## can only be closed by the game (hide_modal), not by the player. A `bare` window leaves out the
+## parchment, for content that draws its own card.
+func show_modal(content: Control, size: Vector2, locked: bool = false, bare: bool = false) -> void:
 	_modal_locked = locked
+	_modal_sheet.self_modulate.a = 0.0 if bare else 1.0
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		_modal_body.add_theme_constant_override(side, 0 if bare else 16)
 	_modal_close.visible = not locked
 	for child in _modal_body.get_children():
 		child.queue_free()

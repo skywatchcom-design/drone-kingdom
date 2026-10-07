@@ -138,8 +138,10 @@ password twice, and a terms checkbox (`Cloud.TERMS_VERSION`; drafts in `web/lega
 web build to `/legal/terms-he.html` etc.). Settings > Account has Delete account (`delete_my_account` RPC;
 stores require it). Forgot password: the sign-in window asks Supabase to email a link
 (`Cloud.request_reset`) to `web/account/reset.html` (published at /account/reset.html, supabase-js from
-jsdelivr) where the new password is set; real emails need custom SMTP (Gmail of skywatchcom@gmail.com,
-pending the owner's app password; the bilingual recovery template can only be set after that). Tapping the
+jsdelivr) where the new password is set; emails go through Gmail SMTP (skywatchcom@gmail.com, app password in
+tmp/smtp_password.txt) with the game-styled bilingual template `supabase/templates/recovery.html`
+(Noa picture from web/email). Approved 7.10.2026: sign-up look B "two steps" (https://claude.ai/artifact/Aoa9vgoFSHQ9wN4f6Vf9aQ)
+in `AccountUI` (bright card, Noa bubble, step chips, white fields, green button; `show_modal(..., bare)`). Tapping the
 badge/name opens `ProfileUI` (record, army and building levels). Contact for docs: skywatchcom@gmail.com,
 operator "SkyWatch". The web build busts caches per publish (`?v=` on index.pck and index.js).
 `AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:

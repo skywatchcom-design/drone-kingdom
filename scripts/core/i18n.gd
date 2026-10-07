@@ -422,6 +422,12 @@ const HE := {
 	"Players under 13 have no email: a parent can write to %s and we will help.": "לשחקנים מתחת לגיל 13 אין אימייל: הורה יכול לכתוב ל-%s ונעזור.",
 	"If this email has a base, a link is on its way. Check your inbox (and spam).": "אם לאימייל הזה יש בסיס, הקישור כבר בדרך. בדקו בתיבת הדואר (וגם בספאם).",
 	"Too many requests. Try again in a few minutes.": "יותר מדי בקשות. נסו שוב בעוד כמה דקות.",
+	"Continue": "המשך",
+	"Who you are": "מי אתם",
+	"The account": "החשבון",
+	"Hi! Two quick steps and your base is saved.": "היי! בשני צעדים קצרים נשמור את הבסיס שלכם.",
+	"Great! Now a password, and we're ready.": "מעולה! עכשיו סיסמה, ואנחנו מוכנים.",
+	"Welcome back, Commander! The base saved in the cloud replaces the one on this device.": "ברוכים השבים, המפקד! הבסיס השמור בענן יחליף את הבסיס שבמכשיר הזה.",
 	# Missions
 	"Missions": "משימות",
 	"Starter": "מתחילים",

@@ -702,7 +702,7 @@ func _open_account(mode: String) -> void:
 	hud.hide_panel()
 	open_sheet = "account"
 	var content := AccountUI.window(mode, _submit_account, func(m: String) -> void: _open_account(m))
-	hud.show_modal(content, Vector2(980, {"signup": 600, "signin": 500, "reset": 440}[mode]), not Cloud.signed_in())
+	hud.show_modal(content, Vector2(840, {"signup": 620, "signin": 560, "reset": 470}[mode]), not Cloud.signed_in(), true)
 
 
 func _submit_account(data: Dictionary, mode: String, window: Control) -> void:
