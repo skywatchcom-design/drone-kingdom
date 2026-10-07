@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 8
+const SAVE_VERSION := 9
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -46,6 +46,14 @@ var best_stars := {}
 ## next attack is on. A mission opens once the one before it has at least one star.
 var syndicate_stars := {}
 var syndicate_mission := 0
+## Noa's tutorial: the index of the current step in TutorialSteps.STEPS, or -1 once it is done.
+var tutorial := -1
+## True while the tutorial is replayed from Settings: every step is just a tap, nothing is
+## forced, there is no gift, and the save keeps it finished.
+var tutorial_replay := false
+## Gems just handed out for finishing the tutorial, for the base screen to announce once.
+var tutorial_gift := 0
+signal tutorial_changed
 
 const SETTINGS_PATH := "user://settings.json"
 ## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
@@ -58,7 +66,16 @@ var music_on := true
 func _ready() -> void:
 	I18n.setup_font()
 	load_settings()
-	if not load_game():
+	# Dev: `-- --fresh` shows a brand-new player's base without touching the real save.
+	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fresh"):
+		persist = false
+		infinite_coins = false
+		new_player()
+		# Dev: `--tutorial N` jumps to step N of Noa's tutorial.
+		var args := OS.get_cmdline_user_args()
+		if args.has("--tutorial"):
+			tutorial = int(args[args.find("--tutorial") + 1])
+	elif not load_game():
 		new_player()
 
 
@@ -138,7 +155,6 @@ func new_player() -> void:
 		{"type": "generator", "cell": [3, 4], "level": 1, "collected_at": t - 20.0 * 60.0},
 		{"type": "pump", "cell": [4, 5], "level": 1, "collected_at": t - 20.0 * 60.0},
 		{"type": "hangar", "cell": [5, 4], "level": 1},
-		{"type": "mg", "cell": [4, 3], "level": 1},
 		{"type": "aa", "cell": [3, 3], "level": 1},
 		{"type": "camp", "cell": [3, 5], "level": 1},
 		{"type": "quarters", "cell": [5, 5], "level": 1},
@@ -148,7 +164,8 @@ func new_player() -> void:
 	abilities = {"flare": 1}
 	support_ready = {}
 	support_queue = []
-	army = {"infantry": 2, "courier": 2}
+	# Room for one more squad, which Noa has the player train.
+	army = {"infantry": 1, "courier": 2}
 	training = []
 	train_started = 0.0
 	enemy_index = 0
@@ -156,7 +173,52 @@ func new_player() -> void:
 	best_stars = {}
 	syndicate_stars = {}
 	syndicate_mission = 0
+	tutorial = 0
+	tutorial_replay = false
 	save_game()
+
+
+# ---------------------------------------------------------------- tutorial
+
+func tutorial_key() -> String:
+	return TutorialSteps.STEPS[tutorial]["key"] if tutorial >= 0 else ""
+
+
+## Something the player did; it ends the current step if that step waits for it.
+func tutorial_event(name: String) -> void:
+	if tutorial < 0 or tutorial_replay or TutorialSteps.STEPS[tutorial].get("done", "") != name:
+		return
+	tutorial_next()
+
+
+func tutorial_next() -> void:
+	if tutorial < 0:
+		return
+	tutorial += 1
+	if tutorial >= TutorialSteps.STEPS.size():
+		tutorial = -1
+		if not tutorial_replay:
+			gems += TutorialSteps.GIFT_GEMS
+			tutorial_gift = TutorialSteps.GIFT_GEMS
+		tutorial_replay = false
+	elif tutorial_key() == "upgrade" and not tutorial_replay:
+		# The upgrade must be affordable even after a poor first battle.
+		coins = maxi(coins, mini(Catalog.upgrade_cost("hq", hq_level()), coin_cap()))
+	save_game()
+	tutorial_changed.emit()
+
+
+func skip_tutorial() -> void:
+	tutorial = -1
+	tutorial_replay = false
+	save_game()
+	tutorial_changed.emit()
+
+
+func replay_tutorial() -> void:
+	tutorial = 0
+	tutorial_replay = true
+	tutorial_changed.emit()
 
 
 # ---------------------------------------------------------------- queries
@@ -462,7 +524,9 @@ func _complete(s: Dictionary) -> void:
 
 func speedup_cost(cell: Array) -> int:
 	var s := structure_at(cell)
-	return 0 if s.is_empty() or not is_busy(s) else Catalog.speedup_gems(seconds_left(s))
+	if s.is_empty() or not is_busy(s) or tutorial_key() == "speed":
+		return 0
+	return Catalog.speedup_gems(seconds_left(s))
 
 
 ## Finishes a build or upgrade right away for gems.
@@ -884,6 +948,7 @@ func save_game() -> void:
 		"abilities": abilities, "support_ready": support_ready, "support_queue": support_queue, "support_started": support_started,
 		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 		"syndicate_stars": syndicate_stars, "syndicate_mission": syndicate_mission,
+		"tutorial": -1 if tutorial_replay else tutorial,
 	}))
 
 
@@ -892,7 +957,7 @@ func load_game() -> bool:
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -941,4 +1006,7 @@ func load_game() -> bool:
 	for k in data.get("syndicate_stars", {}):
 		syndicate_stars[str(k)] = int(data["syndicate_stars"][k])
 	syndicate_mission = int(data.get("syndicate_mission", 0))
+	# Players from before the tutorial (save 8 and older) already know the game.
+	tutorial = int(data.get("tutorial", -1))
+	tutorial_replay = false
 	return true

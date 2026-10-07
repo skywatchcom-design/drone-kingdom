@@ -10,6 +10,10 @@ signal retry_pressed
 signal home_pressed
 signal ability_pressed(kind: String)
 
+var retry_button: Button
+## Whether the battle shown in the result window was won (at least one star).
+var won := false
+
 var _title: Label
 var _timer: Label
 var _progress: Label
@@ -114,8 +118,11 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 16)
 	box.add_child(buttons)
-	HomeHud.make_button(buttons, I18n.t("Retry"), 30, 88).pressed.connect(func() -> void: retry_pressed.emit())
-	HomeHud.make_button(buttons, I18n.t("Home"), 30, 88).pressed.connect(func() -> void: home_pressed.emit())
+	retry_button = HomeHud.make_button(buttons, I18n.t("Retry"), 30, 88)
+	retry_button.pressed.connect(func() -> void: retry_pressed.emit())
+	var home := HomeHud.make_button(buttons, I18n.t("Home"), 30, 88)
+	home.pressed.connect(func() -> void: home_pressed.emit())
+	Tutorial.tag(home, "result_home")
 	_result.visible = false
 
 
@@ -304,6 +311,7 @@ func update_bars(entries: Array) -> void:
 
 ## `gained` is {coins, fuel} actually banked.
 func show_result(stars: int, percent: int, gained: Dictionary, practice: bool, extra: String = "") -> void:
+	won = stars > 0
 	_result_title.text = I18n.t("Battle over")
 	_result_stars.text = I18n.t("Stars %d / 3   ·   %d%%") % [stars, percent]
 	if practice:

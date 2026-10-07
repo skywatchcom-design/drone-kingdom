@@ -108,6 +108,9 @@ func _ready() -> void:
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAP_SCENE if GameState.raid_target == "syndicate" else HOME_SCENE))
 	hud.ability_pressed.connect(_on_ability)
 	_start()
+	if GameState.raid_target == "syndicate":
+		GameState.tutorial_event("raid_start")
+	Tutorial.attach(self)
 
 
 func _start() -> void:
@@ -321,7 +324,19 @@ func _show_zones() -> void:
 	_zone_flash = 1.4
 
 
+## Where Noa's tutorial points in battle: open ground to the left of the base, or Retry
+## after a lost battle.
+func tutorial_target(key: String) -> Rect2:
+	if key == "result_retry":
+		return hud.retry_button.get_global_rect() if phase == Phase.RESULT and not hud.won else Rect2()
+	if key != "deploy_ground" or phase != Phase.BATTLE:
+		return Rect2()
+	var screen := get_viewport().get_visible_rect().size
+	return Rect2(screen * Vector2(0.2, 0.45) - Vector2(70, 70), Vector2(140, 140))
+
+
 func _deploy(type: String, p: Vector3) -> void:
+	GameState.tutorial_event("deploy")
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)
@@ -345,6 +360,7 @@ func _deploy(type: String, p: Vector3) -> void:
 ## A card's worth of ground units: an infantry squad of four, two engineers, or one tank,
 ## lined up facing the base.
 func _deploy_ground(type: String, p: Vector3) -> void:
+	GameState.tutorial_event("deploy")
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)

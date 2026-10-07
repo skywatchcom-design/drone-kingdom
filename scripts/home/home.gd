@@ -82,6 +82,19 @@ func _ready() -> void:
 	GameState.finish_ready()
 	GameState.process_training()
 	_rebuild()
+	GameState.tutorial_event("home")
+	Tutorial.attach(self)
+	# Each new tutorial step starts from a clear base, so its target is in view.
+	GameState.tutorial_changed.connect(func() -> void:
+		if GameState.tutorial >= 0 and not GameState.tutorial_replay:
+			hud.hide_modal()
+			hud.hide_panel()
+			_deselect()
+		if GameState.tutorial_gift > 0:
+			hud.toast(I18n.t("+%d gems") % GameState.tutorial_gift)
+			Audio.play("star")
+			GameState.tutorial_gift = 0
+			_refresh_header())
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
 		_open_cell([1, 3])
@@ -309,6 +322,40 @@ func _unhandled_input(event: InputEvent) -> void:
 		_open_cell(cell)
 
 
+## Where Noa's tutorial points on the base (see Tutorial): a coin or fuel drop, a free pad
+## while placing, or a building to tap. Rect2() when it isn't on screen.
+func tutorial_target(key: String) -> Rect2:
+	if key == "coin_generator" or key == "coin_pump":
+		for bubble in coins:
+			if bubble.visible and bubble.fuel == (key == "coin_pump"):
+				return _screen_box(bubble.global_position, Vector2(110, 110))
+		return Rect2()
+	if hud.modal_open() or hud.actions_open() or hud.panel_open():
+		return Rect2()
+	if key == "free_pad":
+		if placing == "":
+			return Rect2()
+		var best := []
+		var best_d := INF
+		for c in City.GRID:
+			for r in City.GRID:
+				var d := Vector2(c - 4, r - 3.2).length()
+				if d < best_d and GameState.structure_at([c, r]).is_empty():
+					best_d = d
+					best = [c, r]
+		return _screen_box(city.roof_top(best), Vector2(130, 100)) if not best.is_empty() else Rect2()
+	if key.begins_with("cell_") and placing == "":
+		var type := key.trim_prefix("cell_")
+		for s in GameState.structures:
+			if s["type"] == type:
+				return _screen_box(city.roof_top(s["cell"]) + Vector3(0, 1.5, 0), Vector2(120, 120))
+	return Rect2()
+
+
+func _screen_box(world: Vector3, size: Vector2) -> Rect2:
+	return Rect2(cam.unproject_position(world) - size / 2.0, size)
+
+
 ## Tapping near a visible coin collects that generator.
 func _try_collect(screen_pos: Vector2) -> bool:
 	for bubble in coins:
@@ -318,6 +365,7 @@ func _try_collect(screen_pos: Vector2) -> bool:
 			continue
 		var got := GameState.collect_generator(bubble.cell)
 		if got > 0:
+			GameState.tutorial_event("collect_fuel" if bubble.fuel else "collect_coins")
 			hud.toast(I18n.t("+%d fuel") % got if bubble.fuel else I18n.t("+%d coins") % got)
 			bubble.pop()
 			Audio.play("coin", -8.0)
@@ -601,6 +649,8 @@ func _open_wall_upgrade(edge: Array) -> void:
 func _open_shop(tab: String = "") -> void:
 	if tab != "":
 		shop_tab = tab
+	if GameState.tutorial_key() == "build" and not GameState.tutorial_replay:
+		shop_tab = "defenses"
 	_deselect()
 	hud.hide_panel()
 	var buy := func(type: String) -> void:
@@ -676,6 +726,7 @@ func _paint_wall(screen_pos: Vector2) -> void:
 
 func _start_placing(type: String) -> void:
 	placing = type
+	GameState.tutorial_event("place_" + type)
 	hud.hide_panel()
 	hud.toast(I18n.t("Tap a free pad for the %s") % Catalog.display_name(type))
 
@@ -704,6 +755,10 @@ func _open_settings() -> void:
 		Audio.refresh_music()
 		music.text = I18n.t("Music on") if GameState.music_on else I18n.t("Music off"))
 	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
+	HomeHud.make_button(grid, I18n.t("Replay tutorial"), 24, 80).pressed.connect(func() -> void:
+		hud.hide_panel()
+		GameState.replay_tutorial()
+		Tutorial.attach(self))
 	if GameState.dev_tools_available():
 		var dev := HomeHud.make_button(grid, I18n.t("DEV: free ON") if GameState.infinite_coins else I18n.t("DEV: free OFF"), 24, 80)
 		dev.add_theme_color_override("font_color", GOOD if GameState.infinite_coins else SOFT)
@@ -777,6 +832,7 @@ func _open_army() -> void:
 			Audio.play("click")
 			_refresh_header()
 			_open_army()
+			GameState.tutorial_event("train")
 		else:
 			hud.toast(GameState.train_block_reason(type))
 	var cancel := func(type: String) -> void:
@@ -1128,6 +1184,7 @@ func _gold(button: Button, enabled: bool) -> void:
 func _do_build(type: String, cell: Array) -> void:
 	if GameState.build(type, cell):
 		Audio.play("build")
+		GameState.tutorial_event("built_" + type)
 		hud.toast(I18n.t("%s built") % Catalog.display_name(type))
 		_rebuild()
 		_open_cell(cell)
@@ -1136,6 +1193,8 @@ func _do_build(type: String, cell: Array) -> void:
 func _do_upgrade(cell: Array) -> void:
 	if GameState.upgrade(cell):
 		Audio.play("build")
+		if GameState.structure_at(cell)["type"] == "hq":
+			GameState.tutorial_event("upgrade_hq")
 		hud.toast(I18n.t("Upgrade started"))
 		_rebuild()
 		_open_cell(cell)
@@ -1147,6 +1206,7 @@ func _do_speed_up(cell: Array) -> void:
 		hud.toast(I18n.t("Done!"))
 		_rebuild()
 		_open_cell(cell)
+		GameState.tutorial_event("speed_up")
 
 
 ## Who is working on what, and the button to hire one more worker for gems.
@@ -1227,6 +1287,8 @@ func _open_attack_choice() -> void:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		b.custom_minimum_size = Vector2(300, 260)
+		if c[0] == "syndicate":
+			Tutorial.tag(b, "attack_syndicate")
 		b.add_theme_font_size_override("font_size", 24)
 		HomeHud._style_button(b, Color(0.32, 0.22, 0.45) if c[0] == "syndicate" else Color(0.82, 0.32, 0.2), 16, Color.WHITE, 4)
 		b.pressed.connect(func() -> void: Audio.play("click", -6.0))

@@ -110,6 +110,7 @@ func _ready() -> void:
 	_pin(corners, _left, false, true)
 	_attack = _big_button(_left, "swords", I18n.t("ATTACK!"))
 	_attack.pressed.connect(func() -> void: attack_pressed.emit())
+	Tutorial.tag(_attack, "attack_button")
 	_small_button(_left, "army", I18n.t("Army")).pressed.connect(func() -> void: army_pressed.emit())
 
 	# Settings and the Shop, bottom right.
@@ -118,6 +119,7 @@ func _ready() -> void:
 	_pin(corners, _dock, true, true)
 	_small_button(_dock, "gear", I18n.t("Settings")).pressed.connect(func() -> void: settings_pressed.emit())
 	var shop := _big_button(_dock, "cart", I18n.t("Shop"))
+	Tutorial.tag(shop, "shop_button")
 	shop.pressed.connect(func() -> void: build_pressed.emit())
 	_shop_badge = _corner_badge(shop)
 
@@ -504,6 +506,7 @@ func show_actions(title: String, actions: Array) -> void:
 		_style_button(b, Color(0.95, 0.93, 0.86), 16, Color.WHITE, 3)
 		b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 		b.pressed.connect(a["call"])
+		Tutorial.tag(b, "action_" + str(a["icon"]))
 		col.add_child(b)
 		var l := make_label(col, a["label"], 18)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

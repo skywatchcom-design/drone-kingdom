@@ -46,6 +46,7 @@ func _ready() -> void:
 		Audio.play("click", -6.0)
 		get_tree().change_scene_to_file(HOME_SCENE))
 	ui.add_child(back)
+	Tutorial.tag(back, "map_back")
 
 	var title := PanelContainer.new()
 	title.add_theme_stylebox_override("panel", HomeHud._box(Color(0.08, 0.06, 0.12, 0.85), 10, Color(0.75, 0.55, 1.0), 2))
@@ -90,6 +91,7 @@ func _ready() -> void:
 	if args.has("--mission"):
 		selected = clampi(int(args[args.find("--mission") + 1]), 0, Syndicate.COUNT - 1)
 	_show_brief(selected)
+	Tutorial.attach(self)
 
 
 func _process(delta: float) -> void:
@@ -123,6 +125,7 @@ func _add_spot(parent: Control, i: int, open: bool) -> void:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
 		b.text = str(i + 1)
+	Tutorial.tag(b, "mission_%d" % (i + 1))
 	b.pressed.connect(func() -> void:
 		Audio.play("click", -6.0)
 		if open:
@@ -226,6 +229,7 @@ func _show_brief(i: int) -> void:
 		Audio.play("click", -6.0)
 		_attack(i))
 	box.add_child(attack)
+	Tutorial.tag(attack, "brief_attack")
 
 
 func _attack(i: int) -> void:

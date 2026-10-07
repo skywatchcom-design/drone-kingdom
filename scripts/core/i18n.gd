@@ -329,6 +329,28 @@ const HE := {
 	"Loot banked: %d coins, %d fuel": "שלל שנכנס: %d מטבעות, %d דלק",
 	"Retry": "שוב",
 	"Home": "לבסיס",
+	# Noa's tutorial
+	"Noa": "נועה",
+	"Tap to continue": "לחצו להמשך",
+	"Skip tutorial": "דלג על ההדרכה",
+	"Skip the tutorial?": "לדלג על ההדרכה?",
+	"Skip": "לדלג",
+	"Keep going": "להמשיך",
+	"Replay tutorial": "הדרכה מחדש",
+	"+%d gems": "+%d יהלומים",
+	"Hi, Commander! I'm Noa, your operations officer. Welcome to your new base!": "היי! אני נועה, קצינת המבצעים. ברוכים הבאים לבסיס החדש שלכם!",
+	"A base runs on coins. Tap the Solar Generator to collect them.": "בסיס צריך מטבעות. לחצו על הגנרטור הסולארי כדי לאסוף אותם.",
+	"Now fuel. The pump has been busy. Tap it to collect.": "ועכשיו דלק. המשאבה עבדה קשה, לחצו כדי לאסוף.",
+	"Every base needs guards. Open the Shop and build an MG Nest.": "כל בסיס צריך שמירה. פתחו את החנות ובנו עמדת מקלע.",
+	"Pick a free pad. The blinking one.": "בחרו משבצת פנויה, זאת שמהבהבת.",
+	"Building takes time... but this one's on me! Tap to finish now.": "בנייה לוקחת זמן... אבל הפעם זה עליי! לחצו לסיים עכשיו.",
+	"An army doesn't train itself. Open the Training Camp and train an Infantry Squad.": "צבא לא מתאמן לבד. היכנסו למחנה האימונים ואמנו חוליית חי\"ר.",
+	"We've got trouble. Razor's Syndicate is stealing coins around here. Time to take them back! Tap Attack.": "יש לנו בעיה. הסינדיקט של רייזור גונב מטבעות באזור. הגיע הזמן להחזיר אותם! לחצו על התקפה.",
+	"Tap the ground to send in your troops. Just not right next to buildings.": "לחצו על הקרקע כדי להנחית כוחות. רק לא צמוד למבנים.",
+	"Victory! The loot is on its way home. Razor won't like this.": "ניצחון! השלל כבר בדרך הביתה. רייזור לא יאהב את זה.",
+	"Now upgrade your Command Tower. A taller tower unlocks new buildings.": "עכשיו שדרגו את מגדל הפיקוד. מגדל גבוה יותר פותח מבנים חדשים.",
+	"The base is in good hands. I'm on the radio if you need me. Noa out!": "הבסיס בידיים טובות. אני בקשר אם תצטרכו אותי. נועה, סוף!",
+	"Almost! Razor got lucky this time. Tap Retry and send in all your troops.": "כמעט! לרייזור היה מזל הפעם. לחצו על שוב ושלחו את כל הכוחות.",
 }
 
 

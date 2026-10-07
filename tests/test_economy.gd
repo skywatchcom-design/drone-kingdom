@@ -518,3 +518,62 @@ func test_syndicate_bases_are_valid() -> bool:
 		if hq != 1:
 			return false
 	return Syndicate.base(Syndicate.BOSS)["boss"] and Syndicate.base(9)["walls"].size() > Syndicate.base(2)["walls"].size()
+
+
+func test_tutorial_starts_for_new_players_and_follows_events() -> bool:
+	var gs := _fresh_state()
+	var starts: bool = gs.tutorial == 0 and gs.tutorial_key() == "intro"
+	gs.tutorial_next()
+	gs.tutorial_event("collect_fuel")
+	var ignored: bool = gs.tutorial_key() == "coins"
+	gs.tutorial_event("collect_coins")
+	var moved: bool = gs.tutorial_key() == "fuel"
+	gs.free()
+	return starts and ignored and moved
+
+
+func test_tutorial_new_base_leaves_room_to_build_and_train() -> bool:
+	var gs := _fresh_state()
+	var mg_free: bool = gs.build_block_reason("mg") == ""
+	var can_train: bool = gs.train_block_reason("infantry") == ""
+	gs.free()
+	return mg_free and can_train
+
+
+func test_tutorial_speed_up_is_free_only_in_its_step() -> bool:
+	var gs := _fresh_state()
+	gs.build("mg", [4, 3])
+	var paid: bool = gs.speedup_cost([4, 3]) > 0
+	while gs.tutorial_key() != "speed":
+		gs.tutorial_next()
+	var free: bool = gs.speedup_cost([4, 3]) == 0
+	gs.free()
+	return paid and free
+
+
+func test_tutorial_upgrade_is_affordable_and_ends_with_gems() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 0
+	while gs.tutorial_key() != "upgrade":
+		gs.tutorial_next()
+	var afford: bool = gs.coins >= Catalog.upgrade_cost("hq", 1)
+	var gems: int = gs.gems
+	gs.tutorial_next()
+	gs.tutorial_next()
+	var done: bool = gs.tutorial == -1 and gs.gems == gems + TutorialSteps.GIFT_GEMS
+	gs.free()
+	return afford and done
+
+
+func test_tutorial_skip_and_replay_give_no_gems() -> bool:
+	var gs := _fresh_state()
+	var gems: int = gs.gems
+	gs.skip_tutorial()
+	var skipped: bool = gs.tutorial == -1
+	gs.replay_tutorial()
+	for i in TutorialSteps.STEPS.size():
+		gs.tutorial_next()
+	var replayed: bool = gs.tutorial == -1 and not gs.tutorial_replay
+	var no_gift: bool = gs.gems == gems
+	gs.free()
+	return skipped and replayed and no_gift

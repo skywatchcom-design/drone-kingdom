@@ -156,6 +156,7 @@ static func _card(type: String, on_buy: Callable, on_info: Callable) -> Control:
 	buy.pressed.connect(func() -> void:
 		Audio.play("click", -6.0)
 		on_buy.call(type))
+	Tutorial.tag(buy, "buy_" + type)
 	box.add_child(buy)
 	return card
 
@@ -340,6 +341,7 @@ static func _unit_card(type: String, on_train: Callable, on_cancel: Callable, on
 		train.add_theme_color_override("font_disabled_color", Color(1.0, 0.86, 0.8))
 	train.pressed.connect(func() -> void:
 		on_train.call(type))
+	Tutorial.tag(train, "train_" + type)
 	buttons.add_child(train)
 	return card
 
@@ -398,6 +400,7 @@ static func upgrade_window(title: String, type: String, next_level: int, rows: A
 	HomeHud._style_button(go, GOOD, 12, Color.WHITE, 3)
 	go.pressed.connect(func() -> void: Audio.play("click", -6.0))
 	go.pressed.connect(on_confirm)
+	Tutorial.tag(go, "upgrade_go")
 	foot.add_child(go)
 	return box
 

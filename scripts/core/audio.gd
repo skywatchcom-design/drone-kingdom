@@ -41,6 +41,28 @@ static func set_enabled(on: bool) -> void:
 		sfx.set_enabled(on)
 
 
+## Plays one of Noa's lines; returns its length in seconds (0 when silent).
+static func say(path: String) -> float:
+	var sfx = _sfx()
+	return sfx.say(path) if sfx != null else 0.0
+
+
+static func stop_voice() -> void:
+	var sfx = _sfx()
+	if sfx != null:
+		sfx.stop_voice()
+
+
+static func voice_playing() -> bool:
+	var sfx = _sfx()
+	return sfx != null and sfx.voice_playing()
+
+
+static func voice_position() -> float:
+	var sfx = _sfx()
+	return sfx.voice_position() if sfx != null else 0.0
+
+
 static func _sfx() -> Node:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.root == null:

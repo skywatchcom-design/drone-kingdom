@@ -108,4 +108,13 @@ in `assets/models/incoming` (git-ignored), slimmed by `scripts/dev/slim_model.gd
 weights painted by height in `_skinned`); small coin/fuel markers with no number; softer coin chime;
 slow martial base music (D minor, 70 BPM) `assets/audio/base_theme.ogg` composed by `tools/make_music.py` (Sfx.music, settings
 toggle, off in battles); Army window in Shop style (`ShopUI.army`, unit info with "!").
+Approved 6.10.2026: Noa's tutorial sketch (https://claude.ai/artifact/MGyZi8x3roSUiJFQpDLzYt). In game (7.10.2026,
+save v9): `Tutorial` overlay (`scripts/ui/tutorial.gd`, steps and lines in `TutorialSteps`) with Noa's three
+Gemini-painted faces (`assets/textures/noa`) and her Gemini "Leda" voice (`assets/audio/noa/<lang>_<step>.ogg`,
+made with `tmp/noa/gem/leda.py`, every clip checked by transcription). Scenes call `Tutorial.attach(self)`;
+targets are controls tagged with `Tutorial.tag(control, key)` or rects from the scene's `tutorial_target(key)`;
+steps end on `GameState.tutorial_event(...)`. New players start without the MG Nest (Noa has them build it),
+get a free speed-up and a coin top-up for the HQ upgrade, and 100 gems at the end. Settings has
+"Replay tutorial" (tap-through only). Dev: `-- --fresh` (new player, real save untouched),
+`--tutorial N` (jump to a step), `--tutorial-bot` (plays the tutorial by tapping and saves pictures to tmp/bot).
 Still waiting on the owner: Apple Developer and Google Play accounts.

@@ -17,6 +17,7 @@ var _next := 0
 var _hum: AudioStreamPlayer
 var _music: AudioStreamPlayer
 var _music_wanted := false
+var _voice: AudioStreamPlayer
 const MUSIC_DB := -15.0
 var _last_played := {}
 
@@ -37,6 +38,9 @@ func _ready() -> void:
 	_music.stream = load("res://assets/audio/base_theme.ogg")
 	_music.volume_db = MUSIC_DB
 	add_child(_music)
+	_voice = AudioStreamPlayer.new()
+	_voice.finished.connect(_unduck)
+	add_child(_voice)
 
 
 ## Plays a sound. Repeats of the same sound within `min_gap` seconds are skipped,
@@ -94,6 +98,40 @@ func set_enabled(on: bool) -> void:
 	enabled = on
 	if not on:
 		set_hum(0.0)
+		stop_voice()
+
+
+## Plays a spoken line (one at a time) with the music lowered under it. Returns its length in
+## seconds, or 0 when it doesn't play.
+func say(path: String) -> float:
+	stop_voice()
+	if not enabled or not ResourceLoader.exists(path):
+		return 0.0
+	var stream: AudioStream = load(path)
+	_voice.stream = stream
+	_voice.play()
+	if _music.playing:
+		_music.volume_db = MUSIC_DB - 10.0
+	return stream.get_length()
+
+
+func stop_voice() -> void:
+	if _voice.playing:
+		_voice.stop()
+	_unduck()
+
+
+func voice_playing() -> bool:
+	return _voice.playing
+
+
+func voice_position() -> float:
+	return _voice.get_playback_position()
+
+
+func _unduck() -> void:
+	if _music.playing:
+		_music.volume_db = MUSIC_DB
 
 
 # ---------------------------------------------------------------- synthesis
