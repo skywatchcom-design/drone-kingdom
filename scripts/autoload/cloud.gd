@@ -25,6 +25,8 @@ const RESERVED := ["noa", "razor", "admin", "skywatch", "ironfang", "commander",
 const BLOCKED := ["fuck", "shit", "sex", "porn", "nazi", "hitler", "זונה", "כוס", "זין", "מניאק", "שרמוטה"]
 
 var commander := ""
+## True for players under 13 (from the birth date at sign-up): no email, a parent gate in the store.
+var child := false
 var user_id := ""
 var _access := ""
 var _refresh := ""
@@ -83,7 +85,7 @@ func sign_up(name: String, password: String, email: String, birth_year: int, bir
 	var why := name_problem(name)
 	if why != "":
 		return why
-	var child := age(birth_year, birth_month) < EMAIL_AGE
+	child = age(birth_year, birth_month) < EMAIL_AGE
 	if not child and email_problem(email) != "":
 		return email_problem(email)
 	var free = await name_available(name)
@@ -121,10 +123,11 @@ func sign_in(login: String, password: String) -> String:
 			return I18n.t("Wrong email or password") if login.contains("@") else I18n.t("Wrong name or password. From age 13, log in with your email.")
 		return I18n.t("No connection. Try again in a moment.")
 	_take_session(r["data"], login)
-	var rows := await _call(HTTPClient.METHOD_GET, "/rest/v1/players?select=name,save&id=eq." + user_id)
+	var rows := await _call(HTTPClient.METHOD_GET, "/rest/v1/players?select=name,save,is_child&id=eq." + user_id)
 	if rows["code"] == 200 and rows["data"] is Array and not rows["data"].is_empty():
 		var row: Dictionary = rows["data"][0]
 		commander = str(row["name"])
+		child = bool(row.get("is_child", false))
 		_save_session()
 		if GameState.apply_save(row["save"]):
 			GameState.save_game()
@@ -158,6 +161,7 @@ func delete_account() -> String:
 
 func sign_out() -> void:
 	commander = ""
+	child = false
 	user_id = ""
 	_access = ""
 	_refresh = ""
@@ -206,7 +210,7 @@ func _take_session(data: Dictionary, name: String) -> void:
 func _save_session() -> void:
 	var f := FileAccess.open(SESSION_PATH, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"name": commander, "user": user_id, "access": _access, "refresh": _refresh, "expires": _expires}))
+		f.store_string(JSON.stringify({"name": commander, "child": child, "user": user_id, "access": _access, "refresh": _refresh, "expires": _expires}))
 
 
 func _load_session() -> void:
@@ -215,6 +219,7 @@ func _load_session() -> void:
 	var d = JSON.parse_string(FileAccess.get_file_as_string(SESSION_PATH))
 	if d is Dictionary:
 		commander = str(d.get("name", ""))
+		child = bool(d.get("child", false))
 		user_id = str(d.get("user", ""))
 		_access = str(d.get("access", ""))
 		_refresh = str(d.get("refresh", ""))

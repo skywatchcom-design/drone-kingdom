@@ -79,7 +79,7 @@ func _ready() -> void:
 		marker.visible = false)
 	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
-	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
+	hud.gems_pressed.connect(_open_store)
 	hud.mode_done.connect(_end_wall_mode)
 	hud.missions_pressed.connect(func() -> void: _open_missions())
 	hud.profile_pressed.connect(_open_profile)
@@ -139,6 +139,8 @@ func _ready() -> void:
 		_open_account("signin")
 	elif args.has("--screenshot-profile"):
 		_open_profile()
+	elif args.has("--screenshot-store"):
+		_open_store()
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
@@ -162,6 +164,7 @@ func _rebuild() -> void:
 	city = City.new()
 	level.add_child(city)
 	city.build(GameState.city_seed, all_cells)
+	StructureModels.skin = GameState.cosmetics_worn
 	for s in GameState.structures:
 		_spawn(s)
 	for w in GameState.walls:
@@ -678,6 +681,9 @@ func _open_wall_upgrade(edge: Array) -> void:
 
 ## The Shop, on `tab` (or the last tab used).
 func _open_shop(tab: String = "") -> void:
+	if tab == "store":
+		_open_store()
+		return
 	if tab != "":
 		shop_tab = tab
 	if GameState.tutorial_key() == "build" and not GameState.tutorial_replay:
@@ -777,6 +783,98 @@ func _confirm_delete_account() -> void:
 		get_tree().reload_current_scene())
 	hud.hide_panel()
 	hud.show_modal(box, Vector2(720, 300))
+
+
+# ---------------------------------------------------------------- store
+
+## The gem shop (see StoreUI).
+func _open_store() -> void:
+	_deselect()
+	hud.hide_panel()
+	open_sheet = "store"
+	var gems := func(id: String) -> void:
+		var why := GameState.cosmetic_block_reason(id)
+		if why != "":
+			hud.toast(why)
+			return
+		var buy := func() -> void:
+			if GameState.buy_cosmetic(id):
+				Audio.play("build")
+				hud.toast(I18n.t("%s is on your base!") % I18n.t(Store.COSMETICS[id]["name"]))
+				_rebuild()
+				_refresh_header()
+				_open_store()
+		_confirm(I18n.t("Buy \"%s\" for %d gems?") % [I18n.t(Store.COSMETICS[id]["name"]), int(Store.COSMETICS[id]["gems"])], buy)
+	var wear := func(id: String) -> void:
+		GameState.wear_cosmetic(id)
+		Audio.play("click")
+		_rebuild()
+		_open_store()
+	hud.show_modal(StoreUI.window(_buy_real, gems, wear), Vector2(1180, 640))
+
+
+## Real money: players under 13 first pass the parent gate.
+func _buy_real(product: String) -> void:
+	if Cloud.child:
+		_parent_gate(func() -> void: _pay(product))
+	else:
+		_pay(product)
+
+
+## Real payments come with the App Store and Google Play accounts. Until then dev builds grant
+## the purchase (to test the flow) and the web build says when it opens.
+func _pay(product: String) -> void:
+	if not GameState.dev_tools_available():
+		hud.toast(I18n.t("Purchases open when SkyWatch is in the App Store and Google Play"))
+		_open_store()
+		return
+	GameState.grant_purchase(product)
+	Audio.play("star")
+	hud.toast(I18n.t("Thank you, Commander!"))
+	_rebuild()
+	_refresh_header()
+	_open_store()
+
+
+## "Ask a parent": a number written in words, typed back in digits, before a child pays.
+func _parent_gate(on_pass: Callable) -> void:
+	var q: Array = Store.GATE[randi() % Store.GATE.size()]
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	HomeHud.ink(box, I18n.t("Ask a parent"), 30)
+	var say := HomeHud.ink(box, I18n.t("This costs real money, so a parent needs to say yes. Type in digits: %s") % (q[1] if I18n.rtl() else q[0]), 21)
+	say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var answer := LineEdit.new()
+	answer.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	answer.custom_minimum_size = Vector2(200, 54)
+	answer.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	answer.add_theme_font_size_override("font_size", 26)
+	box.add_child(answer)
+	var err := HomeHud.ink(box, "", 18, BAD)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	HomeHud.make_button(row, I18n.t("OK"), 22, 60).pressed.connect(func() -> void:
+		if answer.text.strip_edges() == str(q[2]):
+			on_pass.call()
+		else:
+			err.text = I18n.t("Not right. A parent needs to answer."))
+	HomeHud.make_button(row, I18n.t("Cancel"), 22, 60).pressed.connect(_open_store)
+	hud.show_modal(box, Vector2(720, 380))
+
+
+## A small yes/no window over the store.
+func _confirm(question: String, on_yes: Callable) -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	var q := HomeHud.ink(box, question, 26)
+	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+	HomeHud.make_button(row, I18n.t("Buy"), 22, 60).pressed.connect(on_yes)
+	HomeHud.make_button(row, I18n.t("Cancel"), 22, 60).pressed.connect(_open_store)
+	hud.show_modal(box, Vector2(680, 260))
 
 
 # ---------------------------------------------------------------- profile

@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 10
+const SAVE_VERSION := 11
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -64,6 +64,11 @@ var daily := {}
 ## Login gift: {day (gifts taken so far), last (date of the last one)}.
 var login := {"day": 0, "last": ""}
 signal missions_changed
+## Cosmetics (see Store): which are owned, which is worn in each slot, and whether the one-time
+## starter pack was bought.
+var cosmetics_owned: Array = []
+var cosmetics_worn := {}
+var starter_bought := false
 
 const SETTINGS_PATH := "user://settings.json"
 ## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
@@ -189,6 +194,9 @@ func new_player() -> void:
 	starter_claimed = []
 	daily = {}
 	login = {"day": 0, "last": ""}
+	cosmetics_owned = []
+	cosmetics_worn = {}
+	starter_bought = false
 	save_game()
 
 
@@ -328,6 +336,57 @@ func _give(reward: Dictionary) -> void:
 	gems += int(reward.get("gems", 0))
 	save_game()
 	missions_changed.emit()
+
+
+# ---------------------------------------------------------------- store
+
+## Empty when the cosmetic can be bought with gems now; otherwise why not.
+func cosmetic_block_reason(id: String) -> String:
+	if cosmetics_owned.has(id):
+		return I18n.t("Owned")
+	var cost := int(Store.COSMETICS[id]["gems"])
+	if cost <= 0:
+		return I18n.t("Comes in the starter pack")
+	return "" if infinite_coins or gems >= cost else I18n.t("Need %d more gems") % (cost - gems)
+
+
+func buy_cosmetic(id: String) -> bool:
+	if cosmetic_block_reason(id) != "":
+		return false
+	_spend_gems(int(Store.COSMETICS[id]["gems"]))
+	cosmetics_owned.append(id)
+	wear_cosmetic(id)
+	return true
+
+
+## Puts on an owned cosmetic (or takes it off, when it is already worn).
+func wear_cosmetic(id: String) -> void:
+	if not cosmetics_owned.has(id):
+		return
+	var slot: String = Store.COSMETICS[id]["slot"]
+	if cosmetics_worn.get(slot, "") == id:
+		cosmetics_worn.erase(slot)
+	else:
+		cosmetics_worn[slot] = id
+	save_game()
+
+
+## Gives what a real-money purchase pays for (called once the store confirms the payment).
+func grant_purchase(product: String) -> void:
+	if product == Store.STARTER["id"]:
+		starter_bought = true
+		add_coins(int(Store.STARTER["coins"]))
+		add_fuel(int(Store.STARTER["fuel"]))
+		gems += int(Store.STARTER["gems"])
+		var flag: String = Store.STARTER["cosmetic"]
+		if not cosmetics_owned.has(flag):
+			cosmetics_owned.append(flag)
+			cosmetics_worn[Store.COSMETICS[flag]["slot"]] = flag
+	else:
+		for p: Dictionary in Store.PACKS:
+			if p["id"] == product:
+				gems += int(p["gems"])
+	save_game()
 
 
 # ---------------------------------------------------------------- tutorial
@@ -1128,6 +1187,7 @@ func save_data() -> Dictionary:
 		"syndicate_stars": syndicate_stars, "syndicate_mission": syndicate_mission,
 		"tutorial": -1 if tutorial_replay else tutorial,
 		"stats": stats, "starter_claimed": starter_claimed, "daily": daily, "login": login,
+		"cosmetics_owned": cosmetics_owned, "cosmetics_worn": cosmetics_worn, "starter_bought": starter_bought,
 	}
 
 
@@ -1140,7 +1200,7 @@ func load_game() -> bool:
 ## Loads a save (from the file or the cloud). False, and nothing changed, when it isn't one.
 func apply_save(data: Variant) -> bool:
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, 10, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -1205,4 +1265,15 @@ func apply_save(data: Variant) -> bool:
 		daily["keys"] = Array(daily.get("keys", []))
 	var saved_login: Dictionary = data.get("login", {})
 	login = {"day": int(saved_login.get("day", 0)), "last": str(saved_login.get("last", ""))}
+	# Cosmetics arrived in save 11.
+	cosmetics_owned = []
+	for id in data.get("cosmetics_owned", []):
+		if Store.COSMETICS.has(str(id)):
+			cosmetics_owned.append(str(id))
+	cosmetics_worn = {}
+	var worn: Dictionary = data.get("cosmetics_worn", {})
+	for slot in worn:
+		if cosmetics_owned.has(str(worn[slot])):
+			cosmetics_worn[str(slot)] = str(worn[slot])
+	starter_bought = bool(data.get("starter_bought", false))
 	return true

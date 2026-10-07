@@ -614,3 +614,26 @@ func test_login_gift_once_a_day() -> bool:
 	var next_day: bool = gs.login_gift().has("fuel")
 	gs.free()
 	return first and second and next_day
+
+
+func test_cosmetics_cost_gems_and_are_worn() -> bool:
+	var gs := _fresh_state()
+	gs.gems = 600
+	var bought: bool = gs.buy_cosmetic("hq_desert") and gs.gems == 100
+	var worn: bool = gs.cosmetics_worn.get("hq", "") == "hq_desert"
+	var poor: bool = not gs.buy_cosmetic("hq_night")
+	var flag_only_in_pack: bool = not gs.buy_cosmetic("flag_gold")
+	gs.wear_cosmetic("hq_desert")
+	var off: bool = not gs.cosmetics_worn.has("hq")
+	gs.free()
+	return bought and worn and poor and flag_only_in_pack and off
+
+
+func test_starter_pack_pays_once_with_the_gold_flag() -> bool:
+	var gs := _fresh_state()
+	var gems: int = gs.gems
+	gs.grant_purchase(Store.STARTER["id"])
+	var paid: bool = gs.starter_bought and gs.gems == gems + int(Store.STARTER["gems"])
+	var flag: bool = gs.cosmetics_owned.has("flag_gold") and gs.cosmetics_worn.get("flag", "") == "flag_gold"
+	gs.free()
+	return paid and flag

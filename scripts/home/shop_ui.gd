@@ -42,6 +42,17 @@ static func shop(tab: String, on_tab: Callable, on_buy: Callable, on_info: Calla
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 8)
 	box.add_child(tabs)
+	var gems_tab := Button.new()
+	gems_tab.text = I18n.t("Gems")
+	gems_tab.icon = Icons.tex("gem", 48)
+	gems_tab.add_theme_constant_override("icon_max_width", 24)
+	gems_tab.custom_minimum_size = Vector2(150, 50)
+	gems_tab.add_theme_font_size_override("font_size", 22)
+	HomeHud._style_button(gems_tab, Color(0.18, 0.44, 0.69), 10, Color(1, 1, 1, 0.6), 2)
+	gems_tab.pressed.connect(func() -> void:
+		Audio.play("click", -6.0)
+		on_tab.call("store"))
+	tabs.add_child(gems_tab)
 	for t in Catalog.SHOP_ORDER:
 		var b := Button.new()
 		b.text = I18n.t(TAB_NAMES[t])

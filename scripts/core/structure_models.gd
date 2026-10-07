@@ -12,6 +12,18 @@ const PAD_SIZED := ["hq", "generator", "storage", "hangar", "pump", "tank", "cam
 const FUEL := Color(0.93, 0.35, 0.55)
 
 
+## Cosmetics worn on the structures being built ({slot: id}, see Store): set it to the player's
+## for their own base and clear it for anyone else's.
+static var skin := {}
+
+## How each Command Tower skin paints the walls, the roof cap, the windows and the flag.
+const HQ_SKINS := {
+	"hq_desert": {"wall": Color(0.86, 0.72, 0.5), "cap": Color(0.62, 0.38, 0.18), "glow": Color(1.0, 0.85, 0.55)},
+	"hq_night": {"wall": Color(0.27, 0.3, 0.36), "cap": Color(0.12, 0.14, 0.2), "glow": Color(1.0, 0.72, 0.3)},
+	"hq_snow": {"wall": Color(0.95, 0.96, 0.98), "cap": Color(0.62, 0.74, 0.86), "glow": Color(0.6, 0.85, 1.0), "snow": true},
+}
+
+
 static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Node3D:
 	var root := Node3D.new()
 	parent.add_child(root)
@@ -79,10 +91,12 @@ static func level_label(parent: Node3D, level: int, y: float) -> Label3D:
 static func _hq(root: Node3D, level: int) -> float:
 	var h: float = [2.6, 3.2, 4.2, 4.8, 5.8][clampi(level, 1, 5) - 1]
 	var w := 4.0 if level >= 3 else 3.6
-	var concrete := MeshKit.surface("concrete", Color(0.84, 0.81, 0.74), 0.9)
-	var pillar := MeshKit.surface("concrete", CONCRETE, 0.9)
+	var look: Dictionary = HQ_SKINS.get(skin.get("hq", ""), {})
+	var concrete := MeshKit.surface("concrete", look.get("wall", Color(0.84, 0.81, 0.74)), 0.9)
+	var pillar := MeshKit.surface("concrete", (look["wall"] as Color).darkened(0.12) if look.has("wall") else CONCRETE, 0.9)
 	var navy := MeshKit.mat(Color(0.2, 0.23, 0.28), 0.5, 0.5)
-	var gold := MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8)
+	var gold := MeshKit.mat(look.get("cap", Color(0.95, 0.75, 0.2)), 0.3, 0.8 if look.is_empty() else 0.3)
+	var window: Color = look.get("glow", Color(0.5, 0.9, 1.0))
 	var metal := MeshKit.surface("metal", Color(0.2, 0.2, 0.22), 0.5, 0.6)
 	var base := 0.3
 	MeshKit.add(root, MeshKit.box(Vector3(w + 0.5, base, w + 0.5)), pillar, Vector3(0, base / 2.0, 0))
@@ -97,7 +111,7 @@ static func _hq(root: Node3D, level: int) -> float:
 		band.rotation.y = side * PI / 2.0
 		band.position = Vector3(0, wy, 0)
 		root.add_child(band)
-		MeshKit.add(band, MeshKit.box(Vector3(w - 0.5, 0.4, 0.04)), MeshKit.glow(Color(0.5, 0.9, 1.0)), Vector3(0, 0, w / 2.0 + 0.01))
+		MeshKit.add(band, MeshKit.box(Vector3(w - 0.5, 0.4, 0.04)), MeshKit.glow(window), Vector3(0, 0, w / 2.0 + 0.01))
 		for i in 5:
 			MeshKit.add(band, MeshKit.box(Vector3(0.07, 0.46, 0.08)), navy, Vector3(-w / 2.0 + 0.25 + i * (w - 0.5) / 4.0, 0, w / 2.0 + 0.03))
 		MeshKit.add(band, MeshKit.box(Vector3(w - 0.4, 0.08, 0.16)), pillar, Vector3(0, -0.26, w / 2.0 + 0.06))
@@ -111,6 +125,9 @@ static func _hq(root: Node3D, level: int) -> float:
 	# Gold roof cap with a parapet, an air conditioner and a cable down the side.
 	var top := base + h
 	MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.24, w + 0.3)), gold, Vector3(0, top + 0.12, 0))
+	if look.get("snow", false):
+		# A soft layer of snow on the roof.
+		MeshKit.add(root, MeshKit.box(Vector3(w + 0.1, 0.16, w + 0.1)), MeshKit.mat(Color(0.98, 0.99, 1.0), 0.95), Vector3(0, top + 0.3, 0))
 	for side in 4:
 		var rim := MeshKit.add(root, MeshKit.box(Vector3(w + 0.3, 0.3, 0.12)), gold, Vector3(0, top + 0.39, 0))
 		rim.rotation.y = side * PI / 2.0
@@ -125,9 +142,10 @@ static func _hq(root: Node3D, level: int) -> float:
 		var flag := Node3D.new()
 		flag.position = Vector3(w / 2.0 + 0.5, 2.7, w / 2.0 + 0.5)
 		root.add_child(flag)
-		MeshKit.add(flag, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(UnitModels.WHITE, 0.6), Vector3(0, 0, 0.5))
+		var golden: bool = skin.get("flag", "") == "flag_gold"
+		MeshKit.add(flag, MeshKit.box(Vector3(0.03, 0.55, 0.95)), MeshKit.mat(Color(0.98, 0.78, 0.2) if golden else UnitModels.WHITE, 0.35 if golden else 0.6, 0.7 if golden else 0.0), Vector3(0, 0, 0.5))
 		for y in [-0.15, 0.15]:
-			MeshKit.add(flag, MeshKit.box(Vector3(0.031, 0.08, 0.95)), MeshKit.mat(UnitModels.BLUE, 0.6), Vector3(0, y, 0.5))
+			MeshKit.add(flag, MeshKit.box(Vector3(0.031, 0.08, 0.95)), MeshKit.mat(Color(0.45, 0.28, 0.05) if golden else UnitModels.BLUE, 0.6), Vector3(0, y, 0.5))
 		_loop_rotate(flag, "rotation:y", 0.22, 1.7)
 	var antennas := 3 if level >= 3 else 1
 	for i in antennas:

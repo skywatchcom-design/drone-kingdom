@@ -133,6 +133,8 @@ func _start() -> void:
 	city = City.new()
 	level.add_child(city)
 	city.build(int(base["seed"]), reserved)
+	# Only the player's own base wears their cosmetics.
+	StructureModels.skin = GameState.cosmetics_worn if GameState.raid_target == "self" else {}
 
 	for s in base["structures"]:
 		var type: String = s["type"]
