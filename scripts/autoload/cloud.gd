@@ -1,7 +1,9 @@
 extends Node
-## The player's account on Supabase (approved sketch Tnvwhfaq4KMqSS85z45tfx): a commander name and
-## a password, no email. Supabase wants an email, so the game makes one up from a hash of the
-## name (nothing is ever sent to it); the name itself is kept, unique, in public.players.
+## The player's account on Supabase (approved sketch Tnvwhfaq4KMqSS85z45tfx, owner 7.10.2026):
+## commander name, birth month and year, password, and an email from age 13 (COPPA: none for
+## younger players). Supabase wants an email for every account, so under-13 accounts get one made
+## up from a hash of the name (nothing is ever sent to it). Players sign in with their email, or
+## with the commander name when they have none. The name is kept, unique, in public.players.
 ## A signed-in player's save goes to their players row a few seconds after each change.
 
 signal account_changed
@@ -9,6 +11,12 @@ signal account_changed
 const SESSION_PATH := "user://session.json"
 const EMAIL_DOMAIN := "players.skywatch.invalid"
 const PUSH_DELAY := 3.0
+## Players this old or older sign up with an email.
+const EMAIL_AGE := 13
+## The terms and privacy policy the player agrees to; bump when they change.
+const TERMS_VERSION := "2026-10-07"
+const TERMS_URL := "https://skywatchcom-design.github.io/drone-kingdom/legal/terms-%s.html"
+const PRIVACY_URL := "https://skywatchcom-design.github.io/drone-kingdom/legal/privacy-%s.html"
 ## Names nobody may take (checked without case), on top of the database's uniqueness.
 const RESERVED := ["noa", "razor", "admin", "skywatch", "ironfang", "commander", "moderator"]
 const BLOCKED := ["fuck", "shit", "sex", "porn", "nazi", "hitler", "זונה", "כוס", "זין", "מניאק", "שרמוטה"]
@@ -48,27 +56,48 @@ static func name_problem(name: String) -> String:
 	return ""
 
 
+## Age in whole years for someone born in `month` of `year`.
+static func age(year: int, month: int) -> int:
+	var now := Time.get_date_dict_from_system()
+	var years := int(now["year"]) - year
+	return years - 1 if int(now["month"]) < month else years
+
+
+static func email_problem(email: String) -> String:
+	var re := RegEx.create_from_string("^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$")
+	return "" if re.search(email.strip_edges()) != null else I18n.t("Check the email address")
+
+
 ## True when nobody has the name yet, false when taken, null without a connection.
 func name_available(name: String) -> Variant:
 	var r := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/name_available", {"n": name}, false)
 	return r["data"] if r["code"] == 200 else null
 
 
-## Signs up and stores the current base in the cloud. Returns "" or what went wrong.
-func sign_up(name: String, password: String) -> String:
+## Signs up and stores the current base in the cloud. `email` is "" for players under 13.
+## Returns "" or what went wrong.
+func sign_up(name: String, password: String, email: String, birth_year: int, birth_month: int) -> String:
 	var why := name_problem(name)
 	if why != "":
 		return why
+	var child := age(birth_year, birth_month) < EMAIL_AGE
+	if not child and email_problem(email) != "":
+		return email_problem(email)
 	var free = await name_available(name)
 	if free == null:
 		return I18n.t("No connection. Try again in a moment.")
 	if not free:
 		return I18n.t("That name is taken. Try another.")
-	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/signup", {"email": email_for(name), "password": password}, false)
+	var address := email_for(name) if child else email.strip_edges().to_lower()
+	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/signup", {"email": address, "password": password}, false)
 	if r["code"] != 200 or not (r["data"] is Dictionary) or not r["data"].has("access_token"):
-		return I18n.t("That name is taken. Try another.") if r["code"] in [400, 422] else I18n.t("No connection. Try again in a moment.")
+		if r["code"] in [400, 422]:
+			return I18n.t("That name is taken. Try another.") if child else I18n.t("This email already has a base. Log in instead.")
+		return I18n.t("No connection. Try again in a moment.")
 	_take_session(r["data"], name)
-	var row := {"id": user_id, "name": name, "hq_level": GameState.hq_level(), "save": GameState.save_data()}
+	var row := {"id": user_id, "name": name, "hq_level": GameState.hq_level(), "save": GameState.save_data(),
+		"birth_year": birth_year, "birth_month": birth_month, "is_child": child,
+		"terms_version": TERMS_VERSION, "terms_accepted_at": Time.get_datetime_string_from_system(true) + "Z"}
 	var made := await _call(HTTPClient.METHOD_POST, "/rest/v1/players", row)
 	if made["code"] != 201:
 		# The name went between the check and now: give the account back up.
@@ -78,12 +107,17 @@ func sign_up(name: String, password: String) -> String:
 	return ""
 
 
-## Signs in and replaces the base on this device with the one in the cloud.
-func sign_in(name: String, password: String) -> String:
-	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email": email_for(name.strip_edges()), "password": password}, false)
+## Signs in with an email, or a commander name for accounts without one, and replaces the base
+## on this device with the one in the cloud.
+func sign_in(login: String, password: String) -> String:
+	login = login.strip_edges()
+	var address := login.to_lower() if login.contains("@") else email_for(login)
+	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email": address, "password": password}, false)
 	if r["code"] != 200 or not (r["data"] is Dictionary) or not r["data"].has("access_token"):
-		return I18n.t("Wrong name or password") if r["code"] in [400, 401] else I18n.t("No connection. Try again in a moment.")
-	_take_session(r["data"], name.strip_edges())
+		if r["code"] in [400, 401]:
+			return I18n.t("Wrong email or password") if login.contains("@") else I18n.t("Wrong name or password. From age 13, log in with your email.")
+		return I18n.t("No connection. Try again in a moment.")
+	_take_session(r["data"], login)
 	var rows := await _call(HTTPClient.METHOD_GET, "/rest/v1/players?select=name,save&id=eq." + user_id)
 	if rows["code"] == 200 and rows["data"] is Array and not rows["data"].is_empty():
 		var row: Dictionary = rows["data"][0]
@@ -92,6 +126,16 @@ func sign_in(name: String, password: String) -> String:
 		if GameState.apply_save(row["save"]):
 			GameState.save_game()
 	account_changed.emit()
+	return ""
+
+
+## Deletes the account and its cloud base for good, then starts over on this device.
+func delete_account() -> String:
+	var r := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/delete_my_account", {})
+	if r["code"] >= 300 or r["code"] == 0:
+		return I18n.t("No connection. Try again in a moment.")
+	sign_out()
+	GameState.new_player()
 	return ""
 
 

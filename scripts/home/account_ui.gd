@@ -1,50 +1,63 @@
 class_name AccountUI
 extends RefCounted
-## The sign-up and sign-in window (approved sketch Tnvwhfaq4KMqSS85z45tfx) in the parchment style:
-## Noa asks the player to save the base with a commander name and a password (no email).
-## Sign-up checks the fields as the player types; the server answer shows under the button.
+## The sign-up and sign-in window (approved sketch Tnvwhfaq4KMqSS85z45tfx, owner 7.10.2026) in the
+## parchment style. Sign-up: commander name, birth month and year (asked neutrally, nothing hints
+## at an age limit), an email only from age 13, password twice, and agreeing to the terms and
+## privacy policy. Sign-in: email or commander name, and password. Fields are checked as the
+## player types; the server answer shows under them. There is no way to skip: an account is
+## required to keep playing.
 
 const MUTED := Color(0.42, 0.4, 0.33)
 const GOOD := Color(0.2, 0.5, 0.2)
 const BAD := Color(0.75, 0.22, 0.14)
+const MONTHS := ["January", "February", "March", "April", "May", "June", "July", "August",
+	"September", "October", "November", "December"]
 
 
-## `mode` is "signup" or "signin". `on_submit(name, password, mode, window)` does the work and
-## calls show_error(window, text) when it fails; `on_switch(mode)` flips. There is no way to skip:
-## an account is required to keep playing (owner, 7.10.2026).
+## `mode` is "signup" or "signin". `on_submit(data, mode, window)` does the work (data:
+## name, email, password, year, month for sign-up; login, password for sign-in) and calls
+## show_error(window, text) when it fails; `on_switch(mode)` flips between the two.
 static func window(mode: String, on_submit: Callable, on_switch: Callable) -> Control:
 	var signup := mode == "signup"
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 14)
-	box.add_child(head)
-	var pic := TextureRect.new()
-	pic.texture = load("res://assets/textures/noa/noa_smile.webp")
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	pic.custom_minimum_size = Vector2(96, 96)
-	head.add_child(pic)
-	var words := VBoxContainer.new()
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(words)
-	HomeHud.ink(words, I18n.t("Save your base") if signup else I18n.t("Log in to your base"), 32)
-	var line := HomeHud.ink(words, I18n.t("Noa: \"Great work! Now let's save your base so nobody takes it from you. No email, no phone.\"") if signup
-		else I18n.t("Enter your commander name and password. The base saved in the cloud replaces the one on this device."), 18, MUTED)
-	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_theme_constant_override("separation", 8)
+	_header(box, signup)
 
-	var name_edit := _field(box, I18n.t("Commander name"), false)
-	name_edit.max_length = 14
-	var name_hint := HomeHud.ink(box, I18n.t("3–14 letters, digits or _") if signup else "", 16, MUTED)
-	var pass_edit := _field(box, I18n.t("Password"), true)
-	var pass_hint := HomeHud.ink(box, I18n.t("At least 6 characters") if signup else "", 16, MUTED)
-	var again_edit: LineEdit = null
-	var again_hint: Label = null
+	var f := {}
 	if signup:
-		again_edit = _field(box, I18n.t("Password again"), true)
-		again_hint = HomeHud.ink(box, "", 16, MUTED)
+		var top := _columns(box)
+		f["name"] = _field(top[0], I18n.t("Commander name"), false)
+		f["name"].max_length = 14
+		f["name_hint"] = HomeHud.ink(top[0], "", 15, MUTED)
+		HomeHud.ink(top[1], I18n.t("Date of birth"), 19)
+		var birth := HBoxContainer.new()
+		birth.add_theme_constant_override("separation", 8)
+		top[1].add_child(birth)
+		f["month"] = _choice(birth, I18n.t("Month"), MONTHS.map(func(m: String) -> String: return I18n.t(m)))
+		var now_year := int(Time.get_date_dict_from_system()["year"])
+		var years := []
+		for y in range(now_year, now_year - 100, -1):
+			years.append(str(y))
+		f["year"] = _choice(birth, I18n.t("Year"), years)
+		f["birth_hint"] = HomeHud.ink(top[1], "", 15, MUTED)
+		f["email_box"] = VBoxContainer.new()
+		f["email_box"].add_theme_constant_override("separation", 2)
+		box.add_child(f["email_box"])
+		f["email"] = _field(f["email_box"], I18n.t("Email"), false)
+		f["email"].layout_direction = Control.LAYOUT_DIRECTION_LTR
+		f["email_hint"] = HomeHud.ink(f["email_box"], "", 15, MUTED)
+		var pw := _columns(box)
+		f["password"] = _field(pw[0], I18n.t("Password"), true)
+		f["pass_hint"] = HomeHud.ink(pw[0], "", 15, MUTED)
+		f["again"] = _field(pw[1], I18n.t("Password again"), true)
+		f["again_hint"] = HomeHud.ink(pw[1], "", 15, MUTED)
+		f["terms"] = _terms(box)
+	else:
+		f["login"] = _field(box, I18n.t("Email or commander name"), false)
+		f["password"] = _field(box, I18n.t("Password"), true)
+		HomeHud.ink(box, I18n.t("Players under 13 log in with their commander name."), 15, MUTED)
 
-	var error := HomeHud.ink(box, "", 18, BAD)
+	var error := HomeHud.ink(box, "", 17, BAD)
 	error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.set_meta("error", error)
 	var row := HBoxContainer.new()
@@ -52,8 +65,8 @@ static func window(mode: String, on_submit: Callable, on_switch: Callable) -> Co
 	box.add_child(row)
 	var go := Button.new()
 	go.text = I18n.t("Save my base") if signup else I18n.t("Log in")
-	go.custom_minimum_size = Vector2(240, 60)
-	go.add_theme_font_size_override("font_size", 26)
+	go.custom_minimum_size = Vector2(240, 56)
+	go.add_theme_font_size_override("font_size", 24)
 	HomeHud._style_button(go, Color(0.25, 0.63, 0.35), 12, Color.WHITE, 3)
 	row.add_child(go)
 	box.set_meta("submit", go)
@@ -64,34 +77,65 @@ static func window(mode: String, on_submit: Callable, on_switch: Callable) -> Co
 		func() -> void: on_switch.call("signin" if signup else "signup"))
 
 	var check := func() -> bool:
-		var ok := true
-		var n := name_edit.text.strip_edges()
-		if signup:
-			var why := Cloud.name_problem(n) if n != "" else ""
-			name_hint.text = why if why != "" else (I18n.t("3–14 letters, digits or _") if n == "" else "✓")
-			name_hint.add_theme_color_override("font_color", BAD if why != "" else (MUTED if n == "" else GOOD))
-			ok = n != "" and why == ""
-			var p := pass_edit.text
-			pass_hint.text = I18n.t("Too short") if p != "" and p.length() < 6 else (I18n.t("At least 6 characters") if p == "" else "✓")
-			pass_hint.add_theme_color_override("font_color", BAD if p != "" and p.length() < 6 else (MUTED if p == "" else GOOD))
-			ok = ok and p.length() >= 6
-			var same := again_edit.text == p
-			again_hint.text = "" if again_edit.text == "" else ("✓" if same else I18n.t("The passwords don't match"))
-			again_hint.add_theme_color_override("font_color", GOOD if same else BAD)
-			ok = ok and same and again_edit.text != ""
-		else:
-			ok = n != "" and pass_edit.text != ""
+		var ok: bool = _check_signup(f) if signup else (f["login"].text.strip_edges() != "" and f["password"].text != "")
 		go.disabled = not ok
 		return ok
-	for e: LineEdit in [name_edit, pass_edit, again_edit]:
-		if e != null:
-			e.text_changed.connect(func(_t: String) -> void: check.call())
+	for key in f:
+		var c = f[key]
+		if c is LineEdit:
+			c.text_changed.connect(func(_t: String) -> void: check.call())
+		elif c is OptionButton:
+			c.item_selected.connect(func(_i: int) -> void: check.call())
+		elif c is CheckBox:
+			c.toggled.connect(func(_on: bool) -> void: check.call())
 	check.call()
 	go.pressed.connect(func() -> void:
-		if check.call():
-			Audio.play("click", -6.0)
-			on_submit.call(name_edit.text.strip_edges(), pass_edit.text, mode, box))
+		if not check.call():
+			return
+		Audio.play("click", -6.0)
+		var data := {"password": f["password"].text}
+		if signup:
+			data["name"] = f["name"].text.strip_edges()
+			data["email"] = f["email"].text.strip_edges() if f["email_box"].visible else ""
+			data["year"] = int(f["year"].get_item_text(f["year"].selected))
+			data["month"] = f["month"].selected
+		else:
+			data["login"] = f["login"].text.strip_edges()
+		on_submit.call(data, mode, box))
 	return box
+
+
+## Checks every sign-up field, shows a hint under each, and shows the email only from 13.
+static func _check_signup(f: Dictionary) -> bool:
+	var ok := true
+	var n: String = f["name"].text.strip_edges()
+	var why := Cloud.name_problem(n) if n != "" else ""
+	_hint(f["name_hint"], why if why != "" else ("" if n == "" else "✓"), why != "")
+	ok = ok and n != "" and why == ""
+
+	var born: bool = f["month"].selected > 0 and f["year"].selected > 0
+	var age := Cloud.age(int(f["year"].get_item_text(f["year"].selected)), f["month"].selected) if born else -1
+	_hint(f["birth_hint"], "" if born else I18n.t("Pick a month and a year"), false)
+	ok = ok and born
+	f["email_box"].visible = age >= Cloud.EMAIL_AGE
+	if f["email_box"].visible:
+		var e: String = f["email"].text.strip_edges()
+		var bad := Cloud.email_problem(e) if e != "" else ""
+		_hint(f["email_hint"], bad if bad != "" else (I18n.t("For password recovery only") if e == "" else "✓"), bad != "")
+		ok = ok and e != "" and bad == ""
+
+	var p: String = f["password"].text
+	_hint(f["pass_hint"], I18n.t("Too short") if p != "" and p.length() < 6 else (I18n.t("At least 6 characters") if p == "" else "✓"), p != "" and p.length() < 6)
+	ok = ok and p.length() >= 6
+	var a: String = f["again"].text
+	_hint(f["again_hint"], "" if a == "" else ("✓" if a == p else I18n.t("The passwords don't match")), a != "" and a != p)
+	ok = ok and a == p and a != ""
+	return ok and f["terms"].button_pressed
+
+
+static func _hint(label: Label, text: String, bad: bool) -> void:
+	label.text = text
+	label.add_theme_color_override("font_color", BAD if bad else (GOOD if text == "✓" else MUTED))
 
 
 ## Shows what went wrong under the fields and lets the player try again.
@@ -109,28 +153,95 @@ static func set_busy(window: Control) -> void:
 	go.text = I18n.t("One moment...")
 
 
+static func _header(box: Control, signup: bool) -> void:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 14)
+	box.add_child(head)
+	var pic := TextureRect.new()
+	pic.texture = load("res://assets/textures/noa/noa_smile.webp")
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pic.custom_minimum_size = Vector2(72, 72)
+	head.add_child(pic)
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_theme_constant_override("separation", 0)
+	head.add_child(words)
+	HomeHud.ink(words, I18n.t("Save your base") if signup else I18n.t("Log in to your base"), 30)
+	var line := HomeHud.ink(words, I18n.t("Noa: \"Let's save your base so nobody takes it from you.\"") if signup
+		else I18n.t("The base saved in the cloud replaces the one on this device."), 17, MUTED)
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+## Two side-by-side columns.
+static func _columns(parent: Control) -> Array:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	parent.add_child(row)
+	var cols := []
+	for i in 2:
+		var c := VBoxContainer.new()
+		c.add_theme_constant_override("separation", 2)
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(c)
+		cols.append(c)
+	return cols
+
+
+## The terms checkbox with links to the terms of use and the privacy policy (in the language).
+static func _terms(parent: Control) -> CheckBox:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	parent.add_child(row)
+	var box := CheckBox.new()
+	box.text = I18n.t("I have read and agree to the")
+	box.add_theme_font_size_override("font_size", 18)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		box.add_theme_color_override(c, HomeHud.INK)
+	row.add_child(box)
+	_link(row, I18n.t("Terms of Use"), 18).pressed.connect(func() -> void: OS.shell_open(Cloud.TERMS_URL % I18n.lang))
+	HomeHud.ink(row, I18n.t("and the"), 18)
+	_link(row, I18n.t("Privacy Policy"), 18).pressed.connect(func() -> void: OS.shell_open(Cloud.PRIVACY_URL % I18n.lang))
+	return box
+
+
 static func _field(parent: Control, label: String, secret: bool) -> LineEdit:
-	HomeHud.ink(parent, label, 20)
+	HomeHud.ink(parent, label, 19)
 	var e := LineEdit.new()
 	e.secret = secret
-	e.custom_minimum_size = Vector2(0, 52)
-	e.add_theme_font_size_override("font_size", 24)
+	e.custom_minimum_size = Vector2(0, 46)
+	e.add_theme_font_size_override("font_size", 22)
 	e.add_theme_color_override("font_color", HomeHud.INK)
 	var style := HomeHud._box(Color(1.0, 0.99, 0.95), 10, Color(0.72, 0.69, 0.6), 2)
-	style.set_content_margin_all(10)
+	style.set_content_margin_all(8)
 	e.add_theme_stylebox_override("normal", style)
 	var focus := HomeHud._box(Color(1.0, 0.99, 0.95), 10, Color(0.95, 0.7, 0.2), 3)
-	focus.set_content_margin_all(10)
+	focus.set_content_margin_all(8)
 	e.add_theme_stylebox_override("focus", focus)
 	parent.add_child(e)
 	return e
 
 
-static func _link(parent: Control, text: String) -> Button:
+## A drop-down whose first item is the empty prompt.
+static func _choice(parent: Control, prompt: String, items: Array) -> OptionButton:
+	var o := OptionButton.new()
+	o.add_item(prompt)
+	for it in items:
+		o.add_item(str(it))
+	o.select(0)
+	o.custom_minimum_size = Vector2(0, 46)
+	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.add_theme_font_size_override("font_size", 20)
+	o.get_popup().add_theme_font_size_override("font_size", 22)
+	parent.add_child(o)
+	return o
+
+
+static func _link(parent: Control, text: String, size: int = 20) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.flat = true
-	b.add_theme_font_size_override("font_size", 20)
+	b.add_theme_font_size_override("font_size", size)
 	b.add_theme_color_override("font_color", Color(0.2, 0.43, 0.66))
 	b.add_theme_color_override("font_hover_color", Color(0.1, 0.3, 0.55))
 	parent.add_child(b)

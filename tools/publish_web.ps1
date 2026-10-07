@@ -13,6 +13,8 @@ $pages = "$env:TEMP\skywatch-pages"
 if (Test-Path $pages) { Remove-Item -Recurse -Force $pages }
 New-Item -ItemType Directory -Force $pages | Out-Null
 Copy-Item build\web\* $pages
+# The terms of use and privacy policy the sign-up window links to.
+Copy-Item -Recurse web\legal "$pages\legal"
 New-Item -ItemType File "$pages\.nojekyll" | Out-Null
 Set-Location $pages
 git init -q -b gh-pages

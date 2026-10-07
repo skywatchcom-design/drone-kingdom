@@ -134,6 +134,8 @@ func _ready() -> void:
 		_open_missions("daily")
 	elif args.has("--screenshot-signup"):
 		_open_account("signup")
+	elif args.has("--screenshot-signin"):
+		_open_account("signin")
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
@@ -697,12 +699,16 @@ func _open_account(mode: String) -> void:
 	hud.hide_panel()
 	open_sheet = "account"
 	var content := AccountUI.window(mode, _submit_account, func(m: String) -> void: _open_account(m))
-	hud.show_modal(content, Vector2(900, 640 if mode == "signup" else 520), not Cloud.signed_in())
+	hud.show_modal(content, Vector2(980, 600 if mode == "signup" else 470), not Cloud.signed_in())
 
 
-func _submit_account(name: String, password: String, mode: String, window: Control) -> void:
+func _submit_account(data: Dictionary, mode: String, window: Control) -> void:
 	AccountUI.set_busy(window)
-	var why: String = await Cloud.sign_up(name, password) if mode == "signup" else await Cloud.sign_in(name, password)
+	var why: String
+	if mode == "signup":
+		why = await Cloud.sign_up(data["name"], data["password"], data["email"], int(data["year"]), int(data["month"]))
+	else:
+		why = await Cloud.sign_in(data["login"], data["password"])
 	if not is_instance_valid(window):
 		return
 	if why != "":
@@ -733,7 +739,35 @@ func _open_account_settings() -> void:
 		hud.hide_panel()
 		hud.toast(I18n.t("Logged out"))
 		_open_account("signup"))
+	var delete := HomeHud.make_button(box, I18n.t("Delete account"), 20, 56)
+	delete.add_theme_color_override("font_color", BAD)
+	delete.pressed.connect(_confirm_delete_account)
 	hud.show_content(I18n.t("Account"), box)
+
+
+## Deleting the account asks once more: the base in the cloud and on this device is gone for good.
+func _confirm_delete_account() -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	var q := HomeHud.ink(box, I18n.t("Delete the account and the base for good? This cannot be undone."), 26)
+	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
+	var yes := HomeHud.make_button(row, I18n.t("Delete for good"), 22, 64)
+	yes.add_theme_color_override("font_color", BAD)
+	HomeHud.make_button(row, I18n.t("Keep my base"), 22, 64).pressed.connect(func() -> void: hud.hide_modal())
+	yes.pressed.connect(func() -> void:
+		yes.disabled = true
+		var why: String = await Cloud.delete_account()
+		if why != "":
+			hud.toast(why)
+			yes.disabled = false
+			return
+		hud.hide_modal()
+		get_tree().reload_current_scene())
+	hud.hide_panel()
+	hud.show_modal(box, Vector2(720, 300))
 
 
 # ---------------------------------------------------------------- missions

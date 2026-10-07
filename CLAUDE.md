@@ -132,7 +132,11 @@ missions picked by date from a pool, +10 gems for all three; 7-day login gift), 
 made up from a hash of the name (`players.skywatch.invalid`, email confirmation off, nothing is sent); the
 name is unique in `public.players` (`name_available` RPC; schema changes in `supabase/migrations/`). The
 save (`GameState.save_data/apply_save`) goes to the player's row 3 s after a change; signing in replaces
-the local base. `AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:
+the local base. Sign-up fields (owner, 7.10.2026): commander name, birth month + year
+(neutral age screen), email only from 13 (COPPA; under 13 keep the made-up address and sign in by name),
+password twice, and a terms checkbox (`Cloud.TERMS_VERSION`; drafts in `web/legal/`, published with the
+web build to `/legal/terms-he.html` etc.). Settings > Account has Delete account (`delete_my_account` RPC;
+stores require it). `AccountUI` opens after Noa (finished or skipped) and on every start without an account; it cannot be closed (owner: an account is required to keep playing). Settings shows the account and Log out. Dev check:
 `godot --headless --path . res://scenes/dev/cloud_check.tscn` (delete its test user afterwards). The
 owner's Management API token sits in `tmp/supabase_token.txt` (git-ignored); `tmp/sb/sql.py` runs SQL.
 The owner considered a Clash Royale-style concept (7.10.2026) and decided to stay with this one.
