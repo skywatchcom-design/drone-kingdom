@@ -577,3 +577,40 @@ func test_tutorial_skip_and_replay_give_no_gems() -> bool:
 	var no_gift: bool = gs.gems == gems
 	gs.free()
 	return skipped and replayed and no_gift
+
+
+func test_starter_missions_open_day_by_day_and_pay_once() -> bool:
+	var gs := _fresh_state()
+	var day2_locked: bool = gs.starter_state(4) == "locked"
+	gs.coins = 5000
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	var ready: bool = gs.starter_state(0) == "claim"
+	var gems: int = gs.gems
+	var paid: bool = gs.claim_starter(0) and gs.gems == gems + 30
+	var once: bool = not gs.claim_starter(0)
+	gs.free()
+	return day2_locked and ready and paid and once
+
+
+func test_daily_missions_count_from_the_start_of_the_day() -> bool:
+	var gs := _fresh_state()
+	gs.add_stat("train", 50)
+	gs.refresh_daily()
+	var three: bool = gs.daily["keys"].size() == Missions.DAILY_PICKS
+	var fresh: bool = int(gs.mission_progress(["stat", "train", 5], gs.daily["base"])[0]) == 0
+	gs.add_stat("train", 5)
+	var counted: bool = int(gs.mission_progress(["stat", "train", 5], gs.daily["base"])[0]) == 5
+	gs.free()
+	return three and fresh and counted
+
+
+func test_login_gift_once_a_day() -> bool:
+	var gs := _fresh_state()
+	var coins: int = gs.coins
+	var first: bool = gs.claim_login() and gs.coins == coins + 200
+	var second: bool = not gs.claim_login()
+	gs.login["last"] = "2000-01-01"
+	var next_day: bool = gs.login_gift().has("fuel")
+	gs.free()
+	return first and second and next_day

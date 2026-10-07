@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 9
+const SAVE_VERSION := 10
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -54,6 +54,16 @@ var tutorial_replay := false
 ## Gems just handed out for finishing the tutorial, for the base screen to announce once.
 var tutorial_gift := 0
 signal tutorial_changed
+## Running totals for missions: coins_collected, fuel_collected, train, train_<unit>, build,
+## upgrade, win, three_stars, raid_win.
+var stats := {}
+## Indexes of the starter missions already claimed.
+var starter_claimed: Array = []
+## Today's missions: {date, keys, base (stats at the start of the day), claimed, bonus}.
+var daily := {}
+## Login gift: {day (gifts taken so far), last (date of the last one)}.
+var login := {"day": 0, "last": ""}
+signal missions_changed
 
 const SETTINGS_PATH := "user://settings.json"
 ## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
@@ -175,7 +185,149 @@ func new_player() -> void:
 	syndicate_mission = 0
 	tutorial = 0
 	tutorial_replay = false
+	stats = {}
+	starter_claimed = []
+	daily = {}
+	login = {"day": 0, "last": ""}
 	save_game()
+
+
+# ---------------------------------------------------------------- missions
+
+func add_stat(key: String, amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	stats[key] = int(stats.get(key, 0)) + amount
+	missions_changed.emit()
+
+
+func today() -> String:
+	return Time.get_date_string_from_system()
+
+
+## [done so far, needed] for a mission check (see Missions). Daily counters count from `base`.
+func mission_progress(check: Array, base: Dictionary = {}) -> Array:
+	match str(check[0]):
+		"hq":
+			return [mini(hq_level(), int(check[1])), int(check[1])]
+		"count":
+			var built := structures.filter(func(s: Dictionary) -> bool: return s["type"] == check[1] and not s.get("fresh", false)).size()
+			return [mini(built, int(check[2])), int(check[2])]
+		"level":
+			var best := 0
+			for l in _working_levels(check[1]):
+				best = maxi(best, int(l))
+			return [mini(best, int(check[2])), int(check[2])]
+		"walls":
+			return [mini(walls.size(), int(check[1])), int(check[1])]
+		"unit":
+			return [1 if units.has(check[1]) else 0, 1]
+		"mission":
+			return [1 if int(syndicate_stars.get(str(check[1]), 0)) > 0 else 0, 1]
+		"stars":
+			return [mini(syndicate_total_stars(), int(check[1])), int(check[1])]
+		"stat":
+			var n := int(stats.get(check[1], 0)) - int(base.get(check[1], 0))
+			return [clampi(n, 0, int(check[2])), int(check[2])]
+	return [0, 1]
+
+
+static func _complete_progress(p: Array) -> bool:
+	return int(p[0]) >= int(p[1])
+
+
+## "claimed", "claim" (done, reward waiting), "open" (in progress) or "locked" (its day has not
+## opened: the day before is not all claimed yet).
+func starter_state(i: int) -> String:
+	if starter_claimed.has(i):
+		return "claimed"
+	var day := int(Missions.STARTER[i]["day"])
+	for j in Missions.STARTER.size():
+		if int(Missions.STARTER[j]["day"]) < day and not starter_claimed.has(j):
+			return "locked"
+	return "claim" if _complete_progress(mission_progress(Missions.STARTER[i]["check"])) else "open"
+
+
+func starter_done() -> bool:
+	return starter_claimed.size() >= Missions.STARTER.size()
+
+
+func claim_starter(i: int) -> bool:
+	if starter_state(i) != "claim":
+		return false
+	starter_claimed.append(i)
+	_give(Missions.STARTER[i]["reward"])
+	return true
+
+
+## Starts a new set of daily missions when the date has changed.
+func refresh_daily() -> void:
+	if str(daily.get("date", "")) == today():
+		return
+	daily = {"date": today(), "keys": Missions.daily_keys(today()), "base": stats.duplicate(), "claimed": [], "bonus": false}
+	save_game()
+
+
+func daily_progress(key: String) -> Array:
+	return mission_progress(Missions.DAILY[key]["check"], daily.get("base", {}))
+
+
+func daily_state(key: String) -> String:
+	if daily.get("claimed", []).has(key):
+		return "claimed"
+	return "claim" if _complete_progress(daily_progress(key)) else "open"
+
+
+## Pays a daily mission, and the bonus once all of the missions of the day are paid.
+func claim_daily(key: String) -> bool:
+	refresh_daily()
+	if not daily["keys"].has(key) or daily_state(key) != "claim":
+		return false
+	daily["claimed"].append(key)
+	if daily["claimed"].size() >= daily["keys"].size() and not daily["bonus"]:
+		daily["bonus"] = true
+		gems += Missions.DAILY_BONUS
+	_give(Missions.DAILY[key]["reward"])
+	return true
+
+
+func login_ready() -> bool:
+	return str(login.get("last", "")) != today()
+
+
+## The login gift waiting today (a missed day does not reset the week, it just waits).
+func login_gift() -> Dictionary:
+	return Missions.LOGIN[int(login.get("day", 0)) % Missions.LOGIN.size()]
+
+
+func claim_login() -> bool:
+	if not login_ready():
+		return false
+	var gift := login_gift()
+	login = {"day": int(login.get("day", 0)) + 1, "last": today()}
+	_give(gift)
+	return true
+
+
+## How many rewards are waiting: the red badge on the Missions button.
+func missions_ready() -> int:
+	refresh_daily()
+	var n := 1 if login_ready() else 0
+	for i in Missions.STARTER.size():
+		if starter_state(i) == "claim":
+			n += 1
+	for key in daily["keys"]:
+		if daily_state(key) == "claim":
+			n += 1
+	return n
+
+
+func _give(reward: Dictionary) -> void:
+	add_coins(int(reward.get("coins", 0)))
+	add_fuel(int(reward.get("fuel", 0)))
+	gems += int(reward.get("gems", 0))
+	save_game()
+	missions_changed.emit()
 
 
 # ---------------------------------------------------------------- tutorial
@@ -470,7 +622,9 @@ func collect_generator(cell: Array) -> int:
 	var taken := mini(pending, maxi(room, 0))
 	var left_minutes := float(pending - taken) / producer_rate(s)
 	s["collected_at"] = now() - left_minutes * 60.0
-	return add_coins(taken) if s["type"] == "generator" else add_fuel(taken)
+	var got := add_coins(taken) if s["type"] == "generator" else add_fuel(taken)
+	add_stat("coins_collected" if s["type"] == "generator" else "fuel_collected", got)
+	return got
 
 
 func build(type: String, cell: Array) -> bool:
@@ -480,6 +634,7 @@ func build(type: String, cell: Array) -> bool:
 	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1, "fresh": true,
 		"busy_until": now() + Catalog.build_seconds(type, 1)}
 	structures.append(s)
+	add_stat("build")
 	save_game()
 	return true
 
@@ -492,6 +647,7 @@ func upgrade(cell: Array) -> bool:
 	var lvl := int(s["level"])
 	_spend(Catalog.upgrade_cost(s["type"], lvl))
 	s["busy_until"] = now() + Catalog.build_seconds(s["type"], lvl + 1)
+	add_stat("upgrade")
 	save_game()
 	return true
 
@@ -802,6 +958,8 @@ func train(type: String) -> bool:
 	if training.is_empty():
 		train_started = now()
 	training.append(type)
+	add_stat("train")
+	add_stat("train_" + type)
 	save_game()
 	return true
 
@@ -895,11 +1053,19 @@ func record_syndicate(index: int, stars: int, loot: int, loot_fuel: int) -> Dict
 	var first := stars > 0 and int(syndicate_stars.get(key, 0)) == 0
 	syndicate_stars[key] = maxi(int(syndicate_stars.get(key, 0)), stars)
 	var reward: Dictionary = Syndicate.MISSIONS[index]["reward"] if first else {}
+	_count_win(stars)
 	var got := {"coins": add_coins(loot + int(reward.get("coins", 0))), "fuel": add_fuel(loot_fuel + int(reward.get("fuel", 0))),
 		"gems": int(reward.get("gems", 0)), "first": first}
 	gems += int(got["gems"])
 	save_game()
 	return got
+
+
+func _count_win(stars: int) -> void:
+	if stars > 0:
+		add_stat("win")
+	if stars >= 3:
+		add_stat("three_stars")
 
 
 ## Banks the loot of an attack on an enemy. Returns {coins, fuel} actually banked.
@@ -912,6 +1078,8 @@ func record_raid(stars: int, loot: int, loot_fuel: int = 0) -> Dictionary:
 	best_stars[key] = maxi(int(best_stars.get(key, 0)), stars)
 	if stars > 0:
 		enemy_index += 1
+		add_stat("raid_win")
+	_count_win(stars)
 	return {"coins": add_coins(loot), "fuel": add_fuel(loot_fuel)}
 
 
@@ -949,6 +1117,7 @@ func save_game() -> void:
 		"train_started": train_started, "enemy_index": enemy_index, "city_seed": city_seed, "best_stars": best_stars,
 		"syndicate_stars": syndicate_stars, "syndicate_mission": syndicate_mission,
 		"tutorial": -1 if tutorial_replay else tutorial,
+		"stats": stats, "starter_claimed": starter_claimed, "daily": daily, "login": login,
 	}))
 
 
@@ -957,7 +1126,7 @@ func load_game() -> bool:
 		return false
 	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -1009,4 +1178,17 @@ func load_game() -> bool:
 	# Players from before the tutorial (save 8 and older) already know the game.
 	tutorial = int(data.get("tutorial", -1))
 	tutorial_replay = false
+	# Missions arrived in save 10; older saves start them now.
+	stats = {}
+	for k in data.get("stats", {}):
+		stats[str(k)] = int(data["stats"][k])
+	starter_claimed = []
+	for i in data.get("starter_claimed", []):
+		starter_claimed.append(int(i))
+	daily = data.get("daily", {})
+	if not daily.is_empty():
+		daily["claimed"] = Array(daily.get("claimed", []))
+		daily["keys"] = Array(daily.get("keys", []))
+	var saved_login: Dictionary = data.get("login", {})
+	login = {"day": int(saved_login.get("day", 0)), "last": str(saved_login.get("last", ""))}
 	return true

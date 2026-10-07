@@ -33,6 +33,8 @@ var open_cell: Array = []
 var open_wall: Array = []
 ## The Shop tab opened last.
 var shop_tab := "army"
+## The Missions tab opened last.
+var missions_tab := ""
 ## The open Army window, so its queue timer can tick.
 var army_box: Control
 ## Which sheet is open besides a structure's ("army", "hangar", "garage" or ""), so it can
@@ -79,6 +81,8 @@ func _ready() -> void:
 	hud.workers_pressed.connect(_open_workers)
 	hud.gems_pressed.connect(func() -> void: hud.toast(I18n.t("The gem shop is coming soon")))
 	hud.mode_done.connect(_end_wall_mode)
+	hud.missions_pressed.connect(func() -> void: _open_missions())
+	GameState.missions_changed.connect(_refresh_header)
 	GameState.finish_ready()
 	GameState.process_training()
 	_rebuild()
@@ -94,7 +98,9 @@ func _ready() -> void:
 			hud.toast(I18n.t("+%d gems") % GameState.tutorial_gift)
 			Audio.play("star")
 			GameState.tutorial_gift = 0
-			_refresh_header())
+			_refresh_header()
+			# Right after Noa, the missions take over.
+			get_tree().create_timer(1.6).timeout.connect(func() -> void: _open_missions("starter")))
 	var args := OS.get_cmdline_user_args()
 	if args.has("--screenshot-panel"):
 		_open_cell([1, 3])
@@ -116,6 +122,13 @@ func _ready() -> void:
 		_open_info("mg", 1, [4, 3])
 	elif args.has("--screenshot-settings"):
 		_open_settings()
+	elif args.has("--screenshot-missions"):
+		_open_missions("starter")
+	elif args.has("--screenshot-daily"):
+		_open_missions("daily")
+	elif GameState.tutorial < 0 and GameState.login_ready():
+		# The day's first visit opens the login gift.
+		_open_missions("daily")
 
 
 func _rebuild() -> void:
@@ -262,6 +275,7 @@ func _refresh_header() -> void:
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	hud.set_header(GameState.hq_level(), target["name"], GameState.infinite_coins)
 	hud.set_shop_badge(ShopUI.new_count())
+	hud.set_missions(GameState.missions_ready(), GameState.tutorial < 0 or GameState.tutorial_replay)
 	for bubble in coins:
 		if bubble.scale.x > 0.99:
 			bubble.set_amount(GameState.generator_pending(GameState.structure_at(bubble.cell)))
@@ -661,6 +675,95 @@ func _open_shop(tab: String = "") -> void:
 			_start_placing(type)
 	var content := ShopUI.shop(shop_tab, func(t: String) -> void: _open_shop(t), buy, func(type: String) -> void: _open_info(type, 1, []))
 	hud.show_modal(content, Vector2(1180, 610))
+
+
+# ---------------------------------------------------------------- missions
+
+## The Missions window on `tab` (the last one used, or Starter until those are all done).
+func _open_missions(tab: String = "") -> void:
+	if tab != "":
+		missions_tab = tab
+	elif missions_tab == "":
+		missions_tab = "daily" if GameState.starter_done() else "starter"
+	_deselect()
+	hud.hide_panel()
+	open_sheet = "missions"
+	var content := MissionsUI.window(missions_tab, func(t: String) -> void: _open_missions(t), _claim_mission, _go_mission)
+	hud.show_modal(content, Vector2(1120, 620))
+
+
+func _claim_mission(kind: String, id: Variant) -> void:
+	var before := [GameState.coins, GameState.fuel, GameState.gems]
+	var ok := false
+	match kind:
+		"starter":
+			ok = GameState.claim_starter(int(id))
+		"daily":
+			ok = GameState.claim_daily(str(id))
+		"login":
+			ok = GameState.claim_login()
+	if not ok:
+		return
+	Audio.play("star")
+	var parts := []
+	for i in 3:
+		var got: int = [GameState.coins, GameState.fuel, GameState.gems][i] - int(before[i])
+		if got > 0:
+			parts.append([I18n.t("+%d coins"), I18n.t("+%d fuel"), I18n.t("+%d gems")][i] % got)
+	if not parts.is_empty():
+		hud.toast("  ".join(parts))
+	_refresh_header()
+	_open_missions()
+
+
+## "Go" on a mission: closes the window and opens the place where it gets done.
+func _go_mission(check: Array) -> void:
+	hud.hide_modal()
+	match str(check[0]):
+		"hq":
+			_open_cell(_cell_of("hq"))
+		"level":
+			var cell := _cell_of(check[1])
+			if cell.is_empty():
+				_open_shop(_shop_tab_of(check[1]))
+			else:
+				_open_cell(cell)
+		"count":
+			_open_shop(_shop_tab_of(check[1]))
+		"walls":
+			_open_shop("walls")
+		"unit":
+			_open_lab(Catalog.unit_lab(check[1]))
+		"mission", "stars":
+			get_tree().change_scene_to_file("res://scenes/syndicate/map.tscn")
+		"stat":
+			var key: String = check[1]
+			if key.begins_with("train"):
+				_open_army()
+			elif key in ["raid_win", "win", "three_stars"]:
+				_open_attack_choice()
+			elif key == "build":
+				_open_shop()
+			elif key == "upgrade":
+				hud.toast(I18n.t("Tap a building, then Upgrade"))
+			else:
+				hud.toast(I18n.t("Tap the coins and drops over your generators and pumps"))
+
+
+## The cell of the highest-level structure of `type`, or [].
+func _cell_of(type: String) -> Array:
+	var best := {}
+	for s in GameState.structures:
+		if s["type"] == type and (best.is_empty() or int(s["level"]) > int(best["level"])):
+			best = s
+	return best.get("cell", [])
+
+
+static func _shop_tab_of(type: String) -> String:
+	for tab in Catalog.SHOP_TABS:
+		if Catalog.SHOP_TABS[tab].has(type):
+			return tab
+	return ""
 
 
 # ---------------------------------------------------------------- walls

@@ -122,4 +122,12 @@ get a free speed-up and a coin top-up for the HQ upgrade, and 100 gems at the en
 `assets/textures/pictures/<type>_<level>.webp`, because Safari on iPad left live 3D pictures blank. After a
 model changes, rebake: `godot --path . res://scenes/dev/bake_pictures.tscn` then `python tools/bake_pictures.py`
 (renders over black and white to get true transparency). On the web Noa's first line waits for the first tap.
+Approved 7.10.2026: missions and sign-up sketch (https://claude.ai/artifact/Tnvwhfaq4KMqSS85z45tfx). In game (save v10):
+`Missions` data (12 starter missions over 3 days, each day opens when the one before is claimed; 3 daily
+missions picked by date from a pool, +10 gems for all three; 7-day login gift), progress in `GameState`
+(`stats` counters, `mission_progress`, `claim_*`), window `MissionsUI` behind the HUD "Missions" button
+(red badge = rewards waiting; hidden during Noa). "Go" opens the place where a mission is done. Dev:
+`--screenshot-missions|--screenshot-daily`. Next: sign-up (name + password, no email) after Noa, on
+Supabase (needs the owner to connect the Supabase connector or save an access token in tmp/).
+The owner considered a Clash Royale-style concept (7.10.2026) and decided to stay with this one.
 Still waiting on the owner: Apple Developer and Google Play accounts.

@@ -16,6 +16,7 @@ signal workers_pressed
 signal gems_pressed
 signal mode_done
 signal actions_closed
+signal missions_pressed
 
 const COIN := Color(0.96, 0.77, 0.26)
 const FUEL := Color(0.93, 0.35, 0.55)
@@ -33,6 +34,8 @@ var _attack: Button
 var _left: HBoxContainer
 var _dock: HBoxContainer
 var _shop_badge: Label
+var _missions: Button
+var _missions_badge: Label
 var _panel: PanelContainer
 var _panel_title: Label
 var _panel_body: VBoxContainer
@@ -61,7 +64,12 @@ func _ready() -> void:
 	var player := HBoxContainer.new()
 	player.add_theme_constant_override("separation", 10)
 	player.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pin(corners, player, false)
+	# The badge, with the Missions button under it.
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pin(corners, column, false)
+	column.add_child(player)
 	var badge := PanelContainer.new()
 	badge.custom_minimum_size = Vector2(60, 60)
 	var badge_style := _box(Color(0.2, 0.42, 0.85), 12, Color(0.8, 0.88, 1.0), 3)
@@ -77,6 +85,12 @@ func _ready() -> void:
 	player.add_child(names)
 	make_label(names, I18n.t("Commander"), 24)
 	_rank = make_label(names, "", 17, Color(0.88, 0.92, 0.88))
+	_missions = _small_button(column, "tasks", I18n.t("Missions"))
+	_missions.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_style_button(_missions, Color(0.2, 0.42, 0.75), 12, Color(1, 1, 1, 0.8), 3)
+	_missions.pressed.connect(func() -> void: missions_pressed.emit())
+	_missions_badge = _corner_badge(_missions)
+	Tutorial.tag(_missions, "missions_button")
 
 	# Free workers, top middle.
 	_workers = Button.new()
@@ -400,6 +414,14 @@ func set_header(hq_level: int, target_name: String, infinite: bool = false) -> v
 
 
 ## How many new things the Shop has (structures there is room to build); 0 hides the badge.
+## The red count of rewards waiting on the Missions button; the button hides during Noa's
+## tutorial.
+func set_missions(count: int, shown: bool) -> void:
+	_missions.visible = shown
+	_missions_badge.text = str(count)
+	_missions_badge.visible = count > 0
+
+
 func set_shop_badge(count: int) -> void:
 	_shop_badge.visible = count > 0
 	_shop_badge.text = str(count)
@@ -567,7 +589,7 @@ func show_mode(text: String) -> void:
 func blocks(pos: Vector2) -> bool:
 	if _dim.visible:
 		return true
-	for c: Control in [_mode, _panel, _left, _dock, _workers, _actions, _bars["gems"]["bar"]]:
+	for c: Control in [_mode, _panel, _left, _dock, _workers, _actions, _missions, _bars["gems"]["bar"]]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false
