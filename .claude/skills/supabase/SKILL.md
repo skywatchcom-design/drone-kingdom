@@ -21,5 +21,7 @@ say what will change before structural changes). The game talks to it from `scri
 4. Facts to keep: accounts need an account (no playing without); under-13 accounts have a made-up
    address from a hash of the name and sign in by name; email from 13; email confirmation is off;
    mail goes through Gmail SMTP of skywatchcom@gmail.com (app password in `tmp/smtp_password.txt`),
-   templates in `supabase/templates/`.
+   templates in `supabase/templates/`. Auth sends at most `rate_limit_email_sent` = 30 emails an hour
+   (raised from 2 on 7.10.2026); past it the API still answers 200 and silently sends nothing, so
+   check `auth.users.recovery_sent_at` when testing emails.
 5. Continue with /ship.
