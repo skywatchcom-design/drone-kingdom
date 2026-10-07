@@ -19,6 +19,11 @@ const DIM := 0.55
 
 ## The step whose line was spoken last, kept across scene changes so a line plays once.
 static var _spoken := ""
+## Browsers (Safari on iPad above all) keep sound off until the first tap, so on the web a
+## line waits for that tap instead of playing into silence.
+static var _audio_ready := not OS.has_feature("web")
+var _pending_voice := ""
+var _swallow_tap := false
 
 var _root: Control
 var _blocker: Blocker
@@ -182,9 +187,15 @@ func _show_line(line: String, face: String) -> void:
 	_typed = 0.0
 	_voice_len = 0.0
 	var id := "%d:%s" % [GameState.tutorial, line]
-	if _spoken != id:
+	var path := "res://assets/audio/noa/%s_%s.ogg" % [I18n.lang, line]
+	_pending_voice = ""
+	_swallow_tap = false
+	if _spoken != id and not _audio_ready:
 		_spoken = id
-		_voice_len = Audio.say("res://assets/audio/noa/%s_%s.ogg" % [I18n.lang, line])
+		_pending_voice = path
+	elif _spoken != id:
+		_spoken = id
+		_voice_len = Audio.say(path)
 	else:
 		_typed = _text.text.length()
 	_text.visible_characters = int(_typed)
@@ -234,7 +245,12 @@ func _animate(delta: float) -> void:
 		else:
 			_typed += delta * TYPE_SPEED * (3.0 if _voice_len > 0.0 else 1.0)
 		_text.visible_characters = int(_typed)
-	_hint.visible = _tap_step() and _typed >= total
+	if _pending_voice != "":
+		_hint.text = I18n.t("Tap to hear Noa")
+		_hint.visible = true
+	else:
+		_hint.text = I18n.t("Tap to continue")
+		_hint.visible = _tap_step() and _typed >= total
 	var talking := Audio.voice_playing()
 	var s := 1.0 + (0.012 * absf(sin(_time * 11.0)) if talking else 0.0)
 	_noa.scale = Vector2(s, s)
@@ -258,10 +274,27 @@ func _find_target(step: Dictionary) -> Rect2:
 	return Rect2()
 
 
+## The first press anywhere unlocks sound on the web; a line waiting for it starts then, and
+## that tap only starts her talking.
+func _input(event: InputEvent) -> void:
+	if _audio_ready or not (event is InputEventMouseButton or event is InputEventScreenTouch) or not event.pressed:
+		return
+	_audio_ready = true
+	if _pending_voice != "":
+		_swallow_tap = _tap_step()
+		_typed = 0.0
+		_text.visible_characters = 0
+		_voice_len = Audio.say(_pending_voice)
+		_pending_voice = ""
+
+
 func _on_blocker_input(event: InputEvent) -> void:
 	var tap: bool = (event is InputEventMouseButton and not event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT) \
 		or (event is InputEventScreenTouch and not event.pressed)
 	if not tap or _confirm.visible:
+		return
+	if _swallow_tap:
+		_swallow_tap = false
 		return
 	if _typed < _text.text.length():
 		_typed = _text.text.length()

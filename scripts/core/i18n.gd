@@ -332,6 +332,7 @@ const HE := {
 	# Noa's tutorial
 	"Noa": "נועה",
 	"Tap to continue": "לחצו להמשך",
+	"Tap to hear Noa": "לחצו כדי לשמוע את נועה",
 	"Skip tutorial": "דלג על ההדרכה",
 	"Skip the tutorial?": "לדלג על ההדרכה?",
 	"Skip": "לדלג",
