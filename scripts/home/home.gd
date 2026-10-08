@@ -167,7 +167,10 @@ func _rebuild() -> void:
 			all_cells.append([c, r])
 	city = City.new()
 	level.add_child(city)
-	city.build(GameState.city_seed, all_cells)
+	var used := []
+	for s in GameState.structures:
+		used.append([int(s["cell"][0]), int(s["cell"][1])])
+	city.build(GameState.city_seed, all_cells, used)
 	StructureModels.skin = GameState.cosmetics_worn
 	StructureModels.show_levels = true
 	for s in GameState.structures:

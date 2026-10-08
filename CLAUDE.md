@@ -182,4 +182,12 @@ Approved 8.10.2026 (real before/after screenshots, https://claude.ai/artifact/2w
 warm horizon, haze only in the distance, +saturation/contrast adjustments, soft glow, and a screen-edge
 vignette on a CanvasLayer under the HUD. Dev: `-- --mood classic` shows the old midday look; home
 `--screenshot-base` opens the base with no window (clean pictures).
+Approved 8.10.2026 (https://claude.ai/artifact/RoZCVzsvoELfzxDFXHFn6G): the player's base ground. `City.build(seed,
+pads, used_cells)`: free pads are subtle plots with white corner stakes (only built pads are concrete), worn
+ground under buildings and grass patches (`_add_patches`), and a camp outside the jeep's lap (`_add_camp`: lamp
+posts with "lamp" bulbs BaseLife flickers, crates, barrels, sandbags, water tower, camo store, gate booth and
+barrier). BaseLife smoke and jeep dust use `Fx.smoke` soft puffs.
+**Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
+players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
+waiting for tomorrow). Sketch first.
 Still waiting on the owner: Apple Developer and Google Play accounts.

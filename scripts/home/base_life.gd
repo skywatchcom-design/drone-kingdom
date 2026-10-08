@@ -15,6 +15,8 @@ var _jeep: Node3D
 var _jeep_wheels: Array[Node3D] = []
 var _workers: Array[Node3D] = []
 var _smoke: Array[Node3D] = []
+## Camp lamp bulbs, which flicker now and then.
+var _lamps: Array = []
 var _blinkers: Array[Node3D] = []
 var _drone: Node3D
 var _birds: Node3D
@@ -55,6 +57,8 @@ func _scan(node: Node) -> void:
 			_smoke.append(child)
 		if child.has_meta("blink"):
 			_blinkers.append(child)
+		if child.has_meta("lamp"):
+			_lamps.append(child)
 		_scan(child)
 
 
@@ -76,16 +80,19 @@ func _process(delta: float) -> void:
 	_dust_timer -= delta
 	if _dust_timer <= 0.0:
 		_dust_timer = 0.15
-		_puff(_jeep.position - _jeep.basis.z * 2.2 + Vector3(0, 0.3, 0), Color(0.78, 0.7, 0.55), 0.9, 1.4, 0.4)
+		Fx.smoke(self, _jeep.position - _jeep.basis.z * 2.2 + Vector3(0, 0.4, 0), 0.7, 0.0, Color(0.74, 0.66, 0.5))
 	_smoke_timer -= delta
 	if _smoke_timer <= 0.0:
 		_smoke_timer = SMOKE_EVERY
 		for s in _smoke:
 			if is_instance_valid(s):
-				_puff((s as Node3D).global_position, Color(0.55, 0.54, 0.52), 0.35, 3.0, 1.0)
+				Fx.smoke(self, (s as Node3D).global_position, 0.45, 0.0, Color(0.6, 0.59, 0.57))
 	for i in _blinkers.size():
 		if is_instance_valid(_blinkers[i]):
 			_blinkers[i].visible = sin(_time * 4.0 + i * 1.3) > 0.2
+	for i in _lamps.size():
+		if is_instance_valid(_lamps[i]):
+			_lamps[i].visible = sin(_time * 23.0 + i * 5.0) > -0.97 or fmod(_time + i * 3.7, 9.0) > 0.3
 	for w in _workers:
 		(w.get_meta("arm") as Node3D).rotation.x = -1.4 + absf(sin(_time * 5.0)) * 1.2
 	_drone.position = Vector3(cos(_time * 0.25) * 22.0, 13.0 + sin(_time * 1.1) * 0.3, sin(_time * 0.25) * 22.0)

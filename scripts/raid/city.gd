@@ -49,10 +49,16 @@ func roof_top(cell: Array) -> Vector3:
 
 ## `pad_cells` lists the cells that get a stone pad: every slot at home (so the player sees
 ## where to build), only the occupied ones in a raid.
-func build(seed_value: int, pad_cells: Array) -> void:
+## `pad_cells` get a pad. When `used_cells` is given (the player's own base), only those pads are
+## concrete; the free ones are faint gravel plots with white corner stakes, and the base gets
+## worn ground under its buildings and a camp around it (lamps, crates, a gate booth...).
+func build(seed_value: int, pad_cells: Array, used_cells: Array = []) -> void:
 	_rng.seed = seed_value
 	MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.surface("grass", Color(0.36, 0.46, 0.24), 1.0, 0.0, true), Vector3(0, -0.2, 0))
-	_add_compound(pad_cells)
+	_add_compound(pad_cells, used_cells)
+	_add_patches(used_cells)
+	if not used_cells.is_empty():
+		_add_camp()
 	_add_stream()
 	_add_fields()
 	_add_road()
@@ -69,15 +75,20 @@ func _process(delta: float) -> void:
 
 # ---------------------------------------------------------------- compound
 
-func _add_compound(pad_cells: Array) -> void:
+func _add_compound(pad_cells: Array, used_cells: Array = []) -> void:
 	var lawn := YARD * 2.0
 	MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.surface("grass", Color(0.4, 0.5, 0.26), 1.0, 0.0, true), Vector3(0, 0.03, 0))
 	for c in GRID:
 		for r in GRID:
 			heights[_key([c, r])] = PAD_H + 0.06
 	var pads := []
+	var plots := []
 	for cell in pad_cells:
-		pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
+		if used_cells.is_empty() or used_cells.has([int(cell[0]), int(cell[1])]):
+			pads.append(Transform3D(Basis(), cell_pos(cell) + Vector3(0, 0.06 + PAD_H / 2.0, 0)))
+		else:
+			plots.append(cell_pos(cell))
+	_add_plots(plots)
 	# The Compatibility renderer (web) lights flat pale ground much brighter: darker pads there.
 	var web := RenderingServer.get_current_rendering_method() == "gl_compatibility"
 	var pad_colors := []
@@ -92,6 +103,132 @@ func _add_compound(pad_cells: Array) -> void:
 	border_colors.fill(Color(0.33, 0.32, 0.29) if web else Color(0.46, 0.45, 0.41))
 	MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.3, PAD_H - 0.02, PAD + 0.3)), MeshKit.surface("concrete", Color.WHITE, 0.95), borders, border_colors)
 	_add_tufts(pad_cells)
+
+
+## Free building plots: a faint gravel square with a small white stake at each corner, so the
+## grid stays readable without looking like a car park.
+func _add_plots(centers: Array) -> void:
+	if centers.is_empty():
+		return
+	var gravel := []
+	var stakes := []
+	for c: Vector3 in centers:
+		gravel.append(Transform3D(Basis(), c + Vector3(0, 0.075, 0)))
+		for sx in [-1.0, 1.0]:
+			for sz in [-1.0, 1.0]:
+				stakes.append(Transform3D(Basis(), c + Vector3(sx * (PAD / 2.0 - 0.15), 0.3, sz * (PAD / 2.0 - 0.15))))
+	var g := MeshKit.multi(self, MeshKit.box(Vector3(PAD, 0.03, PAD)), MeshKit.surface("concrete", Color(0.5, 0.52, 0.4) if RenderingServer.get_current_rendering_method() != "gl_compatibility" else Color(0.4, 0.43, 0.32), 1.0, 0.0, true), gravel)
+	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	MeshKit.multi(self, MeshKit.box(Vector3(0.14, 0.5, 0.14)), MeshKit.mat(Color(0.93, 0.92, 0.88), 0.6), stakes)
+
+
+## Soft patches on the ground: worn dirt under the buildings, and lighter and darker grass
+## around, so the field isn't one flat green.
+func _add_patches(used_cells: Array) -> void:
+	for cell in used_cells:
+		_patch(cell_pos(cell), PAD + 3.4, Color(0.5, 0.42, 0.3), 0.75)
+	for i in 70:
+		var p := Vector3(_rng.randf_range(-90.0, 90.0), 0, _rng.randf_range(-90.0, 90.0))
+		var light := _rng.randf() < 0.5
+		_patch(p, _rng.randf_range(8.0, 20.0), Color(0.52, 0.6, 0.3) if light else Color(0.22, 0.34, 0.14), 0.32)
+	for i in 14:
+		var a := _rng.randf() * TAU
+		var d := _rng.randf_range(YARD + 6.0, YARD + 30.0)
+		_patch(Vector3(cos(a) * d, 0, sin(a) * d), _rng.randf_range(4.0, 9.0), Color(0.55, 0.46, 0.33), 0.6)
+
+
+func _patch(pos: Vector3, size: float, color: Color, alpha: float) -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE * size
+	var m := StandardMaterial3D.new()
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_texture = _soft_patch()
+	m.albedo_color = Color(color.r, color.g, color.b, alpha)
+	m.roughness = 1.0
+	var mi := MeshKit.add(self, quad, m, Vector3(pos.x, 0.07 + _rng.randf() * 0.01, pos.z))
+	mi.rotation = Vector3(-PI / 2.0, _rng.randf() * TAU, 0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+static var _patch_tex: ImageTexture
+
+
+## A soft, slightly lumpy round mask for ground patches.
+static func _soft_patch() -> ImageTexture:
+	if _patch_tex == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var p := Vector2(x, y) - Vector2(n, n) / 2.0
+				var r := p.length() / (n * 0.5)
+				var wobble := 0.08 * sin(atan2(p.y, p.x) * 5.0) + 0.05 * sin(atan2(p.y, p.x) * 11.0)
+				img.set_pixel(x, y, Color(1, 1, 1, clampf((1.0 - r - wobble) * 1.6, 0.0, 1.0)))
+		_patch_tex = ImageTexture.create_from_image(img)
+	return _patch_tex
+
+
+## The camp around the player's base, just outside the jeep's lap: lamp posts, crates and
+## barrels, sandbags, a water tower, a camouflaged store and a guard booth with a barrier at the
+## gate. Lamp bulbs carry the "blink"-free "lamp" meta so BaseLife can make them flicker.
+func _add_camp() -> void:
+	var edge := YARD + 6.0
+	var wood := MeshKit.surface("wood", Color(0.62, 0.48, 0.3), 0.9) if MeshKit.PHOTO_SCALE.has("wood") else MeshKit.mat(Color(0.62, 0.48, 0.3), 0.9)
+	var olive := MeshKit.mat(Color(0.33, 0.37, 0.22), 0.8, 0.1)
+	var steel := MeshKit.surface("metal", Color(0.42, 0.44, 0.45), 0.5, 0.6)
+	var sand := MeshKit.mat(Color(0.74, 0.66, 0.48), 0.95)
+	# Lamp posts on the corners and the middle of each side.
+	for k in 8:
+		var a := k * TAU / 8.0 + PI / 4.0
+		var r := edge + 1.5 if k % 2 == 0 else edge
+		var p := Vector3(cos(a), 0, sin(a)) * r
+		if absf(p.x) < 6.0 and p.z > 0.0:
+			continue
+		MeshKit.add(self, MeshKit.cyl(0.09, 0.12, 4.6, 8), steel, p + Vector3(0, 2.3, 0))
+		MeshKit.add(self, MeshKit.box(Vector3(0.9, 0.08, 0.12)), steel, p + Vector3(0, 4.55, 0))
+		var bulb := MeshKit.add(self, MeshKit.box(Vector3(0.36, 0.14, 0.3)), MeshKit.glow(Color(1.0, 0.86, 0.55)), p + Vector3(0.36, 4.45, 0))
+		bulb.set_meta("lamp", true)
+		_patch(p, 5.0, Color(1.0, 0.85, 0.55), 0.18)
+	# Crates and barrels in little stacks.
+	for spot: Vector3 in [Vector3(-edge, 0, -14), Vector3(edge, 0, 12), Vector3(-12, 0, -edge), Vector3(16, 0, -edge), Vector3(-edge, 0, 18)]:
+		for i in 4:
+			var off := Vector3(_rng.randf_range(-1.6, 1.6), 0, _rng.randf_range(-1.6, 1.6))
+			var s := _rng.randf_range(0.8, 1.2)
+			var crate := MeshKit.add(self, MeshKit.box(Vector3.ONE * s), wood, spot + off + Vector3(0, s / 2.0, 0))
+			crate.rotation.y = _rng.randf() * TAU
+		for i in 3:
+			var b := spot + Vector3(_rng.randf_range(-2.6, 2.6), 0.55, _rng.randf_range(-2.6, 2.6))
+			MeshKit.add(self, MeshKit.cyl(0.38, 0.38, 1.1, 12), olive if i % 2 == 0 else MeshKit.mat(Color(0.62, 0.2, 0.14), 0.7, 0.2), b)
+	# Sandbag walls guarding the corners.
+	for k in 4:
+		var c := Vector3(signf(cos(k * PI / 2.0 + PI / 4.0)), 0, signf(sin(k * PI / 2.0 + PI / 4.0))) * (edge + 4.5)
+		for i in 7:
+			for layer in 2:
+				var bag := MeshKit.add(self, MeshKit.sphere(0.5, 8), sand, c + Vector3((i - 3) * 0.85 + layer * 0.4, 0.3 + layer * 0.45, 0))
+				bag.scale = Vector3(1.0, 0.55, 0.7)
+	# A water tower behind the base.
+	var wt := Vector3(edge + 4.0, 0, -edge - 2.0)
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			MeshKit.add(self, MeshKit.cyl(0.12, 0.12, 6.0, 6), steel, wt + Vector3(sx * 1.2, 3.0, sz * 1.2))
+	MeshKit.add(self, MeshKit.cyl(1.9, 1.9, 2.6, 16), MeshKit.mat(Color(0.86, 0.85, 0.8), 0.6, 0.2), wt + Vector3(0, 7.3, 0))
+	MeshKit.add(self, MeshKit.cyl(0.2, 2.0, 0.7, 16), MeshKit.mat(Color(0.6, 0.22, 0.16), 0.6), wt + Vector3(0, 8.95, 0))
+	# A camouflaged store with crates under the net.
+	var store := Node3D.new()
+	store.position = Vector3(-edge - 3.0, 0, 6.0)
+	add_child(store)
+	StructureModels.camo_net(store, 7.0, 5.0, 2.6)
+	for i in 3:
+		MeshKit.add(store, MeshKit.box(Vector3(1.2, 1.0, 1.0)), wood, Vector3(-1.8 + i * 1.6, 0.5, 0))
+	# Gate: a guard booth with a lit window and a striped barrier across the road.
+	var gz := YARD + 5.0
+	MeshKit.add(self, MeshKit.box(Vector3(2.2, 2.4, 2.2)), MeshKit.mat(Color(0.84, 0.82, 0.74), 0.8), Vector3(5.6, 1.2, gz))
+	MeshKit.add(self, MeshKit.box(Vector3(2.6, 0.2, 2.6)), olive, Vector3(5.6, 2.5, gz))
+	MeshKit.add(self, MeshKit.box(Vector3(1.2, 0.6, 0.05)), MeshKit.glow(Color(1.0, 0.86, 0.55)), Vector3(5.6, 1.6, gz - 1.12))
+	MeshKit.add(self, MeshKit.box(Vector3(0.3, 1.1, 0.3)), steel, Vector3(3.6, 0.55, gz))
+	for i in 6:
+		var stripe := MeshKit.add(self, MeshKit.box(Vector3(1.1, 0.16, 0.16)), MeshKit.mat(Color(0.85, 0.2, 0.16) if i % 2 == 0 else Color(0.95, 0.95, 0.92), 0.6), Vector3(3.0 - i * 1.1, 1.05, gz))
+		stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
 ## Short grass tufts on the lawn between the pads, and wild ones outside.
