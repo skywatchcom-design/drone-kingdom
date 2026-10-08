@@ -177,4 +177,9 @@ the enemy base and zoomed to fit (`raid._frame_base`), no "Lv" labels in battle 
 `Fx` v2 (soft camera-facing puffs from code textures: fireball, black smoke, flames, sparks, flying debris, dust
 ring, scorch marks, camera shake via h/v offsets), burning damaged buildings and smouldering ruins
 (`raid._burn`). Dev: raid `--view N` (camera height), `--fx-demo` (damaged base + repeated explosions).
+Approved 8.10.2026 (real before/after screenshots, https://claude.ai/artifact/2wKP1j2WYAmJ6ZywcSh1To): the
+"late afternoon" look in `WorldSetup.create` for base and battle: a lower warm sun from the side (long shadows),
+warm horizon, haze only in the distance, +saturation/contrast adjustments, soft glow, and a screen-edge
+vignette on a CanvasLayer under the HUD. Dev: `-- --mood classic` shows the old midday look; home
+`--screenshot-base` opens the base with no window (clean pictures).
 Still waiting on the owner: Apple Developer and Google Play accounts.

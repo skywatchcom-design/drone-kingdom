@@ -143,6 +143,8 @@ func _ready() -> void:
 		_open_store()
 	elif args.has("--screenshot-skins"):
 		_open_skins()
+	elif args.has("--screenshot-base"):
+		pass
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
