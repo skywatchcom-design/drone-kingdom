@@ -89,12 +89,21 @@ static func generate(seed_value: int, hq: int) -> Dictionary:
 			if cell.is_empty():
 				break
 			structures.append({"type": type, "cell": cell, "level": rng.randi_range(maxi(1, hq - 1), hq)})
+	var walls := _generated_walls(rng, hq_cell, hq)
+	# Hidden traps on their own random stream, so the rest of every base stays as it was.
+	var trap_rng := RandomNumberGenerator.new()
+	trap_rng.seed = seed_value * 7 + 3
+	for type in Catalog.TRAPS:
+		for i in Catalog.max_count(type, hq):
+			var cell := _free_cell(trap_rng, taken)
+			if not cell.is_empty():
+				structures.append({"type": type, "cell": cell, "level": 1})
 	return {
 		"name": NAMES[seed_value % NAMES.size()],
 		"seed": seed_value,
 		"pad": pad,
 		"structures": structures,
-		"walls": _generated_walls(rng, hq_cell, hq),
+		"walls": walls,
 	}
 
 

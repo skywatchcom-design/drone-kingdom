@@ -46,6 +46,8 @@ var hud: RaidHud
 ## loot, loot_fuel, destroyed}. `loot` counts coins plus fuel, so drones that go for loot
 ## treat fuel buildings as loot too.
 var targets: Array[Dictionary] = []
+## Hidden traps still armed: {type, pos, cell}. Each goes off once and is then removed.
+var traps: Array = []
 var drones: Array[Drone] = []
 var ground: Array[GroundUnit] = []
 ## The base's own soldiers, out of its Quarters.
@@ -133,12 +135,18 @@ func _start() -> void:
 	if GameState.raid_target == "syndicate":
 		base = Syndicate.base(GameState.syndicate_mission)
 	else:
-		base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(enemy_index, GameState.hq_level())
+		# Dev: `--enemy-hq N` makes a generated enemy base as if the player were at HQ N.
+		var enemy_hq := int(args[args.find("--enemy-hq") + 1]) if args.has("--enemy-hq") else GameState.hq_level()
+		base = GameState.player_base() if GameState.raid_target == "self" else Bases.enemy(enemy_index, enemy_hq)
 	level = Node3D.new()
 	add_child(level)
 	var reserved: Array = []
 	for s in base["structures"]:
-		reserved.append(s["cell"])
+		# A trap's pad looks like any empty plot, so nothing gives it away.
+		if Catalog.is_trap(s["type"]):
+			traps.append({"type": s["type"], "pos": City.cell_pos(s["cell"]), "cell": s["cell"]})
+		else:
+			reserved.append(s["cell"])
 	city = City.new()
 	level.add_child(city)
 	city.build(int(base["seed"]), reserved)
@@ -148,6 +156,8 @@ func _start() -> void:
 
 	for s in base["structures"]:
 		var type: String = s["type"]
+		if Catalog.is_trap(type):
+			continue
 		var lvl := int(s["level"])
 		var top := city.roof_top(s["cell"])
 		var node: Node3D
@@ -511,6 +521,7 @@ func _process(delta: float) -> void:
 		if autoplay:
 			_autoplay_abilities()
 		Audio.hum(minf(1.0, alive.size() / 5.0))
+		_check_traps(alive, alive_ground)
 		for d: Drone in alive:
 			_drone_ai(d, delta)
 		for u: GroundUnit in alive_ground:
@@ -525,6 +536,64 @@ func _process(delta: float) -> void:
 		for u: GroundUnit in alive_ground + alive_defenders:
 			u.walk(Vector3.ZERO, delta)
 	_update_bars()
+
+
+# ---------------------------------------------------------------- traps
+
+## Sets off any hidden trap an attacker has come close to: the Spring Mine pops up and flings
+## the soldiers round it (tanks shrug off most of it); the Air Mine shoots up and blows the
+## nearest drone out of the sky.
+func _check_traps(alive_drones: Array, alive_ground: Array) -> void:
+	for i in range(traps.size() - 1, -1, -1):
+		var trap: Dictionary = traps[i]
+		var def: Dictionary = Catalog.TRAPS[trap["type"]]
+		var pos: Vector3 = trap["pos"]
+		var air: bool = trap["type"] == "airmine"
+		var victims: Array = alive_drones if air else alive_ground
+		var hit := false
+		for u: Unit in victims:
+			if PathUtils.flat_distance(u.global_position, pos) <= float(def["trigger"]):
+				hit = true
+				break
+		if not hit:
+			continue
+		traps.remove_at(i)
+		_spring_trap(trap, def, victims, air)
+
+
+func _spring_trap(trap: Dictionary, def: Dictionary, victims: Array, air: bool) -> void:
+	var pos: Vector3 = trap["pos"]
+	var vs: Dictionary = def["vs"]	var model := StructureModels.trap(level, trap["type"], city.roof_top(trap["cell"]))
+	model.scale = Vector3.ONE * 0.2
+	create_tween().tween_property(model, "scale", Vector3.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_float_text(pos + Vector3(0, 4.0, 0), I18n.t("Trap!"), Color(1.0, 0.8, 0.2))
+	Audio.play("breach", -3.0)
+	Audio.buzz(60)
+	if air:
+		var best: Unit = null
+		for u: Unit in victims:
+			if best == null or PathUtils.flat_distance(u.global_position, pos) < PathUtils.flat_distance(best.global_position, pos):
+				best = u
+		if best != null:
+			Fx.boom(level, best.global_position, 1.1)
+			best.damage(float(def["damage"]) * float(vs["air"]))
+	else:
+		Fx.boom(level, pos + Vector3(0, 0.6, 0), 1.0)
+		for u: Unit in victims:
+			var d := PathUtils.flat_distance(u.global_position, pos)
+			if d > float(def["radius"]):
+				continue
+			var tank := (u as GroundUnit).is_tank()
+			u.damage(float(def["damage"]) * float(vs["tank" if tank else "soldier"]))
+			if not tank and not u.dead:
+				# Thrown back, away from the mine.
+				var away := (u.global_position - pos)
+				away.y = 0.0
+				var push := (away.normalized() if away.length() > 0.1 else Vector3.FORWARD) * 3.0
+				create_tween().tween_property(u, "position", u.position + push, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	get_tree().create_timer(1.6).timeout.connect(func() -> void:
+		if is_instance_valid(model):
+			create_tween().tween_property(model, "scale", Vector3.ONE * 0.01, 0.4).finished.connect(model.queue_free))
 
 
 # ---------------------------------------------------------------- support abilities

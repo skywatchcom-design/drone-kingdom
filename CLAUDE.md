@@ -193,7 +193,14 @@ defense ranges), range rings show what a defense hits (`Defense.hits_air`: green
 zone), target badges `Icons.target(type)` (`t_any|loot|defense|fence`) on battle cards and Army cards, picking a card
 says what it goes for (`Catalog.target_text`), a dashed line after each deploy to the first target (`raid._show_aim`),
 and a Command Tower "Levels" window (`ShopUI.hq_ladder`, `Catalog.ladder_lines`). Home flags `--screenshot-ladder|move`.
-Still to build from that sketch: traps, defense log + replay, saved layouts, medic / jammer drone, season pass.
+Round 2 (9.10.2026): hidden traps `Catalog.TRAPS` (Spring Mine from HQ 2 against soldiers, Air Mine from HQ 3 against
+drones). They live in `GameState.structures` like buildings but cost coins only (no worker, no timer, no upgrades),
+take a free pad, look like `StructureModels.trap`, and re-arm by themselves. In battle they are not targets: `raid.traps`
+holds them hidden (their pad looks empty) until a unit comes within `trigger`, then `_spring_trap` pops the model and
+blows. Generated enemy bases get traps on their own RNG (`Bases.generate`). Raid flag `--enemy-hq N`; picture bake
+`bake_pictures.tscn -- --only spring,airmine`.
+Still to build from that sketch: defense log + replay (needs real PvP on Supabase first: today every raid is against a
+generated base), saved layouts, camo net, medic / jammer drone, season pass.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
 players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
 waiting for tomorrow). Sketch first.

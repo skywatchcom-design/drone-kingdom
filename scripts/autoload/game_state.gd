@@ -588,7 +588,8 @@ func build_block_reason(type: String) -> String:
 	if count_of(type) >= allowed:
 		return I18n.t("Limit reached (%d)") % allowed
 	var money := _coins_reason(Catalog.build_cost(type))
-	return money if money != "" else _worker_reason()
+	# Traps go in at once and need no worker.
+	return money if money != "" or Catalog.is_trap(type) else _worker_reason()
 
 
 func _coins_reason(cost: int) -> String:
@@ -610,7 +611,7 @@ func upgrade_block_reason(cell: Array) -> String:
 	if is_busy(s):
 		return I18n.t("Under construction")
 	var level := int(s["level"])
-	if level >= Catalog.MAX_LEVEL:
+	if level >= Catalog.MAX_LEVEL or Catalog.is_trap(s["type"]):
 		return I18n.t("Max level")
 	if s["type"] != "hq" and level >= hq_level():
 		return I18n.t("Upgrade the Command Tower first")
@@ -696,8 +697,10 @@ func build(type: String, cell: Array) -> bool:
 	if build_block_reason(type) != "" or not structure_at(cell).is_empty():
 		return false
 	_spend(Catalog.build_cost(type))
-	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1, "fresh": true,
-		"busy_until": now() + Catalog.build_seconds(type, 1)}
+	var s := {"type": type, "cell": [int(cell[0]), int(cell[1])], "level": 1}
+	if not Catalog.is_trap(type):
+		s["fresh"] = true
+		s["busy_until"] = now() + Catalog.build_seconds(type, 1)
 	structures.append(s)
 	add_stat("build")
 	save_game()

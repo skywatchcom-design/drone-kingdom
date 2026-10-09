@@ -25,6 +25,8 @@ const HQ_SKINS := {
 
 
 static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Node3D:
+	if Catalog.is_trap(type):
+		return trap(parent, type, top)
 	var root := Node3D.new()
 	parent.add_child(root)
 	root.position = top
@@ -59,6 +61,42 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 	if type not in PAD_SIZED:
 		chevrons(root, level, Vector3(1.7, 0, 1.7))
 	level_label(root, level, height + 1.2)
+	return root
+
+
+## A hidden trap on its pad: a small, low model with yellow-black hazard stakes at the corners
+## so the owner can find it at home (attackers never see it until it goes off).
+## Spring Mine: a dug-in olive plate with a coiled spring and a red pressure cap.
+## Air Mine: a thin pole with a spiked charge and a blue sensor light on top.
+static func trap(parent: Node3D, type: String, top: Vector3) -> Node3D:
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.position = top
+	var olive := MeshKit.mat(Color(0.33, 0.37, 0.22), 0.8)
+	var steel := MeshKit.mat(Color(0.45, 0.47, 0.5), 0.4, 0.7)
+	var dark := MeshKit.mat(Color(0.16, 0.17, 0.16), 0.7, 0.3)
+	MeshKit.add(root, MeshKit.cyl(1.5, 1.7, 0.08, 24), MeshKit.surface("dirt", Color(0.55, 0.45, 0.33)), Vector3(0, 0.04, 0))
+	if type == "spring":
+		MeshKit.add(root, MeshKit.cyl(0.95, 1.05, 0.22, 24), olive, Vector3(0, 0.15, 0))
+		for i in 4:
+			var coil := MeshKit.add(root, MeshKit.ring(0.45, 0.08), steel, Vector3(0, 0.32 + i * 0.12, 0))
+			coil.rotation.x = 0.08 * (1 if i % 2 == 0 else -1)
+		MeshKit.add(root, MeshKit.cyl(0.38, 0.42, 0.14, 16), MeshKit.mat(Color(0.8, 0.15, 0.1), 0.5), Vector3(0, 0.84, 0))
+	else:
+		MeshKit.add(root, MeshKit.cyl(0.35, 0.45, 0.2, 12), dark, Vector3(0, 0.1, 0))
+		MeshKit.add(root, MeshKit.cyl(0.07, 0.09, 2.2, 8), steel, Vector3(0, 1.3, 0))
+		MeshKit.add(root, MeshKit.sphere(0.5, 14), olive, Vector3(0, 2.55, 0))
+		for a in 6:
+			var out := Vector3(cos(a * TAU / 6.0), 0.3 * (a % 2), sin(a * TAU / 6.0)).normalized()
+			var spike := MeshKit.add(root, MeshKit.cyl(0.0, 0.07, 0.4, 6), steel, Vector3(0, 2.55, 0) + out * 0.6)
+			spike.basis = Basis(Quaternion(Vector3.UP, out))
+		var light := MeshKit.add(root, MeshKit.sphere(0.12, 8), MeshKit.glow(Color(0.35, 0.8, 1.0)), Vector3(0, 3.1, 0))
+		light.set_meta("blink", true)
+	# Hazard stakes so the owner can spot the trap among the plots.
+	var yellow := MeshKit.mat(Color(0.95, 0.75, 0.1), 0.6)
+	for c in [Vector3(1.9, 0, 1.9), Vector3(-1.9, 0, 1.9), Vector3(1.9, 0, -1.9), Vector3(-1.9, 0, -1.9)]:
+		MeshKit.add(root, MeshKit.box(Vector3(0.12, 0.6, 0.12)), yellow, c + Vector3(0, 0.3, 0))
+		MeshKit.add(root, MeshKit.box(Vector3(0.13, 0.12, 0.13)), dark, c + Vector3(0, 0.45, 0))
 	return root
 
 

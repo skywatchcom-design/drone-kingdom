@@ -143,7 +143,7 @@ static func _card(type: String, on_buy: Callable, on_info: Callable) -> Control:
 	meta.add_theme_constant_override("separation", 4)
 	box.add_child(meta)
 	meta.add_child(Icons.rect("clock", 20))
-	var time_label := HomeHud.ink(meta, I18n.t("Instant") if wall else HomeHud.clock(Catalog.build_seconds(type, 1)), 16)
+	var time_label := HomeHud.ink(meta, I18n.t("Instant") if wall or Catalog.is_trap(type) else HomeHud.clock(Catalog.build_seconds(type, 1)), 16)
 	time_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var built := GameState.walls.size() if wall else GameState.count_of(type)
 	var limit := Catalog.wall_limit(GameState.hq_level()) if wall else Catalog.max_count(type, GameState.hq_level())

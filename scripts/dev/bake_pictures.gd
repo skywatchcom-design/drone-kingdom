@@ -19,8 +19,13 @@ func _ready() -> void:
 			types.append_array(Catalog.SHOP_TABS[tab])
 		types.append_array(Catalog.GROUND_ORDER)
 		types.append_array(Catalog.DRONE_ORDER)
+		# `-- --only spring,airmine` bakes just those types.
+		var args := OS.get_cmdline_user_args()
+		if args.has("--only"):
+			types = Array(args[args.find("--only") + 1].split(","))
 		for type: String in types:
-			for level in range(1, Catalog.MAX_LEVEL + 1):
+			# Traps have a single look.
+			for level in range(1, (1 if Catalog.is_trap(type) else Catalog.MAX_LEVEL) + 1):
 				await _bake(dir, "%s_%d" % [type, level], type, level)
 	for id: String in Store.COSMETIC_ORDER:
 		StructureModels.skin = {Store.COSMETICS[id]["slot"]: id}

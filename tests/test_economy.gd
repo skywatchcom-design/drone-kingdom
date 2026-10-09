@@ -109,6 +109,35 @@ func test_structures_move_to_free_pads_only() -> bool:
 	return ok
 
 
+func test_traps_need_hq2_and_no_worker() -> bool:
+	var gs := _fresh_state()
+	gs.coins = 5000
+	var locked: bool = gs.build_block_reason("spring") != ""
+	gs.upgrade(HQ)
+	_skip_time(gs)
+	gs.workers = 0
+	var free := []
+	for c in City.GRID:
+		for r in City.GRID:
+			if free.is_empty() and gs.structure_at([c, r]).is_empty():
+				free = [c, r]
+	var built: bool = gs.build("spring", free)
+	var s: Dictionary = gs.structure_at(free)
+	var ok: bool = locked and built and not gs.is_busy(s) and gs.upgrade_block_reason(free) != ""
+	gs.free()
+	return ok
+
+
+func test_generated_bases_hide_traps_at_hq3() -> bool:
+	var b := Bases.generate(1234, 3)
+	var springs := 0
+	var air := 0
+	for s in b["structures"]:
+		springs += 1 if s["type"] == "spring" else 0
+		air += 1 if s["type"] == "airmine" else 0
+	return springs == Catalog.max_count("spring", 3) and air == Catalog.max_count("airmine", 3)
+
+
 func test_ladder_names_new_types_first() -> bool:
 	var lines: Array = Catalog.ladder_lines(3)
 	return lines.size() > 2 and str(lines[0]).ends_with("(new)") and not str(lines[-1]).ends_with("(new)")

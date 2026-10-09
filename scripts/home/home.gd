@@ -491,7 +491,7 @@ func _open_cell(cell: Array) -> void:
 		var gems := GameState.speedup_cost(cell)
 		actions.append({"icon": "clock", "label": I18n.t("Finish now"), "cost": str(gems), "cost_icon": "gem",
 			"disabled": not (GameState.infinite_coins or GameState.gems >= gems), "call": func() -> void: _do_speed_up(cell)})
-	elif lvl < Catalog.MAX_LEVEL:
+	elif lvl < Catalog.MAX_LEVEL and not Catalog.is_trap(type):
 		actions.append({"icon": "up", "label": I18n.t("Upgrade"), "cost": HomeHud._thousands(Catalog.upgrade_cost(type, lvl)),
 			"cost_icon": "coin", "call": func() -> void: _open_upgrade(cell)})
 	var own := _own_action(type, cell)
@@ -658,11 +658,13 @@ func _open_info(type: String, lvl: int, cell: Array) -> void:
 	var rows := []
 	if type == "wall":
 		rows.append([I18n.t("Health"), str(int(Catalog.wall_hp(lvl)))])
+	elif Catalog.is_trap(type):
+		rows.append_array(_stat_lines(type, lvl))
 	else:
 		rows.append([I18n.t("Health"), str(int(Catalog.structure_hp(type, lvl)))])
 		rows.append_array(_stat_lines(type, lvl))
-	if Catalog.is_defense(type):
-		var vs: Dictionary = Catalog.DEFENSES[type].get("vs", {})
+	if Catalog.is_defense(type) or Catalog.is_trap(type):
+		var vs: Dictionary = (Catalog.TRAPS if Catalog.is_trap(type) else Catalog.DEFENSES)[type].get("vs", {})
 		var names := {"soldier": I18n.t("Soldiers"), "tank": I18n.t("Tanks"), "air": I18n.t("Drones")}
 		var strong := []
 		var weak := []
@@ -1197,6 +1199,10 @@ func _stat_lines(type: String, lvl: int) -> Array:
 			return [[I18n.t("Training speed"), "x%.2f" % (1.0 + 0.25 * (lvl - 1))]]
 		"support":
 			return [[I18n.t("Slots"), str(Catalog.support_slots(lvl))]]
+		"spring", "airmine":
+			var t: Dictionary = Catalog.TRAPS[type]
+			return [[I18n.t("Damage"), str(int(t["damage"]))], [I18n.t("Goes off within"), I18n.t("%.1f m") % t["trigger"]],
+				[I18n.t("Seen by attackers"), I18n.t("Only when it goes off")]]
 	var st := Catalog.defense_stats(type, lvl)
 	var lines := [[I18n.t("Range"), I18n.t("%.1f m") % st["radius"]]]
 	if st.has("dps"):

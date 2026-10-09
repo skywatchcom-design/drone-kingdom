@@ -37,6 +37,8 @@ const INFO := {
 	"aa": "Shoots drones out of the sky. Weak against anything on the ground.",
 	"mortar": "Lobs rounds that burst among groups of soldiers. Can't hit anything close or in the air.",
 	"jammer": "Scrambles drones inside its field so they drift and slow down.",
+	"spring": "Hidden in the ground. Throws back soldiers who step near it. Attackers don't see it.",
+	"airmine": "Hidden on a pole. Blows up the first drone that flies close. Attackers don't see it.",
 }
 
 ## The Shop's tabs and what each one sells, in order.
@@ -44,7 +46,7 @@ const SHOP_ORDER := ["army", "resources", "defenses", "walls"]
 const SHOP_TABS := {
 	"army": ["camp", "quarters", "garage", "hangar", "support"],
 	"resources": ["generator", "storage", "pump", "tank"],
-	"defenses": ["mg", "at", "aa", "mortar", "jammer"],
+	"defenses": ["mg", "at", "aa", "mortar", "jammer", "spring", "airmine"],
 	"walls": ["wall"],
 }
 
@@ -65,6 +67,8 @@ const SHORT := {
 	"aa": "Shoots down drones.",
 	"mortar": "Hits groups of soldiers from afar.",
 	"jammer": "Scrambles drones in its field.",
+	"spring": "Hidden trap against soldiers.",
+	"airmine": "Hidden trap against drones.",
 	"infantry": "Cheap and quick; they come in numbers.",
 	"engineers": "Blow holes in walls and plant charges.",
 	"armor": "Very tough; takes out defenses first.",
@@ -99,9 +103,20 @@ const BUILDINGS := {
 	"support": {"name": "Support Base", "cost": 400},
 }
 
+## Hidden traps (approved sketch FXGoTcv7xRzZbR5GDqE6S3): each takes a free pad, costs coins only,
+## needs no worker or build time, and stays invisible to attackers until it goes off. They
+## re-arm by themselves after every battle. trigger: how close a unit must come; radius: the
+## blast; vs: damage multiplier for soldiers, tanks and drones.
+const TRAPS := {
+	"spring": {"name": "Spring Mine", "cost": 150, "trigger": 2.4, "radius": 3.2, "damage": 140.0,
+		"vs": {"soldier": 1.0, "tank": 0.3, "air": 0.0}},
+	"airmine": {"name": "Air Mine", "cost": 250, "trigger": 5.0, "radius": 2.5, "damage": 420.0,
+		"vs": {"soldier": 0.0, "tank": 0.0, "air": 1.0}},
+}
+
 ## Order of the build menu.
 const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar", "support",
-	"mg", "at", "aa", "mortar", "jammer"]
+	"mg", "at", "aa", "mortar", "jammer", "spring", "airmine"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
 const LIMITS := {
@@ -120,6 +135,8 @@ const LIMITS := {
 	"aa": [1, 1, 2, 2, 3],
 	"mortar": [0, 0, 1, 1, 2],
 	"jammer": [0, 0, 1, 1, 2],
+	"spring": [0, 2, 2, 3, 4],
+	"airmine": [0, 0, 1, 2, 2],
 }
 
 ## prefers: which structures a unit goes for first ("any", "loot", "defense", or "fence"
@@ -163,6 +180,10 @@ static func is_defense(type: String) -> bool:
 	return DEFENSES.has(type)
 
 
+static func is_trap(type: String) -> bool:
+	return TRAPS.has(type)
+
+
 static func make_defense(type: String) -> Defense:
 	match type:
 		"mg":
@@ -186,6 +207,8 @@ static func display_name(type: String) -> String:
 		return I18n.t(ABILITIES[type]["name"])
 	if DEFENSES.has(type):
 		return I18n.t(DEFENSES[type]["name"])
+	if TRAPS.has(type):
+		return I18n.t(TRAPS[type]["name"])
 	if BUILDINGS.has(type):
 		return I18n.t(BUILDINGS[type]["name"])
 	if DRONES.has(type):
@@ -248,7 +271,10 @@ static func train_fuel(type: String) -> int:
 
 
 static func build_cost(type: String) -> int:
-	return int((DEFENSES[type] if DEFENSES.has(type) else BUILDINGS[type])["cost"])
+	for table: Dictionary in [DEFENSES, TRAPS, BUILDINGS]:
+		if table.has(type):
+			return int(table[type]["cost"])
+	return 0
 
 
 ## Cost to go from `level` to `level + 1`.
