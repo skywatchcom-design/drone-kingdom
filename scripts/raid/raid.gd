@@ -563,7 +563,8 @@ func _check_traps(alive_drones: Array, alive_ground: Array) -> void:
 
 func _spring_trap(trap: Dictionary, def: Dictionary, victims: Array, air: bool) -> void:
 	var pos: Vector3 = trap["pos"]
-	var vs: Dictionary = def["vs"]	var model := StructureModels.trap(level, trap["type"], city.roof_top(trap["cell"]))
+	var vs: Dictionary = def["vs"]
+	var model := StructureModels.trap(level, trap["type"], city.roof_top(trap["cell"]))
 	model.scale = Vector3.ONE * 0.2
 	create_tween().tween_property(model, "scale", Vector3.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_float_text(pos + Vector3(0, 4.0, 0), I18n.t("Trap!"), Color(1.0, 0.8, 0.2))
