@@ -204,4 +204,14 @@ generated base), saved layouts, camo net, medic / jammer drone, season pass.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
 players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
 waiting for tomorrow). Sketch first.
+Approved 9.10.2026: the app icon, a realistic Gemini-app picture (drone over an advancing squad, "1 wide" crop;
+comparison at https://claude.ai/artifact/3HnFRCZDriQd6awAMRSRh9). Files in `assets/icon` (`icon.png` is the project/web
+icon; Android adaptive layers keep the whole picture inside the 72/108 visible zone, background is a blurred copy),
+Play listing icon `docs/store/play_icon_512.png`. The API's free tier cannot make images (limit 0), so the owner makes
+pictures in the Gemini app from prompts we write. Android preset (`export_presets.cfg`, arm64, AAB, gradle build):
+release export takes the keystore from env vars `GODOT_ANDROID_KEYSTORE_RELEASE_PATH|USER|PASSWORD`
+(`tmp/skywatch-release.keystore`, alias `skywatch`, password in `tmp/android_keystore_password.txt`).
+Google Play: the identity check is pending (9.10.2026). A new personal account needs a 14-day closed test with 12 testers
+before production. Still to prepare: feature graphic 1024x500 and store screenshots (from a developed showcase base,
+no dev coins), Data safety and content rating answers, a web page for account deletion.
 Still waiting on the owner: Apple Developer and Google Play accounts.
