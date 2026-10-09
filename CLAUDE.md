@@ -187,6 +187,13 @@ pads, used_cells)`: free pads are subtle plots with white corner stakes (only bu
 ground under buildings and grass patches (`_add_patches`), and a camp outside the jeep's lap (`_add_camp`: lamp
 posts with "lamp" bulbs BaseLife flickers, crates, barrels, sandbags, water tower, camo store, gate booth and
 barrier). BaseLife smoke and jeep dust use `Fx.smoke` soft puffs.
+Approved 9.10.2026: strategy and pay-to-progress sketch (https://claude.ai/artifact/FXGoTcv7xRzZbR5GDqE6S3), rules in
+GDD §10/§10א. In game (round 1): every structure has a Move action (`GameState.move`, free; `_start_move` shows all
+defense ranges), range rings show what a defense hits (`Defense.hits_air`: green ground, blue air, red mortar dead
+zone), target badges `Icons.target(type)` (`t_any|loot|defense|fence`) on battle cards and Army cards, picking a card
+says what it goes for (`Catalog.target_text`), a dashed line after each deploy to the first target (`raid._show_aim`),
+and a Command Tower "Levels" window (`ShopUI.hq_ladder`, `Catalog.ladder_lines`). Home flags `--screenshot-ladder|move`.
+Still to build from that sketch: traps, defense log + replay, saved layouts, medic / jammer drone, season pass.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
 players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
 waiting for tomorrow). Sketch first.

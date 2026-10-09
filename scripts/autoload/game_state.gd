@@ -781,6 +781,18 @@ func hire_worker() -> bool:
 	return true
 
 
+## Moves a structure to a free pad, for free (base layout is part of the strategy).
+func move(from: Array, to: Array) -> bool:
+	var s := structure_at(from)
+	if s.is_empty() or not structure_at(to).is_empty():
+		return false
+	if int(to[0]) < 0 or int(to[1]) < 0 or int(to[0]) >= City.GRID or int(to[1]) >= City.GRID:
+		return false
+	s["cell"] = [int(to[0]), int(to[1])]
+	save_game()
+	return true
+
+
 func remove(cell: Array) -> bool:
 	var s := structure_at(cell)
 	if s.is_empty() or s["type"] == "hq" or is_busy(s):

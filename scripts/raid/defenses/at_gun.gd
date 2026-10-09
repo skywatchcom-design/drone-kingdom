@@ -84,7 +84,3 @@ func tick(delta: float, units: Array) -> void:
 		Fx.boom(fx, aim, 0.9)
 		if is_instance_valid(target):
 			target.damage(damage))
-
-
-func _ring_color() -> Color:
-	return Color(1.0, 0.5, 0.25)

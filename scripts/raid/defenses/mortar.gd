@@ -59,7 +59,3 @@ func tick(delta: float, units: Array) -> void:
 		for u: Unit in units:
 			if is_instance_valid(u) and not u.dead and Vector2(u.global_position.x - land.x, u.global_position.z - land.z).length() <= splash:
 				u.damage(damage * factor(u)))
-
-
-func _ring_color() -> Color:
-	return Color(1.0, 0.85, 0.4)

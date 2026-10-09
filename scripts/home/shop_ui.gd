@@ -309,6 +309,10 @@ static func _unit_card(type: String, on_train: Callable, on_cancel: Callable, on
 	HomeHud.ink(meta, str(int(def["housing"])), 15)
 	meta.add_child(Icons.rect("clock", 18))
 	HomeHud.ink(meta, HomeHud.clock(Catalog.train_seconds(type, GameState.camp_level())), 15)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meta.add_child(spacer)
+	meta.add_child(Icons.rect(Icons.target(type), 22))
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 4)
 	box.add_child(buttons)
@@ -355,6 +359,50 @@ static func _unit_card(type: String, on_train: Callable, on_cancel: Callable, on
 	Tutorial.tag(train, "train_" + type)
 	buttons.add_child(train)
 	return card
+
+
+# ---------------------------------------------------------------- command tower ladder
+
+## What every Command Tower level opens (approved sketch FXGoTcv7xRzZbR5GDqE6S3): one column
+## per level, the player's level in green and the next one framed in gold, so there is always a
+## clear goal. New structure types are named first, then the extra copies.
+static func hq_ladder(current: int) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	box.add_child(head)
+	var pic := picture("hq", clampi(current, 1, Catalog.MAX_LEVEL))
+	pic.custom_minimum_size = Vector2(84, 84)
+	head.add_child(pic)
+	var titles := VBoxContainer.new()
+	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	titles.alignment = BoxContainer.ALIGNMENT_CENTER
+	head.add_child(titles)
+	HomeHud.make_label(titles, I18n.t("Command Tower levels"), 30)
+	HomeHud.make_label(titles, I18n.t("Each level also raises the top level of every other building."), 18, Color(0.85, 0.88, 0.8))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(row)
+	for lvl in range(1, Catalog.MAX_LEVEL + 1):
+		var next := lvl == current + 1
+		var color := Color(0.8, 0.9, 0.72) if lvl == current else (Color(1.0, 0.95, 0.8) if next else CARD_GREY)
+		var col := PanelContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_theme_stylebox_override("panel", HomeHud._box(color, 12, Color(0.95, 0.72, 0.18) if next else CARD_LINE, 4 if next else 2))
+		row.add_child(col)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 4)
+		col.add_child(v)
+		HomeHud.ink(v, I18n.t("Lv %d") % lvl, 24)
+		var state := I18n.t("Open") if lvl < current else (I18n.t("Your level") if lvl == current \
+			else (I18n.t("Next goal") if next else I18n.t("Later")))
+		HomeHud.ink(v, state, 15, Color(0.3, 0.45, 0.2) if lvl <= current else Color(0.45, 0.4, 0.3))
+		for line in Catalog.ladder_lines(lvl):
+			var l := HomeHud.ink(v, "• " + str(line), 15)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return box
 
 
 # ---------------------------------------------------------------- upgrade and info

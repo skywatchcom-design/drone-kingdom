@@ -14,7 +14,11 @@ var head_y := 1.5
 var stats := {}
 var level := 1
 var disabled := false
-var _ring: MeshInstance3D
+const GROUND_RING := Color(0.45, 0.95, 0.35)
+const AIR_RING := Color(0.4, 0.75, 1.0)
+const DEAD_ZONE := Color(1.0, 0.3, 0.25)
+
+var _ring: Node3D
 ## Everything visible, scaled; subclasses build into it.
 var model: Node3D
 
@@ -35,8 +39,20 @@ func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 	MeshKit.grime_root = null
 	head_y = roof_y + _head_height() * model.scale.y
 	StructureModels.chevrons(model, level, Vector3(1.85, 0, 1.85))
-	_ring = MeshKit.add(self, MeshKit.ring(radius, 0.22), MeshKit.glow(_ring_color(), 0.45), Vector3(0, roof_y + 0.15, 0))
-	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The range shows what the defense hits (approved sketch FXGoTcv7xRzZbR5GDqE6S3): green for
+	# the ground, blue for the air, with the mortar's dead zone in red.
+	_ring = Node3D.new()
+	_ring.position.y = roof_y + 0.15
+	add_child(_ring)
+	var color := _ring_color()
+	MeshKit.add(_ring, MeshKit.ring(radius, 0.3), MeshKit.glow(color, 0.7))
+	MeshKit.add(_ring, MeshKit.cyl(radius, radius, 0.02, 48), MeshKit.glow(color, 0.12), Vector3(0, -0.1, 0))
+	var min_r := float(stats.get("min_radius", 0.0))
+	if min_r > 0.0:
+		MeshKit.add(_ring, MeshKit.ring(min_r, 0.25), MeshKit.glow(DEAD_ZONE, 0.8))
+		MeshKit.add(_ring, MeshKit.cyl(min_r, min_r, 0.02, 32), MeshKit.glow(DEAD_ZONE, 0.25), Vector3(0, -0.05, 0))
+	for m in _ring.get_children():
+		(m as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Hidden until the player taps this defense (owner feedback: rings everywhere are noise).
 	_ring.visible = false
 	StructureModels.level_label(self, level, head_y + 2.6)
@@ -44,6 +60,12 @@ func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 
 func show_range(on: bool) -> void:
 	_ring.visible = on
+
+
+## True when this defense is meant for drones (AA, jammer) rather than soldiers and tanks.
+func hits_air() -> bool:
+	var vs: Dictionary = stats.get("vs", {})
+	return float(vs.get("air", 1.0 if vs.is_empty() else 0.0)) >= 0.9
 
 
 func flat_distance(p: Vector3) -> float:
@@ -127,7 +149,7 @@ func _head_height() -> float:
 
 
 func _ring_color() -> Color:
-	return Color(1.0, 0.45, 0.3)
+	return AIR_RING if hits_air() else GROUND_RING
 
 
 ## Battle effects go into the level, beside the defense.

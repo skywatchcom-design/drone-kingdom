@@ -203,6 +203,18 @@ static func unit_def(type: String) -> Dictionary:
 	return GROUND[type] if GROUND.has(type) else DRONES[type]
 
 
+## What a unit goes for first, in words, for battle cards and unit info.
+static func target_text(type: String) -> String:
+	match str(unit_def(type).get("prefers", "any")):
+		"loot":
+			return I18n.t("Generators, silos and the Command Tower")
+		"defense":
+			return I18n.t("Defenses first")
+		"fence":
+			return I18n.t("Walls, then buildings")
+	return I18n.t("Whatever is closest")
+
+
 ## The building that unlocks and upgrades this unit: "garage" or "hangar".
 static func unit_lab(type: String) -> String:
 	return "garage" if GROUND.has(type) else "hangar"
@@ -246,6 +258,25 @@ static func upgrade_cost(type: String, level: int) -> int:
 
 static func max_count(type: String, hq_level: int) -> int:
 	return int(LIMITS[type][clampi(hq_level, 1, MAX_LEVEL) - 1])
+
+
+## What Command Tower level `lvl` adds over the level below it: new structure types first
+## ("Mortar (new)"), then extra copies ("MG Nest x2"). Level 1 lists the starting set.
+static func ladder_lines(lvl: int) -> Array:
+	var fresh := []
+	var more := []
+	for type in BUILD_ORDER:
+		var now := max_count(type, lvl)
+		var before := max_count(type, lvl - 1) if lvl > 1 else 0
+		if now <= before:
+			continue
+		if lvl == 1:
+			fresh.append(display_name(type))
+		elif before == 0:
+			fresh.append(I18n.t("%s (new)") % display_name(type))
+		else:
+			more.append("%s x%d" % [display_name(type), now])
+	return fresh + more
 
 
 ## Defense stats grow with level: wider range, more damage, faster reload, bigger blasts.

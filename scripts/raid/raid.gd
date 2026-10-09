@@ -232,6 +232,7 @@ func _start() -> void:
 func _on_unit_selected(type: String) -> void:
 	selected = type
 	hud.update_army(army, drone_names, selected)
+	hud.set_status("%s: %s" % [Catalog.display_name(type), Catalog.target_text(type)])
 
 
 func _first_available() -> String:
@@ -360,6 +361,7 @@ func _deploy(type: String, p: Vector3) -> void:
 	d.position = p
 	drones.append(d)
 	d.crashed.connect(func() -> void: Audio.play("drone_down", -4.0))
+	_show_aim(type, p)
 	Audio.play("deploy", -3.0)
 	Audio.buzz(15)
 	started = true
@@ -397,6 +399,7 @@ func _deploy_ground(type: String, p: Vector3) -> void:
 		u.crashed.connect(func() -> void:
 			Audio.play("tank_down" if u.is_tank() else "soldier_down", -4.0)
 			u.knock_out(level))
+	_show_aim(type, p)
 	Audio.play("deploy", -3.0)
 	Audio.buzz(15)
 	started = true
@@ -404,6 +407,52 @@ func _deploy_ground(type: String, p: Vector3) -> void:
 		selected = _first_available()
 	hud.update_army(army, drone_names, selected)
 	hud.set_status("")
+
+
+## A dashed line on the ground from where a card was sent in to what it goes for first, in the
+## color of its target badge, with a ring round the target (approved sketch
+## FXGoTcv7xRzZbR5GDqE6S3). Engineers point at the wall they will breach. Fades after a moment.
+func _show_aim(type: String, p: Vector3) -> void:
+	var prefers := str(Catalog.unit_def(type).get("prefers", "any"))
+	var from := Vector3(p.x, 0.0, p.z)
+	var goal: Vector3
+	var ring := 3.2
+	if flare_left > 0.0:
+		goal = flare_pos
+	else:
+		var i := RaidRules.pick_target("any" if prefers == "fence" else prefers, from, targets)
+		if i < 0:
+			return
+		goal = targets[i]["top"]
+		if prefers == "fence":
+			var k := _first_wall_on_route(from, goal)
+			if k != "":
+				goal = wall_index[k]["center"]
+				ring = 2.0
+	goal.y = 0.0
+	var span := goal - from
+	var length := span.length()
+	if length < 2.0:
+		return
+	var dir := span / length
+	var mat := MeshKit.glow(Icons.TARGET_COLORS.get(prefers, Color.WHITE), 0.9)
+	var aim := Node3D.new()
+	level.add_child(aim)
+	var basis := Basis(Vector3.UP, atan2(dir.x, dir.z))
+	var dash := MeshKit.box(Vector3(0.35, 0.05, 1.0))
+	var xfs := []
+	var d := 1.0
+	while d < length - ring:
+		xfs.append(Transform3D(basis, from + dir * d + Vector3(0, 0.35, 0)))
+		d += 1.8
+	var line := MeshKit.multi(aim, dash, mat, xfs)
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var circle := MeshKit.add(aim, MeshKit.ring(ring, 0.25), mat, goal + Vector3(0, 0.4, 0))
+	circle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var fade := create_tween()
+	fade.tween_interval(1.2)
+	fade.tween_property(mat, "albedo_color:a", 0.0, 0.8)
+	fade.tween_callback(aim.queue_free)
 
 
 func _stats(type: String) -> Dictionary:
@@ -952,7 +1001,7 @@ func _engineer_walls(u: GroundUnit, delta: float, alive_ground: Array) -> void:
 			if u.target < 0:
 				u.breach_state = "done"
 				return
-			var k := _first_wall_on_route(u, targets[u.target]["top"])
+			var k := _first_wall_on_route(u.position, targets[u.target]["top"])
 			if k == "":
 				u.breach_state = "done"
 				return
@@ -998,9 +1047,10 @@ func _engineer_walls(u: GroundUnit, delta: float, alive_ground: Array) -> void:
 				u.breach_state = ""
 
 
-## The first standing wall the engineer's cheap-breach route to `goal` goes through, or "".
-func _first_wall_on_route(u: GroundUnit, goal: Vector3) -> String:
-	var at := Walls.cell_of(u.position)
+## The first standing wall an engineer's cheap-breach route from `from` to `goal` goes
+## through, or "".
+func _first_wall_on_route(from: Vector3, goal: Vector3) -> String:
+	var at := Walls.cell_of(from)
 	for next: Vector2i in Walls.find_path(at, Walls.cell_of(goal), standing_walls, ENGINEER_DETOUR):
 		var k := Walls.key(Walls.between(at, next))
 		if standing_walls.has(k):

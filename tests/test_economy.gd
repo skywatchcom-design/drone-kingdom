@@ -92,6 +92,28 @@ func test_command_tower_cannot_be_removed() -> bool:
 	return not removed
 
 
+func test_structures_move_to_free_pads_only() -> bool:
+	var gs := _fresh_state()
+	var other: Array = gs.structures[1]["cell"]
+	var into_taken: bool = gs.move(HQ, other)
+	var off_grid: bool = gs.move(HQ, [City.GRID, 0])
+	var free := []
+	for c in City.GRID:
+		for r in City.GRID:
+			if free.is_empty() and gs.structure_at([c, r]).is_empty():
+				free = [c, r]
+	var moved: bool = gs.move(HQ, free)
+	var ok: bool = not into_taken and not off_grid and moved \
+		and gs.structure_at(free)["type"] == "hq" and gs.structure_at(HQ).is_empty()
+	gs.free()
+	return ok
+
+
+func test_ladder_names_new_types_first() -> bool:
+	var lines: Array = Catalog.ladder_lines(3)
+	return lines.size() > 2 and str(lines[0]).ends_with("(new)") and not str(lines[-1]).ends_with("(new)")
+
+
 func test_building_costs_coins_and_occupies_roof() -> bool:
 	var gs := _fresh_state()
 	gs.coins = 1000

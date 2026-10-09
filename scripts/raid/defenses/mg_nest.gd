@@ -74,7 +74,3 @@ func tick(delta: float, units: Array) -> void:
 		Fx.tracer(fx, from, hit, Color(1.0, 0.82, 0.29), 0.05, 0.06)
 	Audio.play("rifle", -10.0, 0.05)
 	target.damage(damage)
-
-
-func _ring_color() -> Color:
-	return Color(1.0, 0.7, 0.3)

@@ -44,7 +44,10 @@ var open_sheet := ""
 var placing := "":
 	set(value):
 		placing = value
-		_show_free_pads(value != "")
+		_show_free_pads(value != "" or not moving.is_empty())
+		_show_coverage(Catalog.is_defense(value))
+## Cell of the structure being moved, waiting for a free pad to be tapped, or [].
+var moving: Array = []
 ## Glowing squares on every free pad while a building waits to be placed.
 var _free_pads: MultiMeshInstance3D
 var _free_pad_mat: StandardMaterial3D
@@ -143,6 +146,13 @@ func _ready() -> void:
 		_open_store()
 	elif args.has("--screenshot-skins"):
 		_open_skins()
+	elif args.has("--screenshot-ladder"):
+		_open_hq_ladder()
+	elif args.has("--screenshot-move"):
+		for s in GameState.structures:
+			if Catalog.is_defense(s["type"]):
+				_start_move(s["cell"])
+				break
 	elif args.has("--screenshot-base"):
 		pass
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
@@ -351,6 +361,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			or cam.unproject_position(Walls.center(edge)).distance_to(touch.position) < cam.unproject_position(city.roof_top(cell)).distance_to(touch.position)):
 		_select_wall(edge)
 		return
+	if not moving.is_empty():
+		var from := moving
+		_end_move()
+		if not cell.is_empty() and GameState.structure_at(cell).is_empty() and GameState.move(from, cell):
+			Audio.play("build", -6.0)
+			_rebuild()
+			_open_cell(cell)
+			return
 	if placing != "" and not cell.is_empty() and GameState.structure_at(cell).is_empty():
 		var type := placing
 		placing = ""
@@ -479,6 +497,9 @@ func _open_cell(cell: Array) -> void:
 	var own := _own_action(type, cell)
 	if not own.is_empty():
 		actions.append(own)
+	if type == "hq":
+		actions.append({"icon": "star", "label": I18n.t("Levels"), "call": _open_hq_ladder})
+	actions.append({"icon": "move", "label": I18n.t("Move"), "call": func() -> void: _start_move(cell)})
 	var title := "%s  (%s)" % [Catalog.display_name(type), I18n.t("Lv %d") % lvl]
 	if GameState.is_busy(s):
 		title += "  ·  " + HomeHud.clock(GameState.seconds_left(s))
@@ -523,6 +544,34 @@ func _show_range(cell: Array) -> void:
 	var at := City.cell_pos(cell) if not cell.is_empty() else Vector3(INF, 0, INF)
 	for d in defenses:
 		d.show_range(Vector2(d.position.x - at.x, d.position.z - at.z).length() < 1.0)
+
+
+## Shows every defense's range at once (placing or moving a defense), so gaps are easy to see.
+func _show_coverage(on: bool) -> void:
+	for d in defenses:
+		d.show_range(on)
+
+
+## Picks up a structure: free pads blink and every defense range shows; the next tap on a free
+## pad puts it there, any other tap puts it back.
+func _start_move(cell: Array) -> void:
+	var s := GameState.structure_at(cell) if not cell.is_empty() else {}
+	if s.is_empty():
+		return
+	hud.hide_actions()
+	marker.visible = true
+	marker.position = city.roof_top(cell) + Vector3(0, 0.5, 0)
+	moving = cell
+	placing = ""
+	_show_coverage(true)
+	hud.toast(I18n.t("Tap a free pad for the %s") % Catalog.display_name(s["type"]))
+
+
+func _end_move() -> void:
+	moving = []
+	marker.visible = false
+	_show_free_pads(false)
+	_show_coverage(false)
 
 
 ## Blinks every free pad while a building waits to be placed, so it is clear where it can go.
@@ -1161,6 +1210,13 @@ func _stat_lines(type: String, lvl: int) -> Array:
 	return lines
 
 
+func _open_hq_ladder() -> void:
+	open_cell = []
+	open_sheet = ""
+	marker.visible = false
+	hud.show_modal(ShopUI.hq_ladder(GameState.hq_level()), Vector2(1180, 560))
+
+
 ## What the next Command Tower level allows that this one doesn't, e.g. "Net Launcher +1".
 func _hq_unlocks(lvl: int) -> String:
 	var parts := []
@@ -1217,9 +1273,7 @@ func _open_unit_info(type: String) -> void:
 	if st.has("range"):
 		rows.append([I18n.t("Range"), str(snappedf(float(st["range"]), 0.1))])
 	rows.append([I18n.t("Army space"), str(int(def["housing"]))])
-	var targets := {"any": I18n.t("Whatever is closest"), "loot": I18n.t("Generators, silos and the Command Tower"),
-		"defense": I18n.t("Defenses first"), "fence": I18n.t("Walls, then buildings")}
-	rows.append([I18n.t("Targets"), targets.get(def.get("prefers", "any"), "")])
+	rows.append([I18n.t("Targets"), Catalog.target_text(type)])
 	var back := {"text": I18n.t("Back"), "call": _open_army}
 	var title := Catalog.display_name(type) + "  ·  " + I18n.t("Lv %d") % lvl
 	hud.show_modal(ShopUI.info_window(title, type, lvl, rows, I18n.t(def["role"]), [back]), Vector2(900, 520))

@@ -86,7 +86,3 @@ func tick(delta: float, units: Array) -> void:
 		Fx.flash(fx, hit, 0.5, Color(1, 1, 1))
 	Audio.play("shot_scout", -12.0, 0.05)
 	target.damage(damage)
-
-
-func _ring_color() -> Color:
-	return Color(0.4, 0.8, 1.0)

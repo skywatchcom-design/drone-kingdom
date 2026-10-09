@@ -249,6 +249,14 @@ func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dic
 		strip.size = Vector2(CARD.x, 24)
 		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(strip)
+		# What the unit goes for first, in the top corner (approved sketch FXGoTcv7xRzZbR5GDqE6S3).
+		var aim := TextureRect.new()
+		aim.texture = Icons.tex(Icons.target(type), 64)
+		aim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		aim.size = Vector2(30, 30)
+		aim.position = Vector2(CARD.x - 33, 3)
+		aim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(aim)
 		var name_label := _card_label(strip, names[type], 13, Vector2.ZERO)
 		name_label.size = strip.size
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -29,9 +29,25 @@ const SVG := {
 	"tasks": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="19" rx="2.5" fill="none" stroke="#ffffff" stroke-width="2.2"/><rect x="8.5" y="1.5" width="7" height="4" rx="1.2" fill="#ffffff"/><path d="M8 11l2 2 4-4M8 17h8" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
 	"brush": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 3l7 7-8 8-7-7z" fill="#e9a21f" stroke="#7a4a00" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 11l-3 3c-1 1-1 3 0 4l1 1c1 1 3 1 4 0l3-3" fill="#5fae3b" stroke="#24521a" stroke-width="1.5"/><path d="M9 7l8 8" stroke="#7a4a00" stroke-width="1.2"/></svg>',
 	"star": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2l3 7 7 .6-5.4 4.7 1.7 7.2L12 17.8 5.7 21.5l1.7-7.2L2 9.6 9 9z" fill="#f2b41f" stroke="#7a4a00" stroke-width="1.2"/></svg>',
+	"move": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2l3.5 4h-2.5v4h4V7.5L21 11l-4 3.5V12h-4v4h2.5L12 20l-3.5-4H11v-4H7v2.5L3 11l4-3.5V10h4V6H8.5z" fill="#2f6fe0" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+	# What a unit goes for first (approved sketch FXGoTcv7xRzZbR5GDqE6S3): a badge in the
+	# target's color with a white sign.
+	"t_any": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#5b6670" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="5" fill="none" stroke="#ffffff" stroke-width="2"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#ffffff" stroke-width="2"/></svg>',
+	"t_loot": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#c98a00" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="6" fill="#ffd34d" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="#c98a00" stroke-width="1.4"/></svg>',
+	"t_defense": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#c0392b" stroke="#ffffff" stroke-width="1.6"/><path d="M12 5l6 2.2v4.6c0 3.6-2.8 5.8-6 7.2-3.2-1.4-6-3.6-6-7.2V7.2z" fill="#ffffff"/></svg>',
+	"t_fence": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#a0642a" stroke="#ffffff" stroke-width="1.6"/><path d="M5 8h6v3.5H5zM13 8h6v3.5h-6zM8 13h8v3.5H8z" fill="#ffffff"/></svg>',
 }
 
+## Colors of the target badges, for lines and rings drawn in the world.
+const TARGET_COLORS := {"any": Color(0.6, 0.66, 0.72), "loot": Color(1.0, 0.75, 0.15),
+	"defense": Color(0.95, 0.3, 0.25), "fence": Color(0.85, 0.55, 0.25)}
+
 static var _cache := {}
+
+
+## The badge icon for what unit `type` attacks first.
+static func target(type: String) -> String:
+	return "t_" + str(Catalog.unit_def(type).get("prefers", "any"))
 
 
 ## The icon `name` as a texture `size` pixels square.

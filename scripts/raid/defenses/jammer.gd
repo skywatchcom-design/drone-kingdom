@@ -48,7 +48,3 @@ func tick(delta: float, units: Array) -> void:
 func disable() -> void:
 	super.disable()
 	_field.visible = false
-
-
-func _ring_color() -> Color:
-	return Color(0.65, 0.4, 1.0)
