@@ -199,6 +199,17 @@ take a free pad, look like `StructureModels.trap`, and re-arm by themselves. In 
 holds them hidden (their pad looks empty) until a unit comes within `trigger`, then `_spring_trap` pops the model and
 blows. Generated enemy bases get traps on their own RNG (`Bases.generate`). Raid flag `--enemy-hq N`; picture bake
 `bake_pictures.tscn -- --only spring,airmine`.
+Approved 10.2026 (owner, 9-10.10.2026): "general" attack planning, built on branch `feature/general-strategy`
+(not merged to main yet). Sketches: target marking https://claude.ai/artifact/XPhDU6EL4YeN3Qjka2A2P6, Planning HQ window
+https://claude.ai/artifact/3ybncHdm6sxxuWetMYLJBg (direction B "orders"). Rules the owner chose: it opens only at Command Tower 4
+through a new building **Planning HQ** (Hebrew: מטה תכנון; `Catalog.LIMITS["planning"] = [0,0,0,1,1]`, 600 coins, up to 5 levels),
+so new players never see it; saved plans (slots = building level), plans survive upgrades, and a Syndicate mission remembers the
+orders used there last. A plan = one order per force (`Catalog.PLAN_UNITS`: infantry, armor, courier, scout, heavy; engineers keep
+breaching) from `Catalog.PLAN_TARGETS` (auto, defense, loot, hq). In game (save v12): `GameState.plans/plan_active/campaign_plans`
+(`set_plan_order`, `battle_orders`, `mission_orders`), `RaidRules.pick_target` takes "hq", `PlanningUI` window (tap the marked word to
+cycle the order), plan buttons over the battle cards until the first unit is sent (`RaidHud.set_plans`), order badge `Icons.target(type,
+order)` and `raid._prefers_of`. Later tools by building level (not built yet): intel preview, timing/waves, decoys. Dev: home
+`--fresh --tutorial -1 --screenshot-planning`, raid `--planning-demo` and `--orders armor:hq,courier:loot`.
 Still to build from that sketch: defense log + replay (needs real PvP on Supabase first: today every raid is against a
 generated base), saved layouts, camo net, medic / jammer drone, season pass.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes

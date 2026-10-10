@@ -15,7 +15,7 @@ const DEFENSE_HEAD := 4.5
 ## Command Tower in a few, while a lone drone loses a duel with a laser.
 const HP := {
 	"hq": 600.0, "generator": 180.0, "storage": 260.0, "pump": 180.0, "tank": 260.0, "hangar": 220.0,
-	"camp": 260.0, "quarters": 220.0, "garage": 280.0, "support": 300.0,
+	"camp": 260.0, "quarters": 220.0, "garage": 280.0, "support": 300.0, "planning": 280.0,
 	"mg": 460.0, "at": 500.0, "aa": 440.0, "mortar": 420.0, "jammer": 300.0,
 }
 
@@ -32,6 +32,7 @@ const INFO := {
 	"quarters": "Where your trained army waits for the next attack. More quarters and levels fit a bigger army.",
 	"garage": "Unlocks and upgrades infantry, engineers and tanks. Its level caps their levels.",
 	"support": "Prepares air strikes and flares ahead of the attack, and upgrades them. More levels, more slots.",
+	"planning": "Where a commander plans the attack: orders for each force, saved plans, and new tools at higher levels.",
 	"mg": "Fires bursts at soldiers. Weak against tanks and drones.",
 	"at": "Slow, heavy shells that crack tanks open. Weak against soldiers, can't hit drones well.",
 	"aa": "Shoots drones out of the sky. Weak against anything on the ground.",
@@ -44,7 +45,7 @@ const INFO := {
 ## The Shop's tabs and what each one sells, in order.
 const SHOP_ORDER := ["army", "resources", "defenses", "walls"]
 const SHOP_TABS := {
-	"army": ["camp", "quarters", "garage", "hangar", "support"],
+	"army": ["camp", "quarters", "garage", "hangar", "support", "planning"],
 	"resources": ["generator", "storage", "pump", "tank"],
 	"defenses": ["mg", "at", "aa", "mortar", "jammer", "spring", "airmine"],
 	"walls": ["wall"],
@@ -61,6 +62,7 @@ const SHORT := {
 	"garage": "Unlocks and upgrades soldiers and tanks.",
 	"hangar": "Unlocks and upgrades drones.",
 	"support": "Prepares air strikes and flares.",
+	"planning": "Plan the attack and save plans.",
 	"wall": "Blocks soldiers and tanks.",
 	"mg": "Fires bursts at soldiers.",
 	"at": "Heavy shells against tanks.",
@@ -101,6 +103,7 @@ const BUILDINGS := {
 	"quarters": {"name": "Quarters", "cost": 150},
 	"garage": {"name": "Garage", "cost": 300},
 	"support": {"name": "Support Base", "cost": 400},
+	"planning": {"name": "Planning HQ", "cost": 600},
 }
 
 ## Hidden traps (approved sketch FXGoTcv7xRzZbR5GDqE6S3): each takes a free pad, costs coins only,
@@ -115,7 +118,7 @@ const TRAPS := {
 }
 
 ## Order of the build menu.
-const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar", "support",
+const BUILD_ORDER := ["generator", "storage", "pump", "tank", "camp", "quarters", "garage", "hangar", "support", "planning",
 	"mg", "at", "aa", "mortar", "jammer", "spring", "airmine"]
 
 ## How many of each structure the Command Tower allows, by Command Tower level 1..5.
@@ -130,6 +133,7 @@ const LIMITS := {
 	"quarters": [1, 1, 2, 2, 3],
 	"garage": [1, 1, 1, 1, 1],
 	"support": [1, 1, 1, 1, 1],
+	"planning": [0, 0, 0, 1, 1],
 	"mg": [1, 2, 2, 3, 3],
 	"at": [0, 1, 1, 2, 2],
 	"aa": [1, 1, 2, 2, 3],
@@ -227,8 +231,11 @@ static func unit_def(type: String) -> Dictionary:
 
 
 ## What a unit goes for first, in words, for battle cards and unit info.
-static func target_text(type: String) -> String:
-	match str(unit_def(type).get("prefers", "any")):
+static func target_text(type: String, order: String = "auto") -> String:
+	var own := str(unit_def(type).get("prefers", "any"))
+	match own if order == "auto" or own == "fence" else order:
+		"hq":
+			return I18n.t("The Command Tower first")
 		"loot":
 			return I18n.t("Generators, silos and the Command Tower")
 		"defense":
@@ -425,6 +432,36 @@ const ABILITY_ORDER := ["flare", "strike"]
 ## Slots in a Support Base of this level (0 without one).
 static func support_slots(level: int) -> int:
 	return 0 if level <= 0 else level + 1
+
+
+## Attack plans (Planning HQ, opens at Command Tower 4): an order per force. "auto" keeps the
+## unit's own habit; the others make it go for defenses, loot or the Command Tower first.
+## Engineers keep breaching the fence, so they take no order yet.
+const PLAN_TARGETS := ["auto", "defense", "loot", "hq"]
+const PLAN_UNITS := ["infantry", "armor", "courier", "scout", "heavy"]
+
+
+## What an order is called on screen.
+static func plan_target_name(order: String) -> String:
+	match order:
+		"defense":
+			return I18n.t("Defenses")
+		"loot":
+			return I18n.t("Loot")
+		"hq":
+			return I18n.t("Command Tower")
+	return I18n.t("Its own habit")
+
+
+## The next order in the cycle a force's button steps through.
+static func next_plan_target(order: String) -> String:
+	var i := PLAN_TARGETS.find(order)
+	return PLAN_TARGETS[(i + 1) % PLAN_TARGETS.size()]
+
+
+## Saved plans a Planning HQ of this level holds (0 without one).
+static func planning_slots(level: int) -> int:
+	return 0 if level <= 0 else mini(level, MAX_LEVEL)
 
 
 ## What an ability does at a level. Air strike: bombs, damage per bomb, blast radius, spacing.

@@ -9,6 +9,7 @@ signal end_pressed
 signal retry_pressed
 signal home_pressed
 signal ability_pressed(kind: String)
+signal plan_selected(slot: int)
 
 var retry_button: Button
 ## Whether the battle shown in the result window was won (at least one star).
@@ -24,6 +25,7 @@ var _card_buttons := {}
 ## Per card: the count label and the panel style.
 var _card_parts := {}
 var _end: Button
+var _plan_row: HBoxContainer
 var _support_row: HBoxContainer
 var _abilities := {}
 var _bars_layer: Control
@@ -94,6 +96,18 @@ func _ready() -> void:
 	_cards.add_theme_constant_override("separation", 10)
 	bottom.add_child(_cards)
 	bottom.add_child(_support_panel())
+
+	# The saved attack plans, in a row over the cards until the first unit goes in.
+	_plan_row = HBoxContainer.new()
+	_plan_row.anchor_top = 1.0
+	_plan_row.anchor_bottom = 1.0
+	_plan_row.offset_left = 130.0
+	_plan_row.offset_top = -200.0
+	_plan_row.offset_bottom = -156.0
+	_plan_row.add_theme_constant_override("separation", 8)
+	_plan_row.layout_direction = Control.LAYOUT_DIRECTION_LTR
+	_plan_row.visible = false
+	root.add_child(_plan_row)
 
 	_result = PanelContainer.new()
 	_result.anchor_left = 0.5
@@ -184,6 +198,32 @@ func set_support(counts: Dictionary, armed: String) -> void:
 			b.add_theme_stylebox_override(state, s)
 
 
+## One round button per saved plan; `active` is the slot in force (-1 when none matches).
+func set_plans(names: Array, active: int) -> void:
+	for child in _plan_row.get_children():
+		child.queue_free()
+	for i in names.size():
+		var b := Button.new()
+		b.text = str(names[i])
+		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(0, 44)
+		b.add_theme_font_size_override("font_size", 20)
+		b.set_pressed_no_signal(i == active)
+		var on := i == active
+		HomeHud._style_button(b, Color(0.94, 0.66, 0.19) if on else Color(0.1, 0.12, 0.1, 0.9), 22, Color(0.94, 0.66, 0.19), 3)
+		var slot := i
+		b.pressed.connect(func() -> void:
+			Audio.play("click", -6.0)
+			plan_selected.emit(slot))
+		_plan_row.add_child(b)
+	_plan_row.visible = not names.is_empty()
+
+
+func hide_plans() -> void:
+	_plan_row.visible = false
+
+
 func set_loot(coins: int, fuel: int) -> void:
 	_loot.text = I18n.t("Loot %d coins · %d fuel") % [coins, fuel]
 
@@ -194,7 +234,7 @@ const CARD := Vector2(104, 130)
 ## Clash-style unit cards (approved sketch Fy11Uvx52E8AXFytERpDZa): a picture of the unit at
 ## its level, how many are left in the corner, a level badge in the level color and the name
 ## in a strip at the bottom. The selected card lifts with a white frame; empty ones go grey.
-func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dictionary = {}) -> void:
+func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dictionary = {}, orders: Dictionary = {}) -> void:
 	for child in _cards.get_children():
 		child.queue_free()
 	_card_buttons.clear()
@@ -251,7 +291,7 @@ func set_army(army: Dictionary, names: Dictionary, selected: String, levels: Dic
 		b.add_child(strip)
 		# What the unit goes for first, in the top corner (approved sketch FXGoTcv7xRzZbR5GDqE6S3).
 		var aim := TextureRect.new()
-		aim.texture = Icons.tex(Icons.target(type), 64)
+		aim.texture = Icons.tex(Icons.target(type, str(orders.get(type, "auto"))), 64)
 		aim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		aim.size = Vector2(30, 30)
 		aim.position = Vector2(CARD.x - 33, 3)

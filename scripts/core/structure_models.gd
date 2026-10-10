@@ -8,7 +8,7 @@ extends RefCounted
 const SCALE := 1.35
 ## Sketch-based models are drawn at pad size.
 ## Every model is drawn at pad size now; the 1.35 scale only remains for safety.
-const PAD_SIZED := ["hq", "generator", "storage", "hangar", "pump", "tank", "camp", "quarters", "garage", "support"]
+const PAD_SIZED := ["hq", "generator", "storage", "hangar", "pump", "tank", "camp", "quarters", "garage", "support", "planning"]
 const FUEL := Color(0.93, 0.35, 0.55)
 
 
@@ -54,6 +54,8 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 			height = _garage(root, level)
 		"support":
 			height = _support(root, level)
+		"planning":
+			height = _planning(root, level)
 		"hangar":
 			height = _hangar(root, level)
 	_details(root, type, level)
@@ -545,6 +547,57 @@ static func _support(root: Node3D, level: int) -> float:
 		shelter.scale = Vector3(1, 1, 0.9)
 	chevrons(root, level, Vector3(2.3, 0, 2.6))
 	return 3.4 if level >= 5 else 2.4
+
+
+## Planning HQ: a low concrete operations bunker with a glowing window and a map table in the
+## open, red and blue pins on the map. Lv2 a mast with a red light; Lv3 a satellite dish and a
+## second map board; Lv4 a spinning radar and a taller bunker; Lv5 a gold band, a second window
+## and a flag.
+static func _planning(root: Node3D, level: int) -> float:
+	var concrete := MeshKit.surface("concrete", CONCRETE, 0.9)
+	var navy := MeshKit.mat(Color(0.2, 0.23, 0.28), 0.5, 0.5)
+	var wood := MeshKit.surface("wood", WOOD, 0.9)
+	var steel := MeshKit.surface("metal", UnitModels.METAL, 0.6, 0.4)
+	MeshKit.add(root, MeshKit.box(Vector3(5.2, 0.08, 5.2)), MeshKit.mat(Color(0.3, 0.3, 0.28), 0.9), Vector3(0, 0.04, 0))
+	var h := 1.5 if level < 4 else 1.9
+	MeshKit.add(root, MeshKit.box(Vector3(3.2, h, 2.4)), concrete, Vector3(-0.4, h / 2.0, -0.9))
+	MeshKit.add(root, MeshKit.box(Vector3(3.4, 0.14, 2.6)), MeshKit.surface("camo", UnitModels.SINAI, 0.8), Vector3(-0.4, h + 0.07, -0.9))
+	MeshKit.add(root, MeshKit.box(Vector3(0.7, 1.1, 0.06)), navy, Vector3(-1.4, 0.58, 0.32))
+	MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.3, 0.05)), MeshKit.glow(Color(0.55, 0.9, 1.0)), Vector3(0.3, h * 0.62, 0.32))
+	if level >= 5:
+		MeshKit.add(root, MeshKit.box(Vector3(3.24, 0.1, 2.44)), MeshKit.mat(Color(0.95, 0.75, 0.2), 0.3, 0.8), Vector3(-0.4, h - 0.1, -0.9))
+		MeshKit.add(root, MeshKit.box(Vector3(0.9, 0.3, 0.05)), MeshKit.glow(Color(0.55, 0.9, 1.0)), Vector3(-1.4, h * 0.62, 0.32))
+	# The map table out in front, with pins on the map.
+	MeshKit.add(root, MeshKit.box(Vector3(1.8, 0.12, 1.1)), wood, Vector3(1.0, 0.62, 1.6))
+	for dx in [-0.8, 0.8]:
+		for dz in [-0.45, 0.45]:
+			MeshKit.add(root, MeshKit.box(Vector3(0.1, 0.56, 0.1)), wood, Vector3(1.0 + dx, 0.28, 1.6 + dz))
+	MeshKit.add(root, MeshKit.box(Vector3(1.6, 0.02, 0.95)), MeshKit.mat(Color(0.85, 0.82, 0.65), 0.9), Vector3(1.0, 0.69, 1.6))
+	for pin in [[Vector3(0.6, 0.74, 1.4), Color(0.85, 0.15, 0.1)], [Vector3(1.2, 0.74, 1.7), Color(0.85, 0.15, 0.1)], [Vector3(1.5, 0.74, 1.35), Color(0.2, 0.5, 0.95)]]:
+		MeshKit.add(root, MeshKit.sphere(0.07, 8), MeshKit.mat(pin[1], 0.5), pin[0])
+	if level >= 2:
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 2.6, 6), steel, Vector3(-1.7, h + 1.3, -1.6))
+		var lamp := MeshKit.add(root, MeshKit.sphere(0.1, 8), MeshKit.glow(Color(1.0, 0.2, 0.15)), Vector3(-1.7, h + 2.65, -1.6))
+		lamp.set_meta("blink", true)
+	if level >= 3:
+		var dish := MeshKit.add(root, MeshKit.cyl(0.55, 0.1, 0.16, 16), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3), Vector3(0.8, h + 0.4, -1.5))
+		dish.rotation.x = -0.9
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 0.4, 6), steel, Vector3(0.8, h + 0.2, -1.5))
+		MeshKit.add(root, MeshKit.box(Vector3(0.9, 0.7, 0.05)), wood, Vector3(2.0, 0.5, 0.2)).rotation.y = -0.4
+		MeshKit.add(root, MeshKit.box(Vector3(0.8, 0.6, 0.02)), MeshKit.mat(Color(0.85, 0.82, 0.65), 0.9), Vector3(2.0, 0.5, 0.23)).rotation.y = -0.4
+	if level >= 4:
+		var radar := Node3D.new()
+		radar.position = Vector3(-1.5, h + 0.9, -0.6)
+		root.add_child(radar)
+		MeshKit.add(radar, MeshKit.box(Vector3(1.0, 0.4, 0.06)), MeshKit.mat(Color(0.85, 0.84, 0.8), 0.5, 0.3)).rotation.x = -0.3
+		MeshKit.add(root, MeshKit.cyl(0.05, 0.05, 0.9, 6), steel, Vector3(-1.5, h + 0.45, -0.6))
+		var spin := radar.create_tween().set_loops()
+		spin.tween_property(radar, "rotation:y", TAU, 3.0).as_relative()
+	if level >= 5:
+		MeshKit.add(root, MeshKit.cyl(0.03, 0.03, 1.6, 6), steel, Vector3(1.0, h + 0.8, -1.9))
+		MeshKit.add(root, MeshKit.box(Vector3(0.6, 0.35, 0.03)), MeshKit.mat(Color(0.2, 0.42, 0.8), 0.6), Vector3(1.32, h + 1.4, -1.9))
+	chevrons(root, level, Vector3(2.3, 0, 2.6))
+	return h + 0.9
 
 
 ## Sways a property back and forth around its current value, forever (flags, pumpjacks, hooks).

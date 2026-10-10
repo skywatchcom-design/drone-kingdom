@@ -9,7 +9,7 @@ extends Node
 ## process_training() moves whatever has finished into the army.
 
 const SAVE_PATH := "user://save.json"
-const SAVE_VERSION := 11
+const SAVE_VERSION := 12
 ## Defenses that left the game, and what replaces them in older saves.
 const RETIRED := {"laser": "aa", "net": "at", "birds": "mg"}
 
@@ -69,6 +69,11 @@ signal missions_changed
 var cosmetics_owned: Array = []
 var cosmetics_worn := {}
 var starter_bought := false
+## Attack plans (Planning HQ): [{"name": String, "orders": {unit type: Catalog.PLAN_TARGETS entry}}],
+## the slot used last, and for each Syndicate mission the orders used there last.
+var plans: Array = []
+var plan_active := 0
+var campaign_plans := {}
 
 const SETTINGS_PATH := "user://settings.json"
 ## Development only: coins, fuel and gems cost nothing. Forced off in release exports,
@@ -197,6 +202,9 @@ func new_player() -> void:
 	cosmetics_owned = []
 	cosmetics_worn = {}
 	starter_bought = false
+	plans = []
+	plan_active = 0
+	campaign_plans = {}
 	save_game()
 
 
@@ -357,6 +365,75 @@ func buy_cosmetic(id: String) -> bool:
 	cosmetics_owned.append(id)
 	wear_cosmetic(id)
 	return true
+
+
+## Saved plan slots the player's Planning HQ gives (0 until it is built, Command Tower 4).
+func plan_slots() -> int:
+	return Catalog.planning_slots(level_of("planning"))
+
+
+## The orders of a plan slot, with "auto" for every force that has none.
+func plan_orders(slot: int) -> Dictionary:
+	var out := {}
+	var saved: Dictionary = plans[slot]["orders"] if slot >= 0 and slot < plans.size() else {}
+	for type: String in Catalog.PLAN_UNITS:
+		out[type] = str(saved.get(type, "auto"))
+	return out
+
+
+func plan_name(slot: int) -> String:
+	return str(plans[slot]["name"]) if slot >= 0 and slot < plans.size() else ""
+
+
+func _ensure_plan(slot: int) -> void:
+	while plans.size() <= slot:
+		plans.append({"name": "", "orders": {}})
+
+
+## Gives one force an order in a plan slot. False when the slot is not open yet or the order is unknown.
+func set_plan_order(slot: int, type: String, target: String) -> bool:
+	if slot < 0 or slot >= plan_slots() or type not in Catalog.PLAN_UNITS or target not in Catalog.PLAN_TARGETS:
+		return false
+	_ensure_plan(slot)
+	plans[slot]["orders"][type] = target
+	plan_active = slot
+	save_game()
+	return true
+
+
+func rename_plan(slot: int, plan_name_text: String) -> void:
+	if slot < 0 or slot >= plan_slots():
+		return
+	_ensure_plan(slot)
+	plans[slot]["name"] = plan_name_text.strip_edges().left(14)
+	save_game()
+
+
+## What the battle uses: the orders of the active plan, or none without a Planning HQ.
+func battle_orders() -> Dictionary:
+	if plan_slots() <= 0:
+		return {}
+	return plan_orders(clampi(plan_active, 0, plan_slots() - 1))
+
+
+## Orders remembered for a Syndicate mission (the plan used there last), or the active plan's.
+func mission_orders(mission: int) -> Dictionary:
+	if plan_slots() <= 0:
+		return {}
+	var saved: Variant = campaign_plans.get(str(mission))
+	if saved is Dictionary:
+		var out := {}
+		for type: String in Catalog.PLAN_UNITS:
+			out[type] = str((saved as Dictionary).get(type, "auto"))
+		return out
+	return battle_orders()
+
+
+func remember_mission_orders(mission: int, orders: Dictionary) -> void:
+	if plan_slots() <= 0:
+		return
+	campaign_plans[str(mission)] = orders.duplicate()
+	save_game()
 
 
 ## Puts on an owned cosmetic (or takes it off, when it is already worn).
@@ -1209,6 +1286,7 @@ func save_data() -> Dictionary:
 		"tutorial": -1 if tutorial_replay else tutorial,
 		"stats": stats, "starter_claimed": starter_claimed, "daily": daily, "login": login,
 		"cosmetics_owned": cosmetics_owned, "cosmetics_worn": cosmetics_worn, "starter_bought": starter_bought,
+		"plans": plans, "plan_active": plan_active, "campaign_plans": campaign_plans,
 	}
 
 
@@ -1221,7 +1299,7 @@ func load_game() -> bool:
 ## Loads a save (from the file or the cloud). False, and nothing changed, when it isn't one.
 func apply_save(data: Variant) -> bool:
 	# Version 4 saves (before ground units) load too: their drones become units.
-	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, 10, SAVE_VERSION]:
+	if not (data is Dictionary) or int(data.get("version", 0)) not in [4, 5, 6, 7, 8, 9, 10, 11, SAVE_VERSION]:
 		return false
 	coins = int(data["coins"])
 	fuel = int(data.get("fuel", 0))
@@ -1297,4 +1375,21 @@ func apply_save(data: Variant) -> bool:
 		if cosmetics_owned.has(str(worn[slot])):
 			cosmetics_worn[str(slot)] = str(worn[slot])
 	starter_bought = bool(data.get("starter_bought", false))
+	# Attack plans arrived in save 12.
+	plans = []
+	for p in data.get("plans", []):
+		var orders := {}
+		for type in (p as Dictionary).get("orders", {}):
+			if str(type) in Catalog.PLAN_UNITS and str(p["orders"][type]) in Catalog.PLAN_TARGETS:
+				orders[str(type)] = str(p["orders"][type])
+		plans.append({"name": str(p.get("name", "")), "orders": orders})
+	plan_active = int(data.get("plan_active", 0))
+	campaign_plans = {}
+	for k in data.get("campaign_plans", {}):
+		var saved: Dictionary = data["campaign_plans"][k]
+		var clean := {}
+		for type in saved:
+			if str(type) in Catalog.PLAN_UNITS and str(saved[type]) in Catalog.PLAN_TARGETS:
+				clean[str(type)] = str(saved[type])
+		campaign_plans[str(k)] = clean
 	return true
