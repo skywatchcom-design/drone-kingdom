@@ -36,6 +36,9 @@ var _pushing := false
 
 
 func _ready() -> void:
+	# Dev store screenshots (--showcase, --anon) show "Commander", never the real signed-in one.
+	if OS.is_debug_build() and (OS.get_cmdline_user_args().has("--showcase") or OS.get_cmdline_user_args().has("--anon")):
+		return
 	_load_session()
 
 

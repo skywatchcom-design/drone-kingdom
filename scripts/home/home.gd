@@ -191,7 +191,8 @@ func _rebuild() -> void:
 		used.append([int(s["cell"][0]), int(s["cell"][1])])
 	city.build(GameState.city_seed, all_cells, used)
 	StructureModels.skin = GameState.cosmetics_worn
-	StructureModels.show_levels = true
+	# Store screenshots (--showcase) leave out the level labels, like battles do.
+	StructureModels.show_levels = not OS.get_cmdline_user_args().has("--showcase")
 	for s in GameState.structures:
 		_spawn(s)
 	for w in GameState.walls:

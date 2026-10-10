@@ -95,6 +95,12 @@ func _ready() -> void:
 		var args := OS.get_cmdline_user_args()
 		if args.has("--tutorial"):
 			tutorial = int(args[args.find("--tutorial") + 1])
+		# Dev: `--lang en|he` picks the language for this run only.
+		if args.has("--lang"):
+			I18n.lang = args[args.find("--lang") + 1]
+		# Dev: `--showcase N` fills this run with a developed HQ-N base for store screenshots.
+		if args.has("--showcase"):
+			_showcase(int(args[args.find("--showcase") + 1]))
 	elif not load_game():
 		new_player()
 
@@ -161,6 +167,38 @@ func _spend_gems(cost: int) -> void:
 
 func now() -> float:
 	return Time.get_unix_time_from_system()
+
+
+## Dev only (with --fresh): a finished-looking base at Command Tower level `hq`, built from the
+## same generator as enemy bases plus the army buildings, with a full army and no tutorial.
+func _showcase(hq: int) -> void:
+	hq = clampi(hq, 1, Catalog.MAX_LEVEL)
+	var base := Bases.generate(4242, hq)
+	structures = base["structures"]
+	walls = base["walls"]
+	var taken := {}
+	for s in structures:
+		taken["%d,%d" % s["cell"]] = true
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for type in ["hangar", "garage", "support", "planning"]:
+		for i in Catalog.max_count(type, hq):
+			var cell: Array = Bases._free_cell(rng, taken)
+			if not cell.is_empty():
+				structures.append({"type": type, "cell": cell, "level": hq})
+	var t := now()
+	for s in structures:
+		if s["type"] in ["generator", "pump"]:
+			s["collected_at"] = t - 30.0 * 60.0
+	units = {}
+	for type in Catalog.UNIT_ORDER:
+		units[type] = hq
+	army = {"infantry": 3, "engineers": 1, "armor": 1, "courier": 2, "scout": 1}
+	abilities = {"flare": hq, "strike": hq}
+	tutorial = -1
+	coins = int(coin_cap() * 0.72)
+	fuel = int(fuel_cap() * 0.64)
+	gems = 1240
 
 
 func new_player() -> void:

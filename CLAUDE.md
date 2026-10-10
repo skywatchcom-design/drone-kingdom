@@ -233,8 +233,14 @@ before production. Approved 10.10.2026: logo A "field stencil" (https://claude.a
 Black Ops One letters, "Sky" sand + "Watch" gold with a dark olive drop, top-view drone mark, no tagline (owner: the game is base + combined army, not only drones).
 `assets/icon/logo.png` (transparent, rendered from canvas) and the boot splash `assets/icon/splash.png` (also the web
 loading picture). Store banner `docs/store/feature_graphic_1024x500.png` (owner's Gemini picture + logo; `_clean` without).
-Still to prepare: store screenshots (from a developed showcase base, no dev coins), Data safety and content rating
-answers.
+Store screenshots (10.10.2026): `docs/store/screenshots/{en,he}_1..5.jpg` (1920x1080: battle, base, campaign map,
+shop, Noa). Dev flags for them: `--fresh --showcase N` (developed HQ-N base, full army, no tutorial, no level labels,
+never saved), `--anon` (skip the saved login so the badge says "Commander"), `--lang en|he`; 1080p needs a temporary
+`override.cfg` with `display/window/size/window_width_override=1920` / `height=1080` (never commit it).
+Play Console answers and listing text: `docs/store/play-console-answers.md`. Play Console (10.10.2026): app created
+(English default + Hebrew), internal test release 1 (0.1.0) uploaded, App content forms done (ratings PEGI 7 / ESRB E10+,
+audience 9+ so the Families policy applies), reviewer account `PlayReviewer` (password in `tmp/play_reviewer.txt`).
+Next: closed test (Alpha) with a Google Group of 12+ testers for 14 days, then production access.
 Account deletion page for Google Play (10.10.2026): `web/account/delete.html`, published at
 https://skywatchcom-design.github.io/drone-kingdom/account/delete.html (`?lang=he|en`). Log in by commander name or
 email (same made-up address as `Cloud.email_for`), tick a box, `delete_my_account`; the players row goes by cascade.
