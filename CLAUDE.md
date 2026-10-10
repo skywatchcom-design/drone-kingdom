@@ -230,7 +230,7 @@ release export takes the keystore from env vars `GODOT_ANDROID_KEYSTORE_RELEASE_
 (`tmp/skywatch-release.keystore`, alias `skywatch`, password in `tmp/android_keystore_password.txt`).
 Google Play: the identity check is pending (9.10.2026). A new personal account needs a 14-day closed test with 12 testers
 before production. Approved 10.10.2026: logo A "field stencil" (https://claude.ai/artifact/FZPuGpNxs2ucs3SLEUgLWa):
-Black Ops One letters, "Sky" sand + "Watch" gold with a dark olive drop, top-view drone mark, gold tag "DRONE COMMAND".
+Black Ops One letters, "Sky" sand + "Watch" gold with a dark olive drop, top-view drone mark, no tagline (owner: the game is base + combined army, not only drones).
 `assets/icon/logo.png` (transparent, rendered from canvas) and the boot splash `assets/icon/splash.png` (also the web
 loading picture). Store banner `docs/store/feature_graphic_1024x500.png` (owner's Gemini picture + logo; `_clean` without).
 Still to prepare: store screenshots (from a developed showcase base, no dev coins), Data safety and content rating
