@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkyWatch – מחיקת חשבון</title>
+<link rel="stylesheet" href="../legal/legal.css">
+<style>
+  form { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+  input[type=text], input[type=password] { font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: #fffdf5; color: #24261f; direction: ltr; }
+  button { font: inherit; font-weight: 700; padding: 12px; border-radius: 10px; border: 0; background: #3fa05a; color: #fff; cursor: pointer; }
+  button.danger { background: #c0392b; }
+  button.plain { background: none; color: inherit; border: 2px solid var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  label.check { display: flex; gap: 8px; align-items: flex-start; }
+  .msg { min-height: 1.5em; font-weight: 700; }
+  .bad { color: #c0392b; } .good { color: var(--accent); }
+  .lang { float: inline-end; }
+</style>
+</head>
+<body>
+<main>
+<a class="lang" id="lang" href="?lang=en">English</a>
+<h1 data-he="מחיקת חשבון SkyWatch" data-en="Delete your SkyWatch account">מחיקת חשבון SkyWatch</h1>
+<p data-he="כאן אפשר למחוק את החשבון גם בלי המשחק, למשל אם כבר מחקתם את האפליקציה. במשחק עצמו: הגדרות ← חשבון ← מחיקת החשבון." data-en="You can delete your account here without the game, for example if you already removed the app. In the game itself: Settings → Account → Delete account.">כאן אפשר למחוק את החשבון גם בלי המשחק, למשל אם כבר מחקתם את האפליקציה. במשחק עצמו: הגדרות ← חשבון ← מחיקת החשבון.</p>
+
+<h2 data-he="מה נמחק" data-en="What is deleted">מה נמחק</h2>
+<ul>
+  <li data-he="שם המפקד, הסיסמה וכתובת המייל (אם יש)" data-en="Your commander name, password and email address (if any)">שם המפקד, הסיסמה וכתובת המייל (אם יש)</li>
+  <li data-he="חודש ושנת הלידה ואישור התנאים" data-en="Your birth month and year and your terms agreement">חודש ושנת הלידה ואישור התנאים</li>
+  <li data-he="הבסיס, הצבא, המשאבים, היהלומים, הקישוטים וכל ההתקדמות במשחק" data-en="Your base, army, resources, gems, cosmetics and all game progress">הבסיס, הצבא, המשאבים, היהלומים, הקישוטים וכל ההתקדמות במשחק</li>
+</ul>
+<p data-he="הכול נמחק מיד ולתמיד מהשרתים שלנו, ואי אפשר לשחזר. אנחנו לא שומרים עותק. יהלומים שנקנו בכסף אמיתי לא מוחזרים." data-en="Everything is deleted at once and for good from our servers, and cannot be restored. We keep no copy. Gems bought with real money are not refunded.">הכול נמחק מיד ולתמיד מהשרתים שלנו, ואי אפשר לשחזר. אנחנו לא שומרים עותק. יהלומים שנקנו בכסף אמיתי לא מוחזרים.</p>
+
+<h2 data-he="מחיקה" data-en="Delete">מחיקה</h2>
+<form id="login">
+  <label for="who" data-he="שם המפקד או המייל" data-en="Commander name or email">שם המפקד או המייל</label>
+  <input id="who" type="text" autocomplete="username" required>
+  <label for="pass" data-he="סיסמה" data-en="Password">סיסמה</label>
+  <input id="pass" type="password" autocomplete="current-password" required>
+  <button id="go" type="submit" data-he="המשך" data-en="Continue">המשך</button>
+</form>
+
+<form id="confirm" hidden>
+  <p id="who-line"></p>
+  <label class="check"><input id="sure" type="checkbox"> <span data-he="אני מבין/ה שהחשבון וכל ההתקדמות יימחקו לתמיד" data-en="I understand my account and all progress will be deleted for good">אני מבין/ה שהחשבון וכל ההתקדמות יימחקו לתמיד</span></label>
+  <button id="del" class="danger" type="submit" disabled data-he="מחיקת החשבון לתמיד" data-en="Delete my account for good">מחיקת החשבון לתמיד</button>
+  <button id="back" class="plain" type="button" data-he="ביטול" data-en="Cancel">ביטול</button>
+</form>
+<p id="msg" class="msg" role="status"></p>
+
+<h2 data-he="שכחתם את הסיסמה?" data-en="Forgot your password?">שכחתם את הסיסמה?</h2>
+<p data-he="אם יש מייל בחשבון: במשחק, בחלון ההתחברות, לוחצים &quot;שכחתי סיסמה&quot; ומקבלים קישור למייל. בלי מייל בחשבון (למשל שחקנים מתחת לגיל 13): כתבו לנו מכתובת של הורה אל skywatchcom@gmail.com עם שם המפקד, ונמחק את החשבון בתוך 30 יום." data-en="If your account has an email: in the game's log-in window tap &quot;Forgot password&quot; to get a link by email. Without an email (for example players under 13): write to skywatchcom@gmail.com, from a parent's address, with the commander name, and we will delete the account within 30 days.">אם יש מייל בחשבון: במשחק, בחלון ההתחברות, לוחצים "שכחתי סיסמה" ומקבלים קישור למייל. בלי מייל בחשבון (למשל שחקנים מתחת לגיל 13): כתבו לנו מכתובת של הורה אל skywatchcom@gmail.com עם שם המפקד, ונמחק את החשבון בתוך 30 יום.</p>
+<p><a id="privacy" href="../legal/privacy-he.html" data-he="מדיניות הפרטיות" data-en="Privacy policy">מדיניות הפרטיות</a></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// The account deletion page Google Play asks for: the player logs in the same way as in the game
+// (commander name or email) and calls delete_my_account, which removes the auth user; the
+// players row goes with it (ON DELETE CASCADE).
+const qs = new URLSearchParams(location.search).get("lang");
+const en = qs ? qs === "en" : !navigator.language.startsWith("he");
+if (en) { document.documentElement.lang = "en"; document.documentElement.dir = "ltr"; }
+document.querySelectorAll("[data-he]").forEach(el => el.textContent = en ? el.dataset.en : el.dataset.he);
+const lang = document.getElementById("lang");
+lang.textContent = en ? "עברית" : "English"; lang.href = en ? "?lang=he" : "?lang=en";
+document.getElementById("privacy").href = "../legal/privacy-" + (en ? "en" : "he") + ".html";
+const T = (he, eng) => en ? eng : he;
+document.title = T("SkyWatch – מחיקת חשבון", "SkyWatch – Delete account");
+const msg = (text, cls) => { const m = document.getElementById("msg"); m.textContent = text; m.className = "msg " + (cls || ""); };
+
+const client = supabase.createClient("https://nlaylfcbijvdwbbcuqhj.supabase.co", "sb_publishable_Lny9jk7SBYa5xtWGeG-xHw_yT8o8Nst", { auth: { persistSession: false } });
+const login = document.getElementById("login"), confirmForm = document.getElementById("confirm");
+
+// Same made-up address as Cloud.email_for in the game.
+async function emailFor(name) {
+  const bytes = new TextEncoder().encode(name.toLowerCase());
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), b => b.toString(16).padStart(2, "0")).join("");
+  return "u" + hash.slice(0, 24) + "@players.skywatch.invalid";
+}
+
+login.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const who = document.getElementById("who").value.trim(), pass = document.getElementById("pass").value;
+  if (!who || !pass) return;
+  document.getElementById("go").disabled = true; msg("");
+  const email = who.includes("@") ? who.toLowerCase() : await emailFor(who);
+  const { data, error } = await client.auth.signInWithPassword({ email, password: pass });
+  document.getElementById("go").disabled = false;
+  if (error) {
+    const wrong = error.status === 400 || error.status === 401;
+    return msg(wrong ? T("שם, מייל או סיסמה לא נכונים. מגיל 13 מתחברים עם המייל.", "Wrong name, email or password. From age 13, log in with your email.")
+                     : T("אין חיבור. נסו שוב בעוד רגע.", "No connection. Try again in a moment."), "bad");
+  }
+  const { data: rows } = await client.from("players").select("name").eq("id", data.user.id);
+  const name = rows && rows.length ? rows[0].name : who;
+  document.getElementById("who-line").textContent = T("החשבון של המפקד: ", "Account of commander: ") + name;
+  login.hidden = true; confirmForm.hidden = false;
+});
+
+document.getElementById("sure").addEventListener("change", e => document.getElementById("del").disabled = !e.target.checked);
+document.getElementById("back").addEventListener("click", async () => {
+  await client.auth.signOut();
+  confirmForm.hidden = true; login.hidden = false; document.getElementById("pass").value = ""; msg("");
+});
+
+confirmForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!document.getElementById("sure").checked) return;
+  document.getElementById("del").disabled = true;
+  const { error } = await client.rpc("delete_my_account");
+  if (error) { document.getElementById("del").disabled = false; return msg(T("המחיקה לא הצליחה. נסו שוב, או כתבו ל-skywatchcom@gmail.com.", "Deleting failed. Try again, or write to skywatchcom@gmail.com."), "bad"); }
+  await client.auth.signOut().catch(() => {});
+  confirmForm.hidden = true;
+  msg(T("החשבון נמחק. אם המשחק עדיין מותקן אצלכם, אפשר למחוק גם אותו.", "Your account is deleted. If the game is still installed, you can remove it too."), "good");
+});
+</script>
+</body>
+</html>
