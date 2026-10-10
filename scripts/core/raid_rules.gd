@@ -15,9 +15,10 @@ static func battle_stars(destroyed_ratio: float, hq_destroyed: bool) -> int:
 	return stars
 
 
-## Index of the structure a drone should attack: the nearest one it prefers, otherwise the
-## nearest standing one, or -1 if nothing is left. Each target is a Dictionary with
-## top (Vector3), is_defense (bool), loot (int) and destroyed (bool).
+## Index of the structure a drone should attack: the nearest one it prefers ("any", "defense",
+## "loot" or "hq" for the Command Tower), otherwise the nearest standing one, or -1 if nothing
+## is left. Each target is a Dictionary with top (Vector3), is_defense (bool), loot (int),
+## destroyed (bool) and, for "hq", type (String).
 static func pick_target(prefers: String, from: Vector3, targets: Array) -> int:
 	var best := -1
 	var best_d := INF
@@ -30,7 +31,8 @@ static func pick_target(prefers: String, from: Vector3, targets: Array) -> int:
 		var d := PathUtils.flat_distance(from, t["top"])
 		var preferred: bool = prefers == "any" \
 			or (prefers == "defense" and t["is_defense"]) \
-			or (prefers == "loot" and int(t["loot"]) > 0)
+			or (prefers == "loot" and int(t["loot"]) > 0) \
+			or (prefers == "hq" and str(t.get("type", "")) == "hq")
 		if preferred and d < best_d:
 			best_d = d
 			best = i

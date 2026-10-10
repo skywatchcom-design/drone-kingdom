@@ -148,6 +148,15 @@ func _ready() -> void:
 		_open_skins()
 	elif args.has("--screenshot-ladder"):
 		_open_hq_ladder()
+	elif args.has("--screenshot-planning"):
+		# Dev: gives this run a Planning HQ with a few orders (use with --fresh so no save is touched).
+		if GameState.level_of("planning") <= 0:
+			GameState.structures.append({"type": "planning", "cell": [8, 8], "level": 3})
+		GameState.set_plan_order(0, "armor", "defense")
+		GameState.set_plan_order(0, "courier", "loot")
+		GameState.set_plan_order(0, "infantry", "hq")
+		GameState.rename_plan(0, I18n.t("Front line"))
+		_open_planning(0)
 	elif args.has("--screenshot-move"):
 		for s in GameState.structures:
 			if Catalog.is_defense(s["type"]):
@@ -516,6 +525,8 @@ func _own_action(type: String, cell: Array) -> Dictionary:
 			return {"icon": "army", "label": I18n.t("Units"), "call": func() -> void: _open_lab("garage")}
 		"support":
 			return {"icon": "plane", "label": I18n.t("Prepare"), "call": _open_support}
+		"planning":
+			return {"icon": "t_any", "label": I18n.t("Plans"), "call": func() -> void: _open_planning(GameState.plan_active)}
 		"generator", "pump":
 			return {"icon": "coin" if type == "generator" else "fuel", "label": I18n.t("Collect"), "call": func() -> void: _collect(cell)}
 		"hq":
@@ -642,6 +653,8 @@ func _upgrade_rows(type: String, lvl: int) -> Array:
 			rows.append(["army", I18n.t("Soldier and tank max level"), lvl, nxt, top])
 		"support":
 			rows.append(["plane", I18n.t("Slots"), Catalog.support_slots(lvl), Catalog.support_slots(nxt), Catalog.support_slots(top)])
+		"planning":
+			rows.append(["t_any", I18n.t("Saved plans"), Catalog.planning_slots(lvl), Catalog.planning_slots(nxt), Catalog.planning_slots(top)])
 	if Catalog.is_defense(type):
 		var a := Catalog.defense_stats(type, lvl)
 		var b := Catalog.defense_stats(type, nxt)
@@ -1199,6 +1212,8 @@ func _stat_lines(type: String, lvl: int) -> Array:
 			return [[I18n.t("Training speed"), "x%.2f" % (1.0 + 0.25 * (lvl - 1))]]
 		"support":
 			return [[I18n.t("Slots"), str(Catalog.support_slots(lvl))]]
+		"planning":
+			return [[I18n.t("Saved plans"), str(Catalog.planning_slots(lvl))]]
 		"spring", "airmine":
 			var t: Dictionary = Catalog.TRAPS[type]
 			return [[I18n.t("Damage"), str(int(t["damage"]))], [I18n.t("Goes off within"), I18n.t("%.1f m") % t["trigger"]],
@@ -1283,6 +1298,28 @@ func _open_unit_info(type: String) -> void:
 	var back := {"text": I18n.t("Back"), "call": _open_army}
 	var title := Catalog.display_name(type) + "  ·  " + I18n.t("Lv %d") % lvl
 	hud.show_modal(ShopUI.info_window(title, type, lvl, rows, I18n.t(def["role"]), [back]), Vector2(900, 520))
+
+
+# ---------------------------------------------------------------- planning hq
+
+## The Planning HQ window: plan slots and one order per force (approved sketch 3ybncHdm6sxxuWetMYLJBg).
+func _open_planning(slot: int) -> void:
+	open_cell = []
+	open_sheet = "planning"
+	marker.visible = false
+	_deselect()
+	hud.hide_panel()
+	var cycle := func(type: String) -> void:
+		var orders := GameState.plan_orders(slot)
+		GameState.set_plan_order(slot, type, Catalog.next_plan_target(str(orders[type])))
+		_open_planning(slot)
+	var rename := func(at: int, text: String) -> void:
+		if text.strip_edges() != GameState.plan_name(at):
+			GameState.rename_plan(at, text)
+	var pick := func(at: int) -> void:
+		GameState.plan_active = at
+		_open_planning(at)
+	hud.show_modal(PlanningUI.window(slot, pick, cycle, rename), Vector2(1000, 540))
 
 
 # ---------------------------------------------------------------- support base

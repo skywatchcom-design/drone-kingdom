@@ -35,19 +35,22 @@ const SVG := {
 	"t_any": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#5b6670" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="5" fill="none" stroke="#ffffff" stroke-width="2"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="#ffffff" stroke-width="2"/></svg>',
 	"t_loot": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#c98a00" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="6" fill="#ffd34d" stroke="#ffffff" stroke-width="1.6"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="#c98a00" stroke-width="1.4"/></svg>',
 	"t_defense": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#c0392b" stroke="#ffffff" stroke-width="1.6"/><path d="M12 5l6 2.2v4.6c0 3.6-2.8 5.8-6 7.2-3.2-1.4-6-3.6-6-7.2V7.2z" fill="#ffffff"/></svg>',
+	"t_hq": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#2f6fe0" stroke="#ffffff" stroke-width="1.6"/><path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z" fill="#ffffff"/></svg>',
 	"t_fence": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#a0642a" stroke="#ffffff" stroke-width="1.6"/><path d="M5 8h6v3.5H5zM13 8h6v3.5h-6zM8 13h8v3.5H8z" fill="#ffffff"/></svg>',
 }
 
 ## Colors of the target badges, for lines and rings drawn in the world.
 const TARGET_COLORS := {"any": Color(0.6, 0.66, 0.72), "loot": Color(1.0, 0.75, 0.15),
-	"defense": Color(0.95, 0.3, 0.25), "fence": Color(0.85, 0.55, 0.25)}
+	"defense": Color(0.95, 0.3, 0.25), "fence": Color(0.85, 0.55, 0.25), "hq": Color(0.3, 0.6, 0.95)}
 
 static var _cache := {}
 
 
 ## The badge icon for what unit `type` attacks first.
-static func target(type: String) -> String:
-	return "t_" + str(Catalog.unit_def(type).get("prefers", "any"))
+## An attack plan order other than "auto" replaces the unit's own habit.
+static func target(type: String, order: String = "auto") -> String:
+	var own := str(Catalog.unit_def(type).get("prefers", "any"))
+	return "t_" + (own if order == "auto" or own == "fence" else order)
 
 
 ## The icon `name` as a texture `size` pixels square.

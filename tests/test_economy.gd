@@ -511,6 +511,51 @@ func test_support_prepares_over_time_and_is_used_up() -> bool:
 	return not_yet and ready and gone
 
 
+func test_planning_hq_opens_at_command_tower_four() -> bool:
+	var before := Catalog.max_count("planning", 3)
+	var opens := Catalog.max_count("planning", 4)
+	return before == 0 and opens == 1 and Catalog.ladder_lines(4).has(I18n.t("%s (new)") % Catalog.display_name("planning"))
+
+
+func test_plan_orders_need_a_planning_hq() -> bool:
+	var gs := _fresh_state()
+	var closed: bool = not gs.set_plan_order(0, "armor", "defense") and gs.battle_orders().is_empty()
+	gs.structures.append({"type": "planning", "cell": [0, 0], "level": 1})
+	var ok: bool = gs.set_plan_order(0, "armor", "defense")
+	var second_slot: bool = gs.set_plan_order(1, "armor", "loot")
+	var bad_target: bool = gs.set_plan_order(0, "armor", "moon")
+	var engineers: bool = gs.set_plan_order(0, "engineers", "hq")
+	var orders: Dictionary = gs.battle_orders()
+	gs.free()
+	return closed and ok and not second_slot and not bad_target and not engineers \
+		and orders["armor"] == "defense" and orders["courier"] == "auto"
+
+
+func test_plans_survive_a_save_and_upgrade() -> bool:
+	var gs := _fresh_state()
+	gs.structures.append({"type": "planning", "cell": [0, 0], "level": 2})
+	gs.set_plan_order(1, "scout", "hq")
+	gs.rename_plan(1, "  Fast strike with a very long name  ")
+	gs.remember_mission_orders(3, {"armor": "loot"})
+	var data: Dictionary = JSON.parse_string(JSON.stringify(gs.save_data()))
+	var other := _fresh_state()
+	other.apply_save(data)
+	var same: bool = other.plan_orders(1)["scout"] == "hq" and other.plan_name(1).length() == 14
+	var mission: bool = other.mission_orders(3)["armor"] == "loot" and other.mission_orders(4)["armor"] == "auto"
+	gs.free()
+	other.free()
+	return same and mission
+
+
+func test_hq_order_picks_the_command_tower() -> bool:
+	var targets := [
+		{"type": "mg", "top": Vector3(1, 0, 0), "is_defense": true, "loot": 0, "destroyed": false},
+		{"type": "hq", "top": Vector3(9, 0, 0), "is_defense": false, "loot": 50, "destroyed": false}]
+	var picked := RaidRules.pick_target("hq", Vector3.ZERO, targets)
+	targets[1]["destroyed"] = true
+	return picked == 1 and RaidRules.pick_target("hq", Vector3.ZERO, targets) == 0
+
+
 func test_strike_unlocks_at_support_level_two() -> bool:
 	var gs := _fresh_state()
 	gs.fuel = 5000

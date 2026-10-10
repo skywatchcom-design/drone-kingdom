@@ -68,6 +68,8 @@ var _flare_smoke := 0.0
 var _smouldering: Array = []
 var _burn_tick := 0.0
 var army := {}
+## The attack plan in force: an order per unit type (see Catalog.PLAN_TARGETS), empty without a Planning HQ.
+var orders := {}
 var _pinch := Pinch.new()
 ## The red squares shown for a moment after a tap too close to a building.
 var _zones: Node3D
@@ -115,6 +117,7 @@ func _ready() -> void:
 	hud.retry_pressed.connect(func() -> void: get_tree().reload_current_scene())
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAP_SCENE if GameState.raid_target == "syndicate" else HOME_SCENE))
 	hud.ability_pressed.connect(_on_ability)
+	hud.plan_selected.connect(_on_plan_selected)
 	_start()
 	_frame_base()
 	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fx-demo"):
@@ -213,7 +216,9 @@ func _start() -> void:
 	hud.set_title(base["name"])
 	for type in army:
 		unit_levels[type] = force_level if force_level > 0 else int(GameState.units.get(type, 1))
-	hud.set_army(army, drone_names, selected, unit_levels)
+	orders = _starting_orders(args)
+	hud.set_army(army, drone_names, selected, unit_levels, orders)
+	_show_plans()
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
 	support = GameState.support_ready.duplicate()
@@ -237,12 +242,76 @@ func _start() -> void:
 		_autoplay_deploy()
 
 
+# ---------------------------------------------------------------- attack plans
+
+## The orders a battle starts with: the player's plan (or, in a Syndicate mission, what was used
+## there last). Dev: `--orders armor:hq,courier:loot` sets them by hand.
+func _starting_orders(args: Array) -> Dictionary:
+	if args.has("--planning-demo") and OS.is_debug_build():
+		# Dev (use with --fresh): a Planning HQ with two plans, for pictures.
+		if GameState.level_of("planning") <= 0:
+			GameState.structures.append({"type": "planning", "cell": [8, 8], "level": 3})
+		GameState.set_plan_order(0, "infantry", "hq")
+		GameState.set_plan_order(0, "courier", "loot")
+		GameState.set_plan_order(0, "armor", "defense")
+		GameState.rename_plan(0, I18n.t("Front line"))
+		GameState.set_plan_order(1, "courier", "defense")
+		GameState.plan_active = 0
+	if args.has("--orders"):
+		var forced := {}
+		for part: String in args[args.find("--orders") + 1].split(","):
+			forced[part.get_slice(":", 0)] = part.get_slice(":", 1)
+		return forced
+	if GameState.raid_target == "syndicate":
+		return GameState.mission_orders(GameState.syndicate_mission)
+	return GameState.battle_orders()
+
+
+## What a unit goes for: its order, or its own habit when it has none. Engineers keep breaching.
+func _prefers_of(type: String) -> String:
+	var own := str(Catalog.unit_def(type).get("prefers", "any"))
+	var order := str(orders.get(type, "auto"))
+	return own if order == "auto" or own == "fence" else order
+
+
+## The plan buttons over the cards, until the first unit goes in.
+func _show_plans() -> void:
+	if started or GameState.plan_slots() <= 0:
+		hud.hide_plans()
+		return
+	var names := []
+	var active := -1
+	for i in GameState.plan_slots():
+		names.append(GameState.plan_name(i) if GameState.plan_name(i) != "" else I18n.t("Plan %d") % (i + 1))
+		if orders == GameState.plan_orders(i):
+			active = i
+	hud.set_plans(names, active)
+
+
+func _on_plan_selected(slot: int) -> void:
+	if started:
+		return
+	GameState.plan_active = slot
+	orders = GameState.plan_orders(slot)
+	hud.set_army(army, drone_names, selected, unit_levels, orders)
+	_show_plans()
+
+
+## The first unit is in: the plan is fixed for this battle, and a Syndicate mission remembers it.
+func _lock_orders() -> void:
+	if started:
+		return
+	hud.hide_plans()
+	if GameState.raid_target == "syndicate" and not orders.is_empty():
+		GameState.remember_mission_orders(GameState.syndicate_mission, orders)
+
+
 # ---------------------------------------------------------------- deploying
 
 func _on_unit_selected(type: String) -> void:
 	selected = type
 	hud.update_army(army, drone_names, selected)
-	hud.set_status("%s: %s" % [Catalog.display_name(type), Catalog.target_text(type)])
+	hud.set_status("%s: %s" % [Catalog.display_name(type), Catalog.target_text(type, str(orders.get(type, "auto")))])
 
 
 func _first_available() -> String:
@@ -360,12 +429,14 @@ func tutorial_target(key: String) -> Rect2:
 
 func _deploy(type: String, p: Vector3) -> void:
 	GameState.tutorial_event("deploy")
+	_lock_orders()
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)
 	var d := Drone.new()
 	d.configure(stats)
 	d.kind = type
+	d.prefers = _prefers_of(type)
 	d.invulnerable = false
 	level.add_child(d)
 	d.position = p
@@ -385,6 +456,7 @@ func _deploy(type: String, p: Vector3) -> void:
 ## lined up facing the base.
 func _deploy_ground(type: String, p: Vector3) -> void:
 	GameState.tutorial_event("deploy")
+	_lock_orders()
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)
@@ -400,6 +472,7 @@ func _deploy_ground(type: String, p: Vector3) -> void:
 	for i in count:
 		var u := GroundUnit.new()
 		u.configure(stats)
+		u.prefers = _prefers_of(type)
 		u.kneels = i % 2 == 0
 		u.invulnerable = false
 		u.rotation.y = facing
@@ -423,7 +496,7 @@ func _deploy_ground(type: String, p: Vector3) -> void:
 ## color of its target badge, with a ring round the target (approved sketch
 ## FXGoTcv7xRzZbR5GDqE6S3). Engineers point at the wall they will breach. Fades after a moment.
 func _show_aim(type: String, p: Vector3) -> void:
-	var prefers := str(Catalog.unit_def(type).get("prefers", "any"))
+	var prefers := _prefers_of(type)
 	var from := Vector3(p.x, 0.0, p.z)
 	var goal: Vector3
 	var ring := 3.2
