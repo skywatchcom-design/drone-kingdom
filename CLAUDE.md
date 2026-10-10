@@ -234,5 +234,10 @@ Black Ops One letters, "Sky" sand + "Watch" gold with a dark olive drop, top-vie
 `assets/icon/logo.png` (transparent, rendered from canvas) and the boot splash `assets/icon/splash.png` (also the web
 loading picture). Store banner `docs/store/feature_graphic_1024x500.png` (owner's Gemini picture + logo; `_clean` without).
 Still to prepare: store screenshots (from a developed showcase base, no dev coins), Data safety and content rating
-answers, a web page for account deletion.
+answers.
+Account deletion page for Google Play (10.10.2026): `web/account/delete.html`, published at
+https://skywatchcom-design.github.io/drone-kingdom/account/delete.html (`?lang=he|en`). Log in by commander name or
+email (same made-up address as `Cloud.email_for`), tick a box, `delete_my_account`; the players row goes by cascade.
+Lists what is deleted; no-email players (under 13) ask by email. Linked from both privacy pages; checked against the
+live server with a throwaway account.
 Still waiting on the owner: Apple Developer and Google Play accounts.
