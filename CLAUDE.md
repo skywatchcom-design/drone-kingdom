@@ -201,6 +201,12 @@ blows. Generated enemy bases get traps on their own RNG (`Bases.generate`). Raid
 `bake_pictures.tscn -- --only spring,airmine`.
 Still to build from that sketch: defense log + replay (needs real PvP on Supabase first: today every raid is against a
 generated base), saved layouts, camo net, medic / jammer drone, season pass.
+**Open task (10.10.2026): real PvP + defense log on Supabase.** Sketch https://claude.ai/artifact/NW7rzSLQsYyZ2g54BgcdTx
+waits for the owner's pick (ask again first): finding an opponent (A search with "Next" / B board of 3 opponents /
+C ladder + revenge), defense report (A welcome-back from Noa + log / B log only / C damage map instead of replay),
+rules (A like Clash 20% / B soft 10% + 8 h shield + protected until HQ 2 / C only uncollected loot). Recommended:
+B, A+C (replay later), B. Then build the server side (opponent pick, battle results, loot taken from the defender,
+shield, trophies) with `/supabase`, and the log screen.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
 players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
 waiting for tomorrow). Sketch first.
