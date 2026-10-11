@@ -240,10 +240,26 @@ never saved), `--anon` (skip the saved login so the badge says "Commander"), `--
 Play Console answers and listing text: `docs/store/play-console-answers.md`. Play Console (10.10.2026): app created
 (English default + Hebrew), internal test release 1 (0.1.0) uploaded, App content forms done (ratings PEGI 7 / ESRB E10+,
 audience 9+ so the Families policy applies), reviewer account `PlayReviewer` (password in `tmp/play_reviewer.txt`).
-Next: closed test (Alpha) with a Google Group of 12+ testers for 14 days, then production access.
+Closed test "Alpha" (Play's Hebrew UI calls it "בדיקות בקבוצות מוגדרות") sent for review 11.10.2026: testers from
+the email list "Team", feedback to skywatchcom@gmail.com. Opt-in link: https://play.google.com/apps/testing/com.skywatchcom.skywatch
+(works after approval, only for listed testers in listed countries). 12+ testers must stay opted in for 14 days, then
+production access. Never suggest fake tester accounts (against Play policy, risks the developer account).
+
 Account deletion page for Google Play (10.10.2026): `web/account/delete.html`, published at
 https://skywatchcom-design.github.io/drone-kingdom/account/delete.html (`?lang=he|en`). Log in by commander name or
 email (same made-up address as `Cloud.email_for`), tick a box, `delete_my_account`; the players row goes by cascade.
 Lists what is deleted; no-email players (under 13) ask by email. Linked from both privacy pages; checked against the
 live server with a throwaway account.
-Still waiting on the owner: Apple Developer and Google Play accounts.
+Still waiting on the owner: the Apple Developer account (Google Play is approved, 10.10.2026).
+
+## Android releases (Google Play)
+- Work goes on as usual: every change still ships to the web build. A Play build is made only when the owner asks
+  ("גרסה לגוגל"), not on every change. Do not upload a new build while the first review is still pending.
+- Build: `powershell -ExecutionPolicy Bypass -File tools/build_android.ps1` (bumps `version/code` in
+  `export_presets.cfg`; `-Name 0.2.0` also sets the version name; `-NoBump` rebuilds). The signed bundle lands in
+  `C:/Dev/drone-kingdom/build/android_upload/skywatch-<name>-v<code>.aab`. Commit the bumped preset with the build.
+- Owner uploads it: Alpha > create new release > upload > release notes (`<en-US>` and `<iw-IL>`) > send for review.
+- Players already have saves: any save-format change needs a migration (as v4..v11), and Supabase changes must keep
+  working for older installed builds (web and Android update at different times).
+- The upload key (`tmp/skywatch-release.keystore` + password, main checkout) is the only key Play accepts; never
+  make a new one. Google holds the app-signing key (Play App Signing).
