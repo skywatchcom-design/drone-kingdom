@@ -247,9 +247,10 @@ Apple rules kept: only in-app footage, no prices, no other platforms on screen.
 Play Console answers and listing text: `docs/store/play-console-answers.md`. Play Console (10.10.2026): app created
 (English default + Hebrew), internal test release 1 (0.1.0) uploaded, App content forms done (ratings PEGI 7 / ESRB E10+,
 audience 9+ so the Families policy applies), reviewer account `PlayReviewer` (password in `tmp/play_reviewer.txt`).
-Closed test "Alpha" (Play's Hebrew UI calls it "בדיקות בקבוצות מוגדרות") sent for review 11.10.2026: testers from
+Closed test "Alpha" (Play's Hebrew UI calls it "בדיקות בקבוצות מוגדרות") sent for review 11.10.2026 and **APPROVED by Google the same day** (12.10.2026: release 0.1.0, version code 1, live
+"available to selected testers", 2 countries): testers from
 the email list "Team", feedback to skywatchcom@gmail.com. Opt-in link: https://play.google.com/apps/testing/com.skywatchcom.skywatch
-(works after approval, only for listed testers in listed countries). 12+ testers must stay opted in for 14 days, then
+(works now, only for listed testers in listed countries; the 14-day count starts when testers actually join). 12+ testers must stay opted in for 14 days, then
 production access. Never suggest fake tester accounts (against Play policy, risks the developer account).
 
 Account deletion page for Google Play (10.10.2026): `web/account/delete.html`, published at
