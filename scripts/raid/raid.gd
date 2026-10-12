@@ -120,6 +120,7 @@ func _ready() -> void:
 	hud.plan_selected.connect(_on_plan_selected)
 	_start()
 	_frame_base()
+	WorldSetup.dev_camera(self, cam, hud, focus)
 	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fx-demo"):
 		_fx_demo()
 	if GameState.raid_target == "syndicate":
@@ -560,6 +561,7 @@ func _autoplay_deploy() -> void:
 
 func _process(delta: float) -> void:
 	_burn(delta)
+	_dev_follow(delta)
 	if _zones != null:
 		_zone_flash = maxf(0.0, _zone_flash - delta)
 		var a := minf(1.0, _zone_flash / 0.5)
@@ -1643,6 +1645,32 @@ func _frame_base() -> void:
 	WorldSetup.place_camera(cam, focus)
 	if not OS.get_cmdline_user_args().has("--view"):
 		cam.size = clampf(reach + 12.0, 28.0, VIEW_SIZE)
+
+
+## Dev, for store videos: `--follow N` keeps the camera on the middle of the attacking units,
+## N meters tall, drifting there smoothly.
+func _dev_follow(delta: float) -> void:
+	if not OS.is_debug_build():
+		return
+	var args := OS.get_cmdline_user_args()
+	if not args.has("--follow"):
+		return
+	var sum := Vector3.ZERO
+	var n := 0
+	var units: Array = []
+	units.append_array(drones)
+	units.append_array(ground)
+	for u: Unit in units:
+		if not u.dead:
+			sum += Vector3(u.global_position.x, 0.0, u.global_position.z)
+			n += 1
+	if n == 0:
+		return
+	var want := sum / n
+	var k := 1.0 - exp(-delta * 0.9)
+	focus = Vector3(lerpf(focus.x, want.x, k), focus.y, lerpf(focus.z, want.z, k))
+	cam.size = lerpf(cam.size, float(args[args.find("--follow") + 1]), k)
+	WorldSetup.place_camera(cam, focus)
 
 
 ## Dev: `--fx-demo` leaves buildings damaged (so they burn) and sets off explosions on them, to

@@ -237,6 +237,13 @@ Store screenshots (10.10.2026): `docs/store/screenshots/{en,he}_1..5.jpg` (1920x
 shop, Noa). Dev flags for them: `--fresh --showcase N` (developed HQ-N base, full army, no tutorial, no level labels,
 never saved), `--anon` (skip the saved login so the badge says "Commander"), `--lang en|he`; 1080p needs a temporary
 `override.cfg` with `display/window/size/window_width_override=1920` / `height=1080` (never commit it).
+Approved 12.10.2026: store video direction C "mixed" (https://claude.ai/artifact/BkDGMrvmSVVLVPLbGjA16Z), English, landscape
+1920x1080, 30 s, original upbeat music. Result: https://claude.ai/artifact/KZ4FUiA7QTfgyVbU7JvcWf. Pipeline: `bash tools/record_store_video.sh`
+(MJPEG .avi via the movie writer, ~8x faster than PNG; temporary `override.cfg` for a 1080p window) ->
+`python tools/make_promo_music.py` (128 BPM, 16 bars = 30 s, cuts on bar lines) -> `python tools/make_store_video.py`
+(Black Ops One from tmp/fonts, logo-style caption tags, end card) -> `docs/store/video/skywatch_store_1080p.mp4`
+(git-ignored, ~40 MB). Dev flags: `--fresh --showcase 4 --lang en` (see screenshots above), plus `--no-hud`, `--cinema A,B,S[,DX,DZ]` (home and raid), raid `--follow N` (camera on the attackers).
+Apple rules kept: only in-app footage, no prices, no other platforms on screen.
 Play Console answers and listing text: `docs/store/play-console-answers.md`. Play Console (10.10.2026): app created
 (English default + Hebrew), internal test release 1 (0.1.0) uploaded, App content forms done (ratings PEGI 7 / ESRB E10+,
 audience 9+ so the Families policy applies), reviewer account `PlayReviewer` (password in `tmp/play_reviewer.txt`).

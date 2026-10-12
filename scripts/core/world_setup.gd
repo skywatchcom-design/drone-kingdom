@@ -82,6 +82,27 @@ static func place_camera(cam: Camera3D, focus: Vector3) -> void:
 	cam.look_at(focus, Vector3.UP)
 
 
+## Dev, for store videos: `--no-hud` hides the HUD; `--cinema A,B,S[,DX,DZ]` moves the camera over
+## S seconds from A to B times its starting view size while sliding DX/DZ meters (screen-ish axes).
+static func dev_camera(owner: Node, cam: Camera3D, hud: CanvasLayer, focus: Vector3) -> void:
+	if not OS.is_debug_build():
+		return
+	var args := OS.get_cmdline_user_args()
+	if args.has("--no-hud"):
+		hud.visible = false
+	if not args.has("--cinema"):
+		return
+	var p: PackedStringArray = args[args.find("--cinema") + 1].split(",")
+	var size0 := cam.size
+	var secs := float(p[2])
+	var slide := Vector3(float(p[3]), 0.0, float(p[4])) if p.size() >= 5 else Vector3.ZERO
+	cam.size = size0 * float(p[0])
+	place_camera(cam, focus - slide * 0.5)
+	var tw := owner.create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(cam, "size", size0 * float(p[1]), secs)
+	tw.tween_method(func(f: Vector3) -> void: place_camera(cam, f), focus - slide * 0.5, focus + slide * 0.5, secs)
+
+
 ## Darker screen edges, under the HUD, so the eye goes to the middle.
 static func _vignette(parent: Node) -> void:
 	var layer := CanvasLayer.new()

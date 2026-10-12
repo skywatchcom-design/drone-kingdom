@@ -91,6 +91,7 @@ func _ready() -> void:
 	GameState.finish_ready()
 	GameState.process_training()
 	_rebuild()
+	WorldSetup.dev_camera(self, cam, hud, focus)
 	GameState.tutorial_event("home")
 	Tutorial.attach(self)
 	# Each new tutorial step starts from a clear base, so its target is in view.
