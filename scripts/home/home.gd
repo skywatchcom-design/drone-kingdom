@@ -128,7 +128,8 @@ func _ready() -> void:
 	elif args.has("--screenshot-build") or args.has("--screenshot-shop"):
 		_open_shop("defenses")
 	elif args.has("--screenshot-upgrade"):
-		_open_upgrade([4, 4])
+		var hq: Array = GameState.structures.filter(func(s: Dictionary) -> bool: return s["type"] == "hq")
+		_open_upgrade(hq[0]["cell"] if not hq.is_empty() else [4, 4])
 	elif args.has("--screenshot-info"):
 		_open_info("mg", 1, [4, 3])
 	elif args.has("--screenshot-settings"):
