@@ -244,6 +244,9 @@ Approved 12.10.2026: store video direction C "mixed" (https://claude.ai/artifact
 (Black Ops One from tmp/fonts, logo-style caption tags, end card) -> `docs/store/video/skywatch_store_1080p.mp4`
 (git-ignored, ~40 MB). Dev flags: `--fresh --showcase 4 --lang en` (see screenshots above), plus `--no-hud`, `--cinema A,B,S[,DX,DZ]` (home and raid), raid `--follow N` (camera on the attackers).
 Apple rules kept: only in-app footage, no prices, no other platforms on screen.
+Owner uploaded it to YouTube (SkyWatch channel, made for kids, embedding on) and linked it in the Play store listing
+(English + Hebrew) on 12.10.2026, sent for review. Still to do: App Store preview sizes (needs the Apple account),
+a 9:16 cut for TikTok/Reels/Shorts.
 Play Console answers and listing text: `docs/store/play-console-answers.md`. Play Console (10.10.2026): app created
 (English default + Hebrew), internal test release 1 (0.1.0) uploaded, App content forms done (ratings PEGI 7 / ESRB E10+,
 audience 9+ so the Families policy applies), reviewer account `PlayReviewer` (password in `tmp/play_reviewer.txt`).
