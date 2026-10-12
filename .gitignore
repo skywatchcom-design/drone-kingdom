@@ -10,3 +10,4 @@ assets/models/incoming/*.png
 assets/models/incoming/*.webp*
 docs/store/video/*.mp4
 override.cfg
+assets/models/incoming/mixamo/
