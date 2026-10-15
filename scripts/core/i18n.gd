@@ -6,6 +6,18 @@ extends RefCounted
 static var lang := "he"
 
 const HE := {
+	# Base Wars prototype
+	"Wave %d!": "גל %d!",
+	"Wave %d cleared! +100": "גל %d הושלם! +100",
+	"Command Tower %d%%": "מגדל פיקוד %d%%",
+	"Wave %d/%d": "גל %d/%d",
+	"Wave %d ▶": "גל %d ▶",
+	"Wave %d in %d": "גל %d בעוד %d",
+	"Victory!": "ניצחון!",
+	"Base destroyed": "הבסיס הושמד",
+	"+850 coins · +50 gems": "+850 מטבעות · +50 יהלומים",
+	"Fell in wave %d of %d": "נפלת בגל %d מתוך %d",
+	"Next stage": "לשלב הבא",
 	# Structures and drones
 	"Command Tower": "מגדל פיקוד",
 	"Solar Generator": "גנרטור סולארי",

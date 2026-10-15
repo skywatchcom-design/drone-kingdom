@@ -5,7 +5,7 @@ config_version=5
 [application]
 
 config/name="Drone Kingdom"
-run/main_scene="res://scenes/home/home.tscn"
+run/main_scene="res://scenes/merge/merge.tscn"
 config/icon="res://assets/icon/icon.png"
 boot_splash/bg_color=Color(0.094, 0.118, 0.071, 1)
 boot_splash/image="res://assets/icon/splash.png"
@@ -19,13 +19,13 @@ Cloud="*res://scripts/autoload/cloud.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/size/window_width_override=1040
-window/size/window_height_override=585
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/size/window_width_override=450
+window/size/window_height_override=800
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=4
+window/handheld/orientation=1
 
 [input_devices]
 

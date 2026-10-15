@@ -30,6 +30,15 @@ Read the GDD before changing gameplay: it records every product decision made wi
 - Skills in `.claude/skills/`: `/ship`, `/sketch`, `/noa-voice` (Noa's lines, `tools/voice/noa_line.py`),
   `/supabase` (migrations and checks, `tools/supabase_sql.py`).
 
+## Base Wars pivot (owner, 15.10.2026, branch `diorama`, not in main)
+The owner decided to change the concept completely to **Base Wars**: tower defense + merge (owner's docs "Base Wars Game
+Design Document" and "BASE WARS הסבר פשוט", 15.10.2026), portrait, in look B "town on a floating block" (sketch
+https://claude.ai/artifact/AgekkKZLSYRZCdFepdTztT). Prototype: `scenes/merge/merge.tscn` (now the main scene on the branch,
+project set to portrait 720x1280): `MergeGame` (9x9 board, winding street to the Command Tower, drag towers from the bar,
+drag onto an identical tower to merge up to level 5, 10 waves of Iron Fang, coins +5 a kill, +100 a wave) and `MergeHud`.
+Reuses MgNest / MortarPit / AaBattery models (look per level), robots / tank / scout drone painted as Iron Fang. Look trial
+flags for the old scenes: `-- --look toy|diorama|town`. Dev: `-- --merge-bot` plays by itself (recordings).
+
 ## Stack and commands
 - Godot 4.7.2, GDScript. Godot binary (winget):
   `%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.7.2-stable_win64_console.exe`
