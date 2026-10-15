@@ -139,14 +139,20 @@ static func crates(parent: Node3D, at: Vector3, n: int) -> void:
 ## level, a glass cab, a deck with a rail from Lv3, a pointed cap (gold at Lv5), a flag from Lv2
 ## and a dish at Lv4+.
 static func _hq(root: Node3D, level: int) -> float:
+	# Command Tower skins (StructureModels.skin): the walls, the roof and the glass take the
+	# skin's colours; snow adds white caps.
+	var skin: Dictionary = StructureModels.HQ_SKINS.get(StructureModels.skin.get("hq", ""), {})
+	var wall: Color = skin.get("wall", WALL)
+	var roof: Color = skin.get("cap", ROOF)
+	var glass: Color = (skin["glow"] as Color).darkened(0.35) if skin.has("glow") else GLASS
 	rbox(root, Vector3(4.6, 0.5, 4.6), Vector3(0, 0.25, 0), m(WALL2), 0.1)
 	for i in 2:
 		MeshKit.add(root, MeshKit.box(Vector3(1.4, 0.12, 0.4)), m(WALL2, 0.9), Vector3(0, 0.06 + i * 0.12, 2.5 - i * 0.2))
 	var shaft := 2.4 + 0.6 * level
-	rbox(root, Vector3(2.6, shaft, 2.6), Vector3(0, 0.5 + shaft / 2.0, 0), m(WALL), 0.12)
+	rbox(root, Vector3(2.6, shaft, 2.6), Vector3(0, 0.5 + shaft / 2.0, 0), m(wall), 0.12)
 	for k in int(shaft / 1.0):
 		for side: Vector3 in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
-			MeshKit.add(root, MeshKit.box(Vector3(0.05, 0.6, 0.3) if side.x > 0 else Vector3(0.3, 0.6, 0.05)), m(GLASS, 0.3), side * 1.31 + Vector3(0, 1.2 + k * 1.0, 0))
+			MeshKit.add(root, MeshKit.box(Vector3(0.05, 0.6, 0.3) if side.x > 0 else Vector3(0.3, 0.6, 0.05)), m(glass, 0.3), side * 1.31 + Vector3(0, 1.2 + k * 1.0, 0))
 	trim(root, Vector3(2.6, 0, 2.6), Vector3(0, 0.5, 0), shaft * 0.5, level)
 	var cab := 0.5 + shaft
 	if level >= 3:
@@ -154,14 +160,17 @@ static func _hq(root: Node3D, level: int) -> float:
 		for side: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
 			MeshKit.add(root, MeshKit.box(Vector3(0.04, 0.04, 3.7) if side.x != 0 else Vector3(3.7, 0.04, 0.04)), m(FRAME, 0.6), side * 1.85 + Vector3(0, cab + 0.6, 0))
 		cab += 0.2
-	rbox(root, Vector3(3.0, 1.3, 3.0), Vector3(0, cab + 0.65, 0), m(WALL), 0.06)
-	MeshKit.add(root, MeshKit.box(Vector3(3.04, 0.85, 3.04)), m(GLASS, 0.25), Vector3(0, cab + 0.7, 0))
+	rbox(root, Vector3(3.0, 1.3, 3.0), Vector3(0, cab + 0.65, 0), m(wall), 0.06)
+	MeshKit.add(root, MeshKit.box(Vector3(3.04, 0.85, 3.04)), m(glass, 0.25), Vector3(0, cab + 0.7, 0))
 	for k in 3:
 		for side: Vector3 in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
 			var off := Vector3(side.z, 0, side.x) * (-0.75 + k * 0.75)
 			MeshKit.add(root, MeshKit.box(Vector3(0.05, 0.9, 0.08) if side.x > 0 else Vector3(0.08, 0.9, 0.05)), m(FRAME, 0.6), side * 1.53 + off + Vector3(0, cab + 0.7, 0))
-	rbox(root, Vector3(3.4, 0.25, 3.4), Vector3(0, cab + 1.42, 0), m(ROOF, 0.6), 0.05)
-	var cap := MeshKit.add(root, MeshKit.cyl(0.0, 1.6, 1.2, 4), UnitModels.level_material(5) if level >= 5 else m(ROOF, 0.6), Vector3(0, cab + 2.15, 0))
+	rbox(root, Vector3(3.4, 0.25, 3.4), Vector3(0, cab + 1.42, 0), m(roof, 0.6), 0.05)
+	var cap := MeshKit.add(root, MeshKit.cyl(0.0, 1.6, 1.2, 4), UnitModels.level_material(5) if level >= 5 else m(roof, 0.6), Vector3(0, cab + 2.15, 0))
+	if skin.get("snow", false):
+		rbox(root, Vector3(3.5, 0.12, 3.5), Vector3(0, cab + 1.6, 0), m(Color(0.97, 0.98, 1.0), 0.9), 0.04)
+		rbox(root, Vector3(4.7, 0.1, 4.7), Vector3(0, 0.55, 0), m(Color(0.97, 0.98, 1.0), 0.9), 0.04)
 	cap.rotation.y = PI / 4.0
 	var top := cab + 2.75
 	MeshKit.add(root, MeshKit.cyl(0.03, 0.04, 1.2, 6), m(METAL, 0.4), Vector3(0, top + 0.6, 0))

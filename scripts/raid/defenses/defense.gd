@@ -28,6 +28,12 @@ func setup(p_stats: Dictionary, p_roof_y: float) -> void:
 	radius = float(stats.get("radius", 10.0))
 	level = int(stats.get("level", 1))
 	roof_y = p_roof_y
+	if MeshKit.look == "leo":
+		# Base Wars: every defense stands on a concrete plinth with the level trim, like the
+		# buildings.
+		LeoModels.rbox(self, Vector3(4.9, 0.3, 4.9), Vector3(0, roof_y + 0.15, 0), MeshKit.mat(LeoModels.WALL2, 0.85), 0.08)
+		LeoModels.trim(self, Vector3(4.9, 0, 4.9), Vector3(0, roof_y, 0), 0.22, level)
+		roof_y += 0.3
 	model = Node3D.new()
 	model.position.y = roof_y
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.0 + 0.03 * (level - 1))

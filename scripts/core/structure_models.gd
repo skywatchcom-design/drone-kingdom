@@ -641,7 +641,8 @@ static func sandbags(parent: Node3D, r: float, rows: int) -> void:
 			var a := (i + (row % 2) * 0.5) / n * TAU
 			var b := Basis(Vector3.UP, -a).scaled(Vector3(1.15, 0.5, 0.78))
 			transforms.append(Transform3D(b, Vector3(cos(a) * r, 0.2 + row * 0.3, sin(a) * r)))
-	MeshKit.multi(parent, MeshKit.sphere(0.32, 8), MeshKit.surface("canvas", BAG, 0.95), transforms)
+	var bag := MeshKit.mat(Color(0.74, 0.64, 0.45), 0.95) if MeshKit.look == "leo" else MeshKit.surface("canvas", BAG, 0.95)
+	MeshKit.multi(parent, MeshKit.sphere(0.32, 8), bag, transforms)
 
 
 ## An olive ammo crate with a yellow band.
@@ -652,6 +653,9 @@ static func crate(parent: Node3D, x: float, z: float, s: float = 1.0) -> void:
 
 ## A camouflage net on four poles.
 static func camo_net(parent: Node3D, w: float, d: float, y: float) -> void:
+	if MeshKit.look == "leo":
+		# The clean look leaves the netting out: from above it hid the weapon.
+		return
 	var net := PlaneMesh.new()
 	net.size = Vector2(w, d)
 	net.subdivide_width = 6

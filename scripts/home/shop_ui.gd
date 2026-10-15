@@ -73,15 +73,7 @@ static func shop(tab: String, on_tab: Callable, on_buy: Callable, on_info: Calla
 			badge.visible = true
 	var title := HomeHud.make_label(box, I18n.t(TAB_NAMES[tab]), 30)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var scroll := ScrollContainer.new()
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(scroll)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(row)
+	var row := _card_rows(box, 12)
 	for type in Catalog.SHOP_TABS[tab]:
 		row.add_child(_card(type, on_buy, on_info))
 	var foot := PanelContainer.new()
@@ -227,15 +219,7 @@ static func army(on_train: Callable, on_cancel: Callable, on_info: Callable, on_
 			on_speedup.call())
 		q.add_child(fast)
 		update_army_timer(box)
-	var scroll := ScrollContainer.new()
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(scroll)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(row)
+	var row := _card_rows(box, 10)
 	for type in Catalog.UNIT_ORDER:
 		row.add_child(_unit_card(type, on_train, on_cancel, on_info))
 	return box
@@ -577,6 +561,31 @@ static func picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33
 
 
 ## The picture drawn live in a small 3D stage.
+## Where a window's cards go: one row that scrolls sideways in landscape; in portrait, rows
+## that wrap and scroll down, so the tall window fills with cards.
+static func _card_rows(box: Control, separation: int) -> Container:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	var screen := (Engine.get_main_loop() as SceneTree).root.get_visible_rect().size
+	if screen.y > screen.x:
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", separation)
+		flow.add_theme_constant_override("v_separation", separation)
+		flow.alignment = FlowContainer.ALIGNMENT_CENTER
+		flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(flow)
+		return flow
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", separation)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(row)
+	return row
+
+
 static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33)) -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
@@ -648,5 +657,11 @@ static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58,
 	cam.fov = 40.0
 	vp.add_child(cam)
 	var far := 1.25 if type == "hq" else 1.0
+	if type == "hq" and MeshKit.look == "leo":
+		# The control tower is tall: frame it from further back, looking higher up.
+		far = 1.55
+		look = Vector3(0, 3.4, 0)
+	elif Catalog.is_defense(type) and MeshKit.look == "leo":
+		far = 1.2
 	cam.look_at_from_position(eye * far, look)
 	return frame
