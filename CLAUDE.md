@@ -30,7 +30,14 @@ Read the GDD before changing gameplay: it records every product decision made wi
 - Skills in `.claude/skills/`: `/ship`, `/sketch`, `/noa-voice` (Noa's lines, `tools/voice/noa_line.py`),
   `/supabase` (migrations and checks, `tools/supabase_sql.py`).
 
-## Base Wars pivot (owner, 15.10.2026, branch `diorama`, not in main)
+## Base Wars (owner, 15.10.2026): the new version, branch `basewars`
+Approved 15.10.2026: the owner moves to Base Wars and builds it as a **separate version** on branch `basewars`
+(main / SkyWatch stays as it is). Look: the refined serious tone "leo" (https://claude.ai/artifact/AaiZwV3Jjo92kGX1rZEgZY,
+`scenes/merge/town.tscn -- --tone leo`, after the owner's Leonardo picture): isometric 9x9 base on a floating block of earth,
+grey concrete blocks between dark streets with crosswalks, khaki walls, olive ribbed metal roofs, red only on fuel tanks,
+control-tower Command Tower, stronger shading. Portrait 720x1280. Previews go to `/preview/basewars/`.
+
+## Base Wars pivot history (15.10.2026, branch `diorama`)
 The owner decided to change the concept completely to **Base Wars**: tower defense + merge (owner's docs "Base Wars Game
 Design Document" and "BASE WARS הסבר פשוט", 15.10.2026), portrait, in look B "town on a floating block" (sketch
 https://claude.ai/artifact/AgekkKZLSYRZCdFepdTztT). Prototype: `scenes/merge/merge.tscn` (now the main scene on the branch,
