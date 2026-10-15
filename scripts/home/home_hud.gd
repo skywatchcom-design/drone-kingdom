@@ -578,6 +578,11 @@ func actions_open() -> bool:
 ## parchment, for content that draws its own card.
 func show_modal(content: Control, size: Vector2, locked: bool = false, bare: bool = false) -> void:
 	_modal_locked = locked
+	# Windows were laid out for landscape. In portrait they take the screen's width and grow
+	# taller, so their containers reflow; whatever still does not fit shrinks (below).
+	var screen := get_viewport().get_visible_rect().size
+	if screen.y > screen.x and size.x > screen.x - 24.0:
+		size = Vector2(screen.x - 24.0, minf(size.y * 1.35, screen.y - 200.0))
 	_modal_sheet.self_modulate.a = 0.0 if bare else 1.0
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		_modal_body.add_theme_constant_override(side, 0 if bare else 16)
@@ -590,11 +595,27 @@ func show_modal(content: Control, size: Vector2, locked: bool = false, bare: boo
 	_modal.offset_top = -size.y / 2.0
 	_modal.offset_bottom = size.y / 2.0
 	# Windows were drawn for landscape; in portrait they shrink to fit the screen.
-	var screen := get_viewport().get_visible_rect().size
-	_modal.pivot_offset = size / 2.0
-	_modal.scale = Vector2.ONE * minf(1.0, minf((screen.x - 24.0) / size.x, (screen.y - 80.0) / size.y))
+	_modal.scale = Vector2.ONE
 	_dim.visible = true
 	_modal.visible = true
+	_fit_modal()
+
+
+## Some windows need more room than they were given (fixed-width rows): once laid out, the
+## window is centred on its real size and shrunk to fit the screen.
+func _fit_modal() -> void:
+	for i in 2:
+		await get_tree().process_frame
+	if not _modal.visible:
+		return
+	var screen := get_viewport().get_visible_rect().size
+	var real := _modal.size.max(_modal_sheet.get_combined_minimum_size())
+	_modal.offset_left = -real.x / 2.0
+	_modal.offset_right = real.x / 2.0
+	_modal.offset_top = -real.y / 2.0
+	_modal.offset_bottom = real.y / 2.0
+	_modal.pivot_offset = real / 2.0
+	_modal.scale = Vector2.ONE * minf(1.0, minf((screen.x - 24.0) / real.x, (screen.y - 80.0) / real.y))
 
 
 func hide_modal() -> void:
