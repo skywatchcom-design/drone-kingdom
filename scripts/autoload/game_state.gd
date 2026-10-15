@@ -39,7 +39,13 @@ var support_ready := {}
 var support_queue: Array = []
 var support_started := 0.0
 var enemy_index := 0
+## "enemy" (the next generated base), "pvp" (a player's base or an Iron Fang outpost: pvp_opponent),
+## "syndicate" or "self".
 var raid_target := "enemy"
+## The base the next "pvp" battle is against (Pvp.base_from_row or Pvp.outpost); not saved.
+var pvp_opponent := {}
+## Player ids "Next" has passed over in this search.
+var pvp_skip: Array = []
 var city_seed := 7
 var best_stars := {}
 ## Syndicate campaign: best stars per mission (by index as a string) and which mission the
@@ -792,6 +798,35 @@ func add_fuel(amount: int) -> int:
 	return fuel - before
 
 
+## What an attacker took while the player was away: out of the bank first, and whatever is left
+## out of what waits in the generators (coins) or pumps (fuel). Returns {coins, fuel} taken.
+func lose_loot(lost_coins: int, lost_fuel: int) -> Dictionary:
+	var taken := {"coins": 0, "fuel": 0}
+	for key in ["coins", "fuel"]:
+		var want: int = maxi(0, lost_coins if key == "coins" else lost_fuel)
+		var bank: int = coins if key == "coins" else fuel
+		var from_bank := mini(want, bank)
+		if key == "coins":
+			coins -= from_bank
+		else:
+			fuel -= from_bank
+		var rest := want - from_bank
+		for s in structures:
+			if rest <= 0:
+				break
+			if s["type"] != ("generator" if key == "coins" else "pump"):
+				continue
+			var take := mini(rest, generator_pending(s))
+			if take > 0:
+				# Less waiting is the same as having been collected a bit later.
+				var since := maxf(float(s.get("collected_at", now())), now() - Catalog.GENERATOR_FILL_MINUTES * 60.0)
+				s["collected_at"] = since + take / producer_rate(s) * 60.0
+				rest -= take
+		taken[key] = want - rest
+	save_game()
+	return taken
+
+
 ## Moves a generator's coins (or a pump's fuel) into the bank. If the bank is nearly full,
 ## whatever doesn't fit stays in the producer, as in Clash.
 func collect_generator(cell: Array) -> int:
@@ -1267,6 +1302,11 @@ func _count_win(stars: int) -> void:
 func record_raid(stars: int, loot: int, loot_fuel: int = 0) -> Dictionary:
 	if raid_target == "syndicate":
 		return record_syndicate(syndicate_mission, stars, loot, loot_fuel)
+	if raid_target == "pvp":
+		if stars > 0:
+			add_stat("raid_win")
+		_count_win(stars)
+		return {"coins": add_coins(loot), "fuel": add_fuel(loot_fuel)}
 	if raid_target != "enemy":
 		return {"coins": 0, "fuel": 0}
 	var key := str(enemy_index)

@@ -219,14 +219,19 @@ breaching) from `Catalog.PLAN_TARGETS` (auto, defense, loot, hq). In game (save 
 cycle the order), plan buttons over the battle cards until the first unit is sent (`RaidHud.set_plans`), order badge `Icons.target(type,
 order)` and `raid._prefers_of`. Later tools by building level (not built yet): intel preview, timing/waves, decoys. Dev: home
 `--fresh --tutorial -1 --screenshot-planning`, raid `--planning-demo` and `--orders armor:hq,courier:loot`.
-Still to build from that sketch: defense log + replay (needs real PvP on Supabase first: today every raid is against a
-generated base), saved layouts, camo net, medic / jammer drone, season pass.
-**Open task (10.10.2026): real PvP + defense log on Supabase.** Sketch https://claude.ai/artifact/NW7rzSLQsYyZ2g54BgcdTx
-waits for the owner's pick (ask again first): finding an opponent (A search with "Next" / B board of 3 opponents /
-C ladder + revenge), defense report (A welcome-back from Noa + log / B log only / C damage map instead of replay),
-rules (A like Clash 20% / B soft 10% + 8 h shield + protected until HQ 2 / C only uncollected loot). Recommended:
-B, A+C (replay later), B. Then build the server side (opponent pick, battle results, loot taken from the defender,
-shield, trophies) with `/supabase`, and the log screen.
+Still to build from that sketch: battle replay, saved layouts, camo net, medic / jammer drone, season pass.
+**Real PvP (owner's picks 15.10.2026 on sketch https://claude.ai/artifact/NW7rzSLQsYyZ2g54BgcdTx: A search with
+"Next", A+C Noa's welcome-back + log + damage map, B soft rules; full rules in GDD §8).** Server:
+`supabase/migrations/20261015_pvp.sql` (players.trophies/shield_until/lock_*, table `attacks` readable by its defender,
+RPCs `find_opponent(skip)` (locks the base 5 min), `report_attack`, `settle_attacks` (hands out unseen attacks once),
+`pvp_trophies` = `Pvp.trophy_change`). Game: `Pvp` (rules, leagues, `loot_pool`, `share_loot`, `base_from_row`,
+`outpost`, Noa's `tip`; no autoload names so the tests can load it), `Cloud.next_base/find_opponent/report_attack/
+settle_attacks/defense_log` (+ `trophies`, `shield_left()`), raid target "pvp" (`GameState.pvp_opponent`, `pvp_skip`;
+"Next" before the first deploy, End before deploying goes home), `GameState.lose_loot`, `DefenseUI` (welcome + log),
+home `_welcome_back` on start (then the login gift) and `_show_damage_map` (marks over the base, Done returns to the log).
+An Iron Fang outpost stands in when nobody is free, signed out or offline. Dev: raid `--pvp` (outpost) / `--pvp-demo`
+(a sample player), home `--screenshot-welcome|log|damage` (sample attacks); `cloud_check.tscn -- --pvp` checks the
+server flow with two throwaway accounts. Use `--anon` on dev runs so they never search or report with the saved login.
 **Next (owner, 8.10.2026): early-retention campaign** - a serious first-week campaign that is fun, teaches and makes
 players not want to leave (tie Noa, missions and Iron Fang into one story with a daily "wow" and a reward
 waiting for tomorrow). Sketch first.

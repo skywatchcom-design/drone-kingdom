@@ -97,6 +97,12 @@ var time_left := Catalog.BATTLE_SECONDS
 var loot_gained := 0
 var fuel_gained := 0
 var end_timer := -1.0
+## For the defender's damage map: where the first unit came in, traps that went off
+## ({cell, type, hits}) and walls brought down.
+var _entry := []
+var _traps_fired: Array = []
+var _walls_down: Array = []
+var _searching := false
 var focus := Vector3(0, 10, 0)
 var press_pos := Vector2.ZERO
 var autoplay := false
@@ -118,6 +124,7 @@ func _ready() -> void:
 	hud.home_pressed.connect(func() -> void: get_tree().change_scene_to_file(MAP_SCENE if GameState.raid_target == "syndicate" else HOME_SCENE))
 	hud.ability_pressed.connect(_on_ability)
 	hud.plan_selected.connect(_on_plan_selected)
+	hud.next_pressed.connect(_next_opponent)
 	_start()
 	_frame_base()
 	WorldSetup.dev_camera(self, cam, hud, focus)
@@ -136,8 +143,21 @@ func _start() -> void:
 	if args.has("--syndicate"):
 		GameState.raid_target = "syndicate"
 		GameState.syndicate_mission = int(args[args.find("--syndicate") + 1])
+	# Dev: `--pvp` attacks an Iron Fang outpost as if no player were free; `--pvp-demo` a made-up
+	# player's base (both without the server).
+	if OS.is_debug_build() and (args.has("--pvp") or args.has("--pvp-demo")):
+		GameState.raid_target = "pvp"
+		GameState.pvp_opponent = {}
+		if args.has("--pvp-demo"):
+			var sample := Bases.generate(4242, 3)
+			GameState.pvp_opponent = Pvp.base_from_row({"id": "", "name": "KOBI_77", "hq_level": 3, "trophies": 312,
+				"coins": 9200, "fuel": 5100, "city_seed": 11, "structures": sample["structures"], "walls": sample["walls"]}, GameState.now())
 	if GameState.raid_target == "syndicate":
 		base = Syndicate.base(GameState.syndicate_mission)
+	elif GameState.raid_target == "pvp":
+		base = GameState.pvp_opponent
+		if base.is_empty():
+			base = Pvp.outpost(randi(), GameState.hq_level())
 	else:
 		# Dev: `--enemy-hq N` makes a generated enemy base as if the player were at HQ N.
 		var enemy_hq := int(args[args.find("--enemy-hq") + 1]) if args.has("--enemy-hq") else GameState.hq_level()
@@ -181,6 +201,13 @@ func _start() -> void:
 			"loot": Catalog.loot_value(type, lvl) + Catalog.loot_fuel(type, lvl),
 			"loot_coins": Catalog.loot_value(type, lvl), "loot_fuel": Catalog.loot_fuel(type, lvl), "destroyed": false,
 		})
+	# A player's base holds what is really in their bank and generators, spread over the buildings.
+	if base.has("loot_pool"):
+		var shares := Pvp.share_loot(targets, base["loot_pool"])
+		for i in targets.size():
+			targets[i]["loot_coins"] = int(shares[i][0])
+			targets[i]["loot_fuel"] = int(shares[i][1])
+			targets[i]["loot"] = int(shares[i][0]) + int(shares[i][1])
 
 	for w in base.get("walls", []):
 		var edge: Array = w["edge"]
@@ -222,6 +249,15 @@ func _start() -> void:
 	_show_plans()
 	hud.set_timer(time_left)
 	hud.set_loot(0, 0)
+	if GameState.raid_target == "pvp":
+		var available := [0, 0]
+		for t in targets:
+			available[0] += int(t["loot_coins"])
+			available[1] += int(t["loot_fuel"])
+		hud.set_opponent(base.get("outpost", false), int(base.get("hq_level", GameState.hq_level())),
+			int(base.get("trophies", -1)), available[0], available[1])
+		hud.set_next(Pvp.NEXT_COST, GameState.infinite_coins or GameState.coins >= Pvp.NEXT_COST)
+		hud.retry_button.visible = false
 	support = GameState.support_ready.duplicate()
 	support_levels = GameState.abilities.duplicate()
 	if not syndicate_force.is_empty():
@@ -303,6 +339,7 @@ func _lock_orders() -> void:
 	if started:
 		return
 	hud.hide_plans()
+	hud.hide_next()
 	if GameState.raid_target == "syndicate" and not orders.is_empty():
 		GameState.remember_mission_orders(GameState.syndicate_mission, orders)
 
@@ -431,6 +468,7 @@ func tutorial_target(key: String) -> Rect2:
 func _deploy(type: String, p: Vector3) -> void:
 	GameState.tutorial_event("deploy")
 	_lock_orders()
+	_note_entry(p)
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)
@@ -453,11 +491,36 @@ func _deploy(type: String, p: Vector3) -> void:
 	hud.set_status("")
 
 
+func _note_entry(p: Vector3) -> void:
+	if _entry.is_empty():
+		_entry = [snappedf(p.x, 0.1), snappedf(p.z, 0.1)]
+
+
+## "Next" before the first unit goes in: pays and swaps this base for another one.
+func _next_opponent() -> void:
+	if started or _searching or phase != Phase.BATTLE:
+		return
+	if not GameState.infinite_coins and GameState.coins < Pvp.NEXT_COST:
+		return
+	_searching = true
+	hud.set_next(Pvp.NEXT_COST, false)
+	hud.set_status(I18n.t("Looking for another base..."))
+	if not GameState.infinite_coins:
+		GameState.coins -= Pvp.NEXT_COST
+		GameState.save_game()
+	var id := str(base.get("player_id", ""))
+	if id != "":
+		GameState.pvp_skip.append(id)
+	GameState.pvp_opponent = await Cloud.next_base()
+	get_tree().reload_current_scene()
+
+
 ## A card's worth of ground units: an infantry squad of four, two engineers, or one tank,
 ## lined up facing the base.
 func _deploy_ground(type: String, p: Vector3) -> void:
 	GameState.tutorial_event("deploy")
 	_lock_orders()
+	_note_entry(p)
 	army[type] = int(army[type]) - 1
 	deployed[type] = int(deployed.get(type, 0)) + 1
 	var stats := _stats(type)
@@ -653,8 +716,14 @@ func _spring_trap(trap: Dictionary, def: Dictionary, victims: Array, air: bool) 
 		if best != null:
 			Fx.boom(level, best.global_position, 1.1)
 			best.damage(float(def["damage"]) * float(vs["air"]))
+		_traps_fired.append({"cell": trap["cell"], "type": trap["type"], "hits": 1 if best != null else 0})
 	else:
 		Fx.boom(level, pos + Vector3(0, 0.6, 0), 1.0)
+		var hits := 0
+		for u: Unit in victims:
+			if PathUtils.flat_distance(u.global_position, pos) <= float(def["radius"]):
+				hits += 1
+		_traps_fired.append({"cell": trap["cell"], "type": trap["type"], "hits": hits})
 		for u: Unit in victims:
 			var d := PathUtils.flat_distance(u.global_position, pos)
 			if d > float(def["radius"]):
@@ -1123,6 +1192,7 @@ func _damage_wall(k: String, amount: float) -> void:
 func _destroy_wall(k: String) -> void:
 	var w: Dictionary = wall_index[k]
 	w["destroyed"] = true
+	_walls_down.append(w["edge"])
 	(w["node"] as Node3D).visible = false
 	standing_walls.erase(k)
 	walls_version += 1
@@ -1548,6 +1618,10 @@ func _check_end(delta: float) -> void:
 func _finish() -> void:
 	if phase == Phase.RESULT:
 		return
+	# Ending a battle against another base before sending anyone in just goes home, as in Clash.
+	if GameState.raid_target == "pvp" and not started and not autoplay:
+		get_tree().change_scene_to_file(HOME_SCENE)
+		return
 	phase = Phase.RESULT
 	var ratio := _destroyed_ratio()
 	var hq_down := false
@@ -1558,9 +1632,12 @@ func _finish() -> void:
 	var gained := {"coins": 0, "fuel": 0}
 	if not autoplay:
 		gained = GameState.record_raid(stars, loot_gained, fuel_gained)
-		if GameState.raid_target == "enemy":
+		if GameState.raid_target in ["enemy", "pvp"]:
 			GameState.use_army(deployed)
 			GameState.use_support(support_used)
+		if GameState.raid_target == "pvp":
+			GameState.pvp_skip = []
+			_report(stars, int(round(ratio * 100.0)), loot_gained, fuel_gained)
 	Audio.hum(0.0)
 	for i in stars:
 		get_tree().create_timer(0.35 * i + 0.2).timeout.connect(func() -> void: Audio.play("star"))
@@ -1572,6 +1649,21 @@ func _finish() -> void:
 			var r: Dictionary = Syndicate.MISSIONS[GameState.syndicate_mission]["reward"]
 			extra += "\n" + I18n.t("First win reward: %d coins, %d fuel, %d gems") % [int(r.get("coins", 0)), int(r.get("fuel", 0)), int(r.get("gems", 0))]
 	hud.show_result(stars, int(round(ratio * 100.0)), gained, GameState.raid_target == "self", extra)
+
+
+## Sends the result to the server (trophies, the defender's shield and log) and adds the trophy
+## change to the result card when the answer comes.
+func _report(stars: int, percent: int, coins: int, fuel: int) -> void:
+	var destroyed := []
+	for t in targets:
+		if t["destroyed"]:
+			destroyed.append(t["cell"])
+	var report := {"destroyed": destroyed, "traps": _traps_fired, "walls": _walls_down, "entry": _entry, "army": deployed}
+	var r: Dictionary = await Cloud.report_attack(str(base.get("player_id", "")), stars, percent, coins, fuel, report)
+	if r.is_empty() or not is_inside_tree():
+		return
+	var change := int(r["change"])
+	hud.add_result_line(I18n.t("Trophies %s  (now %d)") % [("+%d" if change >= 0 else "%d") % change, int(r["trophies"])])
 
 
 func _destroyed_ratio() -> float:

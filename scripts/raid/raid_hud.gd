@@ -10,6 +10,7 @@ signal retry_pressed
 signal home_pressed
 signal ability_pressed(kind: String)
 signal plan_selected(slot: int)
+signal next_pressed
 
 var retry_button: Button
 ## Whether the battle shown in the result window was won (at least one star).
@@ -35,6 +36,10 @@ var _result: PanelContainer
 var _result_title: Label
 var _result_stars: Label
 var _result_info: Label
+## Another player's base (or an Iron Fang outpost): its level, trophies, loot and "Next".
+var _opponent: PanelContainer
+var _opponent_box: VBoxContainer
+var _next: Button
 
 
 func _ready() -> void:
@@ -139,6 +144,26 @@ func _ready() -> void:
 	Tutorial.tag(home, "result_home")
 	_result.visible = false
 
+	# Top right in both languages (the sketch's corner), under the timer row.
+	_opponent = PanelContainer.new()
+	_opponent.layout_direction = Control.LAYOUT_DIRECTION_LTR
+	_opponent.anchor_left = 1.0
+	_opponent.anchor_right = 1.0
+	_opponent.offset_left = -330.0
+	_opponent.offset_right = -20.0
+	_opponent.offset_top = 165.0
+	_opponent.add_theme_stylebox_override("panel", HomeHud._box(Color(0.06, 0.08, 0.06, 0.88), 14))
+	_opponent.visible = false
+	root.add_child(_opponent)
+	var margin := MarginContainer.new()
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 12)
+	_opponent.add_child(margin)
+	_opponent_box = VBoxContainer.new()
+	_opponent_box.add_theme_constant_override("separation", 6)
+	_opponent_box.layout_direction = Control.LAYOUT_DIRECTION_RTL if I18n.rtl() else Control.LAYOUT_DIRECTION_LTR
+	margin.add_child(_opponent_box)
+
 
 func _process(delta: float) -> void:
 	_hit_tint.color.a = move_toward(_hit_tint.color.a, 0.0, delta * 1.5)
@@ -222,6 +247,71 @@ func set_plans(names: Array, active: int) -> void:
 
 func hide_plans() -> void:
 	_plan_row.visible = false
+
+
+## Fills the opponent panel: Command Tower level and trophies (-1 for none), and what can be taken.
+func set_opponent(outpost: bool, hq: int, trophies: int, coins: int, fuel: int) -> void:
+	for child in _opponent_box.get_children():
+		child.queue_free()
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	_opponent_box.add_child(head)
+	HomeHud.make_label(head, I18n.t("Command Tower Lv %d") % hq, 22)
+	if trophies >= 0 and not outpost:
+		head.add_child(Icons.rect("trophy", 24))
+		HomeHud.make_label(head, str(trophies), 22)
+	if outpost:
+		var why := HomeHud.make_label(_opponent_box, I18n.t("No players free right now. Iron Fang is always up for a fight!"), 17, Color(0.85, 0.88, 0.82))
+		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		why.custom_minimum_size.x = 280
+	HomeHud.make_label(_opponent_box, I18n.t("Loot to take:"), 19, Color(0.85, 0.88, 0.82))
+	var loot := HBoxContainer.new()
+	loot.add_theme_constant_override("separation", 6)
+	_opponent_box.add_child(loot)
+	loot.add_child(Icons.rect("coin", 28))
+	HomeHud.make_label(loot, HomeHud._thousands(coins), 26)
+	var gap := Control.new()
+	gap.custom_minimum_size.x = 10
+	loot.add_child(gap)
+	loot.add_child(Icons.rect("fuel", 28))
+	HomeHud.make_label(loot, HomeHud._thousands(fuel), 26)
+	_next = Button.new()
+	_next.text = I18n.t("Next  %d") % Pvp.NEXT_COST
+	_next.icon = Icons.tex("coin", 48)
+	_next.expand_icon = false
+	_next.add_theme_constant_override("icon_max_width", 26)
+	_next.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_next.custom_minimum_size = Vector2(0, 56)
+	_next.add_theme_font_size_override("font_size", 24)
+	HomeHud._style_button(_next, Color(0.95, 0.71, 0.2), 12, Color(0.6, 0.43, 0.04), 3)
+	for key in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		_next.add_theme_color_override(key, Color(0.16, 0.12, 0.0))
+	_next.add_theme_color_override("font_disabled_color", Color(0.16, 0.12, 0.0, 0.5))
+	for key in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
+		_next.add_theme_color_override(key, Color.WHITE)
+	_next.add_theme_constant_override("outline_size", 0)
+	_next.pressed.connect(func() -> void:
+		Audio.play("click", -6.0)
+		next_pressed.emit())
+	_opponent_box.add_child(_next)
+	_opponent.visible = true
+
+
+func set_next(cost: int, enabled: bool) -> void:
+	if _next != null:
+		_next.disabled = not enabled
+		_next.text = I18n.t("Next  %d") % cost
+
+
+## The first unit is in: no more skipping.
+func hide_next() -> void:
+	if _next != null:
+		_next.visible = false
+
+
+## One more line under the result (the trophies, once the server answers).
+func add_result_line(text: String) -> void:
+	_result_info.text += "\n" + text
 
 
 func set_loot(coins: int, fuel: int) -> void:
@@ -372,10 +462,11 @@ func show_result(stars: int, percent: int, gained: Dictionary, practice: bool, e
 	_result.visible = true
 	_cards.visible = false
 	_end.visible = false
+	_opponent.visible = false
 
 
 func blocks(pos: Vector2) -> bool:
-	for c: Control in [_cards, _end, _result, _support_row]:
+	for c: Control in [_cards, _end, _result, _support_row, _opponent]:
 		if c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
 			return true
 	return false

@@ -3,6 +3,7 @@ extends Node3D
 ## tap a floating coin or fuel drop to collect, train an army (Army button or the Training
 ## Camp), unlock and upgrade units in the Garage and the Hangar, then Attack. Settings holds
 ## language, sound, practice on your own base and dev tools.
+## Defense log samples (no server needed): `--screenshot-welcome` / `--screenshot-log` / `--screenshot-damage`.
 ## Run with `-- --screenshot-panel` / `--screenshot-hq` / `--screenshot-army` / `--screenshot-place` / `--screenshot-shop` /
 ## `--screenshot-upgrade` / `--screenshot-info` /
 ## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-build` / `--screenshot-settings` to open a
@@ -64,6 +65,8 @@ var marker: MeshInstance3D
 var press_pos := Vector2.ZERO
 var header_timer := 0.0
 var focus := Vector3(0, 10, 0)
+## The damage map's marks over the base while it is open (see _show_damage_map).
+var damage_view: Node3D
 
 
 func _ready() -> void:
@@ -83,7 +86,7 @@ func _ready() -> void:
 	hud.settings_pressed.connect(_open_settings)
 	hud.workers_pressed.connect(_open_workers)
 	hud.gems_pressed.connect(_open_store)
-	hud.mode_done.connect(_end_wall_mode)
+	hud.mode_done.connect(_mode_done)
 	hud.missions_pressed.connect(func() -> void: _open_missions())
 	hud.profile_pressed.connect(_open_profile)
 	GameState.missions_changed.connect(_refresh_header)
@@ -166,12 +169,18 @@ func _ready() -> void:
 				break
 	elif args.has("--screenshot-base"):
 		pass
+	elif args.has("--screenshot-welcome"):
+		_show_welcome(_demo_attacks(), {"coins": 520, "fuel": 180})
+	elif args.has("--screenshot-log"):
+		_open_defense_log()
+	elif args.has("--screenshot-damage"):
+		_show_damage_map(_demo_attacks()[0])
 	elif GameState.tutorial < 0 and not Cloud.signed_in():
 		# Playing on needs an account.
 		_open_account("signup")
-	elif GameState.tutorial < 0 and GameState.login_ready():
-		# The day's first visit opens the login gift.
-		_open_missions("daily")
+	elif GameState.tutorial < 0:
+		# Attacks while the player was away, then the day's login gift on the first visit.
+		_welcome_back()
 
 
 func _rebuild() -> void:
@@ -361,6 +370,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		press_pos = touch.position
 		return
 	if _pinch.gesture or hud.blocks(touch.position) or touch.position.distance_to(press_pos) > TAP_SLOP:
+		return
+	if damage_view != null:
 		return
 	if wall_mode:
 		_paint_wall(touch.position)
@@ -991,7 +1002,7 @@ func _open_profile() -> void:
 	open_sheet = "profile"
 	hud.show_modal(ProfileUI.window(func() -> void:
 		hud.hide_modal()
-		_open_account_settings()), Vector2(1120, 600))
+		_open_account_settings(), _open_defense_log), Vector2(1120, 600))
 
 
 # ---------------------------------------------------------------- missions
@@ -1723,16 +1734,17 @@ func _open_attack_choice() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	var to_map := func() -> void:
 		hud.hide_modal()
 		get_tree().change_scene_to_file("res://scenes/syndicate/map.tscn")
 	var to_raid := func() -> void:
 		hud.hide_modal()
-		_go_raid("enemy")
+		_search_and_raid()
+	# Attacking a player ends the player's own shield, so say so while one is on.
+	var raid_line := I18n.t("Players at your level") if Cloud.shield_left() <= 0.0 else I18n.t("Ends your shield")
 	var choices := [
 		["syndicate", I18n.t("Iron Fang campaign"), I18n.t("Stars %d / %d") % [GameState.syndicate_total_stars(), Syndicate.COUNT * 3], to_map],
-		["swords", I18n.t("Raid a base"), target["name"], to_raid],
+		["swords", I18n.t("Raid a base"), raid_line, to_raid],
 	]
 	for c: Array in choices:
 		var b := Button.new()
@@ -1759,3 +1771,177 @@ func _go_raid(target: String) -> void:
 		return
 	GameState.raid_target = target
 	get_tree().change_scene_to_file(RAID_SCENE)
+
+
+## Raid: a real player's base at about the player's level (or an Iron Fang outpost when nobody is free).
+func _search_and_raid() -> void:
+	if GameState.army_used() <= 0:
+		hud.toast(I18n.t("Train an army first"))
+		_open_army()
+		return
+	hud.toast(I18n.t("Looking for a base..."))
+	GameState.pvp_skip = []
+	GameState.pvp_opponent = await Cloud.next_base()
+	if is_inside_tree():
+		_go_raid("pvp")
+
+
+# ---------------------------------------------------------------- defense log
+
+## On the way in: takes off what attackers stole while the player was away and lets Noa tell
+## them about it; then the day's login gift, if it is waiting.
+func _welcome_back() -> void:
+	var attacks = await Cloud.settle_attacks()
+	if not is_inside_tree():
+		return
+	_refresh_header()
+	if attacks is Array and not (attacks as Array).is_empty():
+		var coins_lost := 0
+		var fuel_lost := 0
+		for a: Dictionary in attacks:
+			coins_lost += int(a.get("coins", 0))
+			fuel_lost += int(a.get("fuel", 0))
+		var lost := GameState.lose_loot(coins_lost, fuel_lost)
+		_refresh_header()
+		_show_welcome(attacks, lost)
+	elif GameState.login_ready() and not hud.modal_open():
+		_open_missions("daily")
+
+
+func _show_welcome(attacks: Array, lost: Dictionary) -> void:
+	var go_on := func() -> void:
+		hud.hide_modal()
+		if GameState.login_ready():
+			_open_missions("daily")
+	hud.show_modal(DefenseUI.welcome(attacks, lost, _open_defense_log, go_on), Vector2(1040, 470))
+	Audio.play("star", -8.0)
+
+
+func _open_defense_log() -> void:
+	_deselect()
+	hud.show_modal(DefenseUI.log_window(I18n.t("Loading..."), _show_damage_map), Vector2(1120, 600))
+	var rows: Variant = _demo_attacks()
+	if (rows as Array).is_empty():
+		rows = await Cloud.defense_log()
+	if is_inside_tree() and hud.modal_open():
+		hud.show_modal(DefenseUI.log_window(rows, _show_damage_map), Vector2(1120, 600))
+
+
+## The damage map: the attack drawn over the player's own base (what fell, which traps went off,
+## where the first unit came in), with the attacker on the banner and Noa's tip. Done goes back to the log.
+func _show_damage_map(a: Dictionary) -> void:
+	hud.hide_modal()
+	_deselect()
+	_end_damage_map()
+	damage_view = Node3D.new()
+	level.add_child(damage_view)
+	var report: Dictionary = a.get("report", {})
+	var red := MeshKit.glow(Color(1.0, 0.22, 0.16), 0.95)
+	var green := MeshKit.glow(Color(0.45, 0.95, 0.3), 0.95)
+	var amber := MeshKit.glow(Color(1.0, 0.7, 0.3), 0.95)
+	# The X over a fallen building shows through the building itself.
+	var red_on_top := red.duplicate() as StandardMaterial3D
+	red_on_top.no_depth_test = true
+	red_on_top.render_priority = 1
+	var first := Vector3.ZERO
+	for cell in report.get("destroyed", []):
+		var top := city.roof_top([int(cell[0]), int(cell[1])])
+		if first == Vector3.ZERO:
+			first = top
+		MeshKit.add(damage_view, MeshKit.ring(3.2, 0.4), red, Vector3(top.x, 0.45, top.z)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Square to the grid, which the camera sees from the corner: an X on screen.
+		for turn in [0.0, PI / 2.0]:
+			var bar := MeshKit.add(damage_view, MeshKit.box(Vector3(0.7, 0.7, 5.0)), red_on_top, top + Vector3(0, 2.6, 0))
+			bar.rotation.y = turn
+			bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for t in report.get("traps", []):
+		var pos := City.cell_pos([int(t["cell"][0]), int(t["cell"][1])])
+		MeshKit.add(damage_view, MeshKit.ring(3.0, 0.4), green, pos + Vector3(0, 0.45, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_map_label(pos + Vector3(0, 3.5, 0), I18n.t("Trap caught %d") % int(t.get("hits", 0)), Color(0.45, 0.95, 0.3))
+	for e in report.get("walls", []):
+		var mid := Walls.center([int(e[0]), int(e[1]), int(e[2])])
+		MeshKit.add(damage_view, MeshKit.ring(1.4, 0.3), amber, mid + Vector3(0, 0.4, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var entry: Array = report.get("entry", [])
+	if entry.size() == 2:
+		var from := Vector3(float(entry[0]), 0.0, float(entry[1]))
+		var goal := Vector3(first.x, 0.0, first.z)
+		var span := goal - from
+		var dir := span.normalized() if span.length() > 1.0 else Vector3.FORWARD
+		var dashes := []
+		var d := 0.0
+		while d < span.length() - 3.4:
+			dashes.append(Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z)), from + dir * d + Vector3(0, 0.4, 0)))
+			d += 1.8
+		MeshKit.multi(damage_view, MeshKit.box(Vector3(0.45, 0.06, 1.0)), amber, dashes).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		MeshKit.add(damage_view, MeshKit.ring(1.2, 0.5), amber, from + Vector3(0, 0.4, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_map_label(from + Vector3(0, 2.5, 0), I18n.t("They came in here"), Color(1.0, 0.75, 0.35))
+	# Bring the marks into view, a little under the banner.
+	var marks: Array = report.get("destroyed", []).map(func(c: Array) -> Vector3: return City.cell_pos([int(c[0]), int(c[1])]))
+	if entry.size() == 2:
+		marks.append(Vector3(float(entry[0]), 0.0, float(entry[1])))
+	if not marks.is_empty():
+		var mid := Vector3.ZERO
+		for p: Vector3 in marks:
+			mid += p
+		mid /= marks.size()
+		var b := cam.global_transform.basis
+		var forward := Vector3(-b.z.x, 0.0, -b.z.z).normalized()
+		focus = Vector3(clampf(mid.x, -PAN_LIMIT, PAN_LIMIT), focus.y, clampf(mid.z, -PAN_LIMIT, PAN_LIMIT)) + forward * cam.size * 0.12
+		WorldSetup.place_camera(cam, focus)
+	var head := "%s  ·  %s  ·  %s" % [str(a.get("attacker_name", "?")), I18n.t("Stars %d / 3") % int(a.get("stars", 0)),
+		DefenseUI.ago(Cloud.seconds_since(str(a.get("created_at", ""))))]
+	var taken := I18n.t("Taken: %s coins, %s fuel") % [HomeHud._thousands(int(a.get("coins", 0))), HomeHud._thousands(int(a.get("fuel", 0)))]
+	hud.show_mode("%s\n%s\n%s" % [head, taken, Pvp.tip(a)])
+
+
+func _map_label(pos: Vector3, text: String, color: Color) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.font_size = 64
+	l.outline_size = 14
+	l.modulate = color
+	l.pixel_size = 0.02
+	l.position = pos
+	damage_view.add_child(l)
+
+
+func _end_damage_map() -> void:
+	if damage_view != null:
+		damage_view.queue_free()
+		damage_view = null
+
+
+## Done on the top banner ends whichever mode is on: the damage map (back to the log) or walls.
+func _mode_done() -> void:
+	if damage_view != null:
+		_end_damage_map()
+		hud.show_mode("")
+		_open_defense_log()
+		return
+	_end_wall_mode()
+
+
+## Dev only: sample attacks for pictures of the welcome, log and damage map without a server
+## (`--screenshot-welcome|log|damage`); empty otherwise.
+func _demo_attacks() -> Array:
+	var args := OS.get_cmdline_user_args()
+	if not OS.is_debug_build() or not (args.has("--screenshot-welcome") or args.has("--screenshot-log") or args.has("--screenshot-damage")):
+		return []
+	var cells := []
+	var trap := []
+	for s in GameState.structures:
+		if s["type"] in ["hq", "aa", "generator"] and cells.size() < 3:
+			cells.append(s["cell"])
+		if s["type"] == "camp" and trap.is_empty():
+			trap = [int(s["cell"][0]) + 1, int(s["cell"][1]) + 1]
+	var hours := func(h: float) -> String: return Time.get_datetime_string_from_unix_time(int(GameState.now() - h * 3600.0))
+	return [
+		{"attacker_name": "KOBI_77", "created_at": hours.call(2.0), "stars": 2, "percent": 64, "coins": 340, "fuel": 120, "trophies": -14,
+			"report": {"destroyed": cells, "traps": [{"cell": trap, "type": "spring", "hits": 4}], "walls": [], "entry": [30.0, 34.0]}},
+		{"attacker_name": "Shira_Air", "created_at": hours.call(5.0), "stars": 0, "percent": 22, "coins": 0, "fuel": 0, "trophies": 9,
+			"report": {"destroyed": [], "traps": [], "walls": [], "entry": [-30.0, 30.0]}},
+		{"attacker_name": "IRONHAWK", "created_at": hours.call(26.0), "stars": 1, "percent": 51, "coins": 180, "fuel": 60, "trophies": -8,
+			"report": {"destroyed": cells.slice(0, 1), "traps": [], "walls": [], "entry": [34.0, -20.0]}},
+	]

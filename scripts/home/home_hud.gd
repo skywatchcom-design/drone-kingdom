@@ -29,6 +29,8 @@ const GOLD_TOP := Color(0.94, 0.7, 0.21)
 
 var _badge: Label
 var _rank: Label
+var _trophy: TextureRect
+var _shield: TextureRect
 var _workers: Button
 var _bars := {}
 var _attack: Button
@@ -98,7 +100,18 @@ func _ready() -> void:
 	names.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player.add_child(names)
 	_commander = make_label(names, I18n.t("Commander"), 24)
-	_rank = make_label(names, "", 17, Color(0.88, 0.92, 0.88))
+	var rank_row := HBoxContainer.new()
+	rank_row.add_theme_constant_override("separation", 4)
+	rank_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	names.add_child(rank_row)
+	_trophy = Icons.rect("trophy", 20)
+	_trophy.visible = false
+	rank_row.add_child(_trophy)
+	_rank = make_label(rank_row, "", 17, Color(0.88, 0.92, 0.88))
+	# A shield after being attacked: nobody can attack this base until it runs out.
+	_shield = Icons.rect("shield", 20)
+	_shield.visible = false
+	rank_row.add_child(_shield)
 	_missions = _small_button(column, "tasks", I18n.t("Missions"))
 	_missions.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_style_button(_missions, Color(0.2, 0.42, 0.75), 12, Color(1, 1, 1, 0.8), 3)
@@ -421,7 +434,10 @@ func _process(delta: float) -> void:
 
 func set_header(hq_level: int, target_name: String, infinite: bool = false) -> void:
 	_badge.text = str(hq_level)
-	_rank.text = I18n.t("Command Tower Lv %d") % hq_level
+	# Signed-in players see their trophies and league under the name; others the tower level.
+	_rank.text = "%d  ·  %s" % [Cloud.trophies, Pvp.league_name(Cloud.trophies)] if Cloud.signed_in() else I18n.t("Command Tower Lv %d") % hq_level
+	_trophy.visible = Cloud.signed_in()
+	_shield.visible = Cloud.shield_left() > 0.0
 	_workers.text = "%d/%d" % [GameState.free_workers(), GameState.workers]
 	_attack.tooltip_text = target_name
 	_set_bar("coins", GameState.coins, GameState.coin_cap(), infinite)

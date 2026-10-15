@@ -33,6 +33,12 @@ var _refresh := ""
 var _expires := 0.0
 var _push_in := -1.0
 var _pushing := false
+## Trophies and shield as the server last said (see settle_attacks).
+var trophies := 0
+## Unix time (this device's clock) the shield ends; 0 without one.
+var shield_until := 0.0
+## This device's clock minus the server's, in seconds.
+var _skew := 0.0
 
 
 func _ready() -> void:
@@ -162,10 +168,105 @@ func delete_account() -> String:
 	return ""
 
 
+# ---------------------------------------------------------------- attacks between players
+
+## A real player's base to attack (see find_opponent in the pvp migration), as a battle base
+## (Pvp.base_from_row); {} when nobody is free; null without a connection or an account.
+func find_opponent(skip: Array) -> Variant:
+	if not signed_in():
+		return null
+	var r := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/find_opponent", {"skip": skip})
+	if r["code"] != 200:
+		return null
+	return Pvp.base_from_row(r["data"], GameState.now()) if r["data"] is Dictionary else {}
+
+
+## The next base to attack: a real player's (skipping GameState.pvp_skip), or an Iron Fang outpost
+## when nobody is free, the player has no account, or there is no connection.
+func next_base() -> Dictionary:
+	var found: Variant = await find_opponent(GameState.pvp_skip)
+	if found is Dictionary and not (found as Dictionary).is_empty():
+		return found
+	return Pvp.outpost(randi(), GameState.hq_level())
+
+
+## Sends an attack's result. `foe` is "" for an Iron Fang outpost. Returns {change, trophies} or
+## {} when it didn't get through.
+func report_attack(foe: String, stars: int, percent: int, coins: int, fuel: int, report: Dictionary) -> Dictionary:
+	if not signed_in():
+		return {}
+	var body := {"foe": foe if foe != "" else null, "stars": stars, "percent": percent, "coins": coins, "fuel": fuel, "report": report}
+	var r := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/report_attack", body)
+	if r["code"] != 200 or not (r["data"] is Dictionary):
+		return {}
+	trophies = int(r["data"].get("trophies", trophies))
+	if foe != "":
+		shield_until = 0.0
+	account_changed.emit()
+	return r["data"]
+
+
+## The attacks since the player was last here (each is handed out once), newest first; null
+## without a connection. Also brings the trophies and the shield up to date.
+func settle_attacks() -> Variant:
+	if not signed_in():
+		return null
+	var r := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/settle_attacks", {})
+	if r["code"] != 200 or not (r["data"] is Dictionary):
+		return null
+	var d: Dictionary = r["data"]
+	trophies = int(d.get("trophies", 0))
+	shield_until = 0.0
+	if d.get("now") != null:
+		_skew = GameState.now() - _unix(str(d["now"]))
+	if d.get("shield_until") != null and d.get("now") != null:
+		# Counted from the server's clock, so a wrong clock on the device doesn't matter.
+		var left := _unix(str(d["shield_until"])) - _unix(str(d["now"]))
+		if left > 0.0:
+			shield_until = GameState.now() + left
+	account_changed.emit()
+	return d.get("unseen", [])
+
+
+## The last attacks on the player's base, newest first (up to 20); null without a connection.
+func defense_log() -> Variant:
+	if not signed_in():
+		return null
+	var r := await _call(HTTPClient.METHOD_GET, "/rest/v1/attacks?select=id,created_at,attacker_name,stars,percent,coins,fuel,trophies,report&order=created_at.desc&limit=20")
+	return r["data"] if r["code"] == 200 and r["data"] is Array else null
+
+
+## Seconds of shield left (0 without one).
+func shield_left() -> float:
+	return maxf(0.0, shield_until - GameState.now())
+
+
+## Seconds since a server timestamp.
+func seconds_since(stamp: String) -> float:
+	return maxf(0.0, GameState.now() - _skew - _unix(stamp))
+
+
+## A Postgres timestamp ("2026-10-15 10:20:30.123+00" or ISO) as unix seconds.
+static func _unix(stamp: String) -> float:
+	var s := stamp.replace(" ", "T")
+	var frac := 0.0
+	var dot := s.find(".")
+	var zone := maxi(s.rfind("+"), s.rfind("Z"))
+	if zone < 10:
+		zone = s.length()
+	if dot > 0 and dot < zone:
+		frac = float("0" + s.substr(dot, zone - dot))
+		s = s.substr(0, dot) + s.substr(zone)
+		zone = dot
+	return Time.get_unix_time_from_datetime_string(s.substr(0, zone)) + frac
+
+
 func sign_out() -> void:
 	commander = ""
 	child = false
 	user_id = ""
+	trophies = 0
+	shield_until = 0.0
 	_access = ""
 	_refresh = ""
 	_push_in = -1.0

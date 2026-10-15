@@ -9,7 +9,7 @@ const CARD := Color(0.85, 0.82, 0.75)
 const LINE := Color(0.73, 0.69, 0.6)
 
 
-static func window(on_account: Callable) -> Control:
+static func window(on_account: Callable, on_log: Callable) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
 
@@ -29,6 +29,25 @@ static func window(on_account: Callable) -> Control:
 	head.add_child(words)
 	HomeHud.ink(words, Cloud.commander if Cloud.signed_in() else I18n.t("Commander"), 34)
 	HomeHud.ink(words, I18n.t("Command Tower Lv %d") % GameState.hq_level() + ("" if Cloud.signed_in() else "  ·  " + I18n.t("Not saved yet")), 19, MUTED)
+	if Cloud.signed_in():
+		var cups := HBoxContainer.new()
+		cups.add_theme_constant_override("separation", 6)
+		words.add_child(cups)
+		cups.add_child(Icons.rect("trophy", 24))
+		HomeHud.ink(cups, "%d  ·  %s" % [Cloud.trophies, Pvp.league_name(Cloud.trophies)], 19)
+		if Cloud.shield_left() > 0.0:
+			cups.add_child(Icons.rect("shield", 24))
+			HomeHud.ink(cups, HomeHud.clock(Cloud.shield_left()), 19, Color(0.18, 0.4, 0.8))
+	var log_button := Button.new()
+	log_button.text = I18n.t("Defense log")
+	log_button.icon = Icons.tex("shield", 48)
+	log_button.add_theme_constant_override("icon_max_width", 26)
+	log_button.add_theme_font_size_override("font_size", 18)
+	log_button.custom_minimum_size = Vector2(0, 46)
+	HomeHud._style_button(log_button, Color(0.2, 0.42, 0.75), 10, Color(1, 1, 1, 0.6), 2)
+	log_button.pressed.connect(func() -> void: Audio.play("click", -6.0))
+	log_button.pressed.connect(on_log)
+	head.add_child(log_button)
 	var acc := Button.new()
 	acc.text = I18n.t("Account settings")
 	acc.add_theme_font_size_override("font_size", 18)

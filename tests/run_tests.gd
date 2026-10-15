@@ -8,6 +8,7 @@ const FILES := [
 	"res://tests/test_path_utils.gd",
 	"res://tests/test_economy.gd",
 	"res://tests/test_walls.gd",
+	"res://tests/test_pvp.gd",
 ]
 
 
