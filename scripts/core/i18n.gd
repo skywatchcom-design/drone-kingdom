@@ -7,6 +7,12 @@ static var lang := "he"
 
 const HE := {
 	# Base Wars prototype
+	"Attack!": "תקיפה!",
+	"Iron Fang tower %d%%": "מגדל ניב הברזל %d%%",
+	"Destroyed %d%%": "הושמד %d%%",
+	"Base taken!": "הבסיס נכבש!",
+	"Attack failed": "התקיפה נכשלה",
+	"Loot: %d coins": "שלל: %d מטבעות",
 	"Wave %d!": "גל %d!",
 	"Wave %d cleared! +100": "גל %d הושלם! +100",
 	"Command Tower %d%%": "מגדל פיקוד %d%%",
