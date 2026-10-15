@@ -60,7 +60,7 @@ static func cell_pos(c: float, r: float) -> Vector3:
 
 
 func _ready() -> void:
-	MeshKit.look = "town"
+	MeshKit.look = "leo"
 	MeshKit.toy = true
 	StructureModels.show_levels = false
 	_rng.randomize()

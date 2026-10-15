@@ -7,6 +7,10 @@ extends RefCounted
 ## classic` shows the earlier midday look for comparison.
 
 const CAM_DIR := Vector3(1.0, 1.15, 1.0)
+## The "leo" look views a little lower, like the reference: buildings show more of their walls.
+static var cam_dir := CAM_DIR
+## In portrait the camera keeps the width; view sizes (and zoom limits) scale by this.
+static var size_scale := 1.0
 const CAM_DISTANCE := 150.0
 
 
@@ -62,10 +66,14 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 		sky_mat.sky_horizon_color = Color(0.86, 0.93, 0.98)
 		sky_mat.ground_horizon_color = Color(0.86, 0.93, 0.98)
 		env.fog_light_color = Color(0.86, 0.93, 0.98)
-		if MeshKit.look in ["diorama", "town"]:
+		if MeshKit.look in ["diorama", "town", "leo"]:
 			env.background_mode = Environment.BG_COLOR
 			env.background_color = Color(0.95, 0.96, 0.97)
 			env.fog_enabled = false
+		if MeshKit.look == "leo":
+			# Firmer shading, a grey backdrop.
+			env.background_color = Color(0.88, 0.88, 0.88)
+			env.ambient_light_energy *= 0.63
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	parent.add_child(world_env)
@@ -78,6 +86,9 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	if MeshKit.toy:
 		sun.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
 		sun.light_energy = 0.85 if compat else 1.15
+	if MeshKit.look == "leo":
+		sun.rotation_degrees = Vector3(-50.0, 20.0, 0.0)
+		sun.light_energy *= 1.25
 		sun.light_color = Color(1.0, 0.98, 0.94)
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.6
@@ -90,6 +101,13 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.keep_aspect = Camera3D.KEEP_HEIGHT
 	cam.size = view_height
+	cam_dir = Vector3(1.0, 0.85, 1.0) if MeshKit.look == "leo" else CAM_DIR
+	var screen := parent.get_viewport().get_visible_rect().size
+	size_scale = 1.0
+	if screen.y > screen.x:
+		cam.keep_aspect = Camera3D.KEEP_WIDTH
+		size_scale = 1.4
+		cam.size = view_height * size_scale
 	cam.near = 0.1
 	cam.far = 600.0
 	parent.add_child(cam)
@@ -99,7 +117,7 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 
 
 static func place_camera(cam: Camera3D, focus: Vector3) -> void:
-	cam.position = focus + CAM_DIR.normalized() * CAM_DISTANCE
+	cam.position = focus + cam_dir.normalized() * CAM_DISTANCE
 	cam.look_at(focus, Vector3.UP)
 
 

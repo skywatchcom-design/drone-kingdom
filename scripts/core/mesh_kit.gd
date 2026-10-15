@@ -25,13 +25,15 @@ static var _tex := {}
 ## textures and grime for clean flat colors; `--look diorama` also cuts the world into a floating
 ## block of earth on a light background (City, WorldSetup).
 static var look := _look_arg()
-static var toy := look in ["toy", "diorama", "town"]
+## Base Wars (owner, 15.10.2026) uses "leo" by default: the town look in the refined serious
+## palette. `--look classic` brings back the photo look.
+static var toy := look in ["toy", "diorama", "town", "leo"]
 
 
 static func _look_arg() -> String:
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--look")
-	return args[i + 1] if i >= 0 and i + 1 < args.size() else ""
+	return args[i + 1] if i >= 0 and i + 1 < args.size() else "leo"
 
 
 ## Toy colors: a little brighter and more saturated than the photo look.

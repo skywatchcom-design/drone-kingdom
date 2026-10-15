@@ -336,7 +336,7 @@ func _refresh_header() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	var zoom := _pinch.handle(event)
 	if zoom != 1.0:
-		cam.size = clampf(cam.size / zoom, 36.0, 90.0)
+		cam.size = clampf(cam.size / zoom, 36.0 * WorldSetup.size_scale, 90.0 * WorldSetup.size_scale)
 		return
 	if event is InputEventScreenDrag:
 		if _pinch.gesture:
@@ -350,9 +350,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		var wheel := event as InputEventMouseButton
 		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
-			cam.size = maxf(36.0, cam.size - 4.0)
+			cam.size = maxf(36.0 * WorldSetup.size_scale, cam.size - 4.0)
 		elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			cam.size = minf(90.0, cam.size + 4.0)
+			cam.size = minf(90.0 * WorldSetup.size_scale, cam.size + 4.0)
 		return
 	if not (event is InputEventScreenTouch):
 		return

@@ -492,6 +492,9 @@ func show_content(title: String, content: Control) -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel_body.add_child(content)
 	_panel.visible = true
+	var screen := get_viewport().get_visible_rect().size
+	_panel.anchor_left = 0.03 if screen.y > screen.x else 0.2
+	_panel.anchor_right = 0.97 if screen.y > screen.x else 0.8
 	_corners_visible(false)
 	_fit_panel()
 
@@ -586,6 +589,10 @@ func show_modal(content: Control, size: Vector2, locked: bool = false, bare: boo
 	_modal.offset_right = size.x / 2.0
 	_modal.offset_top = -size.y / 2.0
 	_modal.offset_bottom = size.y / 2.0
+	# Windows were drawn for landscape; in portrait they shrink to fit the screen.
+	var screen := get_viewport().get_visible_rect().size
+	_modal.pivot_offset = size / 2.0
+	_modal.scale = Vector2.ONE * minf(1.0, minf((screen.x - 24.0) / size.x, (screen.y - 80.0) / size.y))
 	_dim.visible = true
 	_modal.visible = true
 
