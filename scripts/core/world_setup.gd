@@ -49,6 +49,23 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	if compat:
 		env.tonemap_exposure = 0.85
 		env.ambient_light_energy = 0.3
+	if MeshKit.toy:
+		# Look trial: clean midday light like a toy model on a table, no grade, no haze.
+		env.glow_enabled = false
+		env.adjustment_enabled = false
+		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		env.tonemap_exposure = 0.9
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.86, 0.9, 1.0)
+		env.ambient_light_energy = 0.32 if compat else 0.45
+		sky_mat.sky_top_color = Color(0.62, 0.8, 0.96)
+		sky_mat.sky_horizon_color = Color(0.86, 0.93, 0.98)
+		sky_mat.ground_horizon_color = Color(0.86, 0.93, 0.98)
+		env.fog_light_color = Color(0.86, 0.93, 0.98)
+		if MeshKit.look in ["diorama", "town"]:
+			env.background_mode = Environment.BG_COLOR
+			env.background_color = Color(0.95, 0.96, 0.97)
+			env.fog_enabled = false
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	parent.add_child(world_env)
@@ -58,11 +75,15 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	sun.rotation_degrees = Vector3(-38.0, 52.0, 0.0) if warm else Vector3(-52.0, 28.0, 0.0)
 	sun.light_energy = (1.15 if compat else 1.85) if warm else (1.05 if compat else 1.7)
 	sun.light_color = Color(1.0, 0.88, 0.72) if warm else Color(1.0, 0.92, 0.8)
+	if MeshKit.toy:
+		sun.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
+		sun.light_energy = 0.85 if compat else 1.15
+		sun.light_color = Color(1.0, 0.98, 0.94)
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.6
 	sun.directional_shadow_max_distance = 320.0
 	parent.add_child(sun)
-	if warm:
+	if warm and not MeshKit.toy:
 		_vignette(parent)
 
 	var cam := Camera3D.new()

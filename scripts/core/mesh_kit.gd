@@ -21,6 +21,23 @@ const OWN_COLOR := ["canvas", "wood", "asphalt", "dirt", "grass"]
 
 static var _tex := {}
 
+## Dev look trial (15.10.2026, owner's isometric "toy city" reference): `-- --look toy` swaps photo
+## textures and grime for clean flat colors; `--look diorama` also cuts the world into a floating
+## block of earth on a light background (City, WorldSetup).
+static var look := _look_arg()
+static var toy := look in ["toy", "diorama", "town"]
+
+
+static func _look_arg() -> String:
+	var args := OS.get_cmdline_user_args()
+	var i := args.find("--look")
+	return args[i + 1] if i >= 0 and i + 1 < args.size() else ""
+
+
+## Toy colors: a little brighter and more saturated than the photo look.
+static func toy_color(c: Color) -> Color:
+	return Color.from_hsv(c.h, minf(1.0, c.s * 1.15), minf(1.0, c.v * 1.02), c.a)
+
 
 ## The everyday material: painted metal / plaster grain under the given color.
 static func mat(color: Color, rough: float = 0.8, metal: float = 0.0) -> StandardMaterial3D:
@@ -36,6 +53,12 @@ static func mat(color: Color, rough: float = 0.8, metal: float = 0.0) -> Standar
 	m.normal_scale = 0.5
 	m.uv1_triplanar = true
 	m.uv1_scale = Vector3.ONE * PHOTO_SCALE["painted"]
+	if toy:
+		m.albedo_color = toy_color(color)
+		m.albedo_texture = null
+		m.normal_enabled = false
+		m.roughness = maxf(rough, 0.7)
+		m.metallic = metal * 0.3
 	return m
 
 
@@ -46,6 +69,13 @@ static func mat(color: Color, rough: float = 0.8, metal: float = 0.0) -> Standar
 static func surface(kind: String, color: Color = Color.WHITE, rough: float = 0.9, metal: float = 0.0, world: bool = false) -> StandardMaterial3D:
 	var m := mat(color, rough, metal)
 	m.uv1_world_triplanar = world
+	if toy and kind != "net":
+		match kind:
+			"grass": m.albedo_color = toy_color(color.lerp(Color(0.5, 0.74, 0.34), 0.85))
+			"dirt": m.albedo_color = toy_color(color.lerp(Color(0.74, 0.62, 0.44), 0.7))
+			"asphalt": m.albedo_color = toy_color(color.lerp(Color(0.42, 0.44, 0.48), 0.8))
+			"wood", "canvas": m.albedo_color = toy_color(color.lerp(Color.WHITE, 0.3))
+		return m
 	if PHOTO_SCALE.has(kind):
 		m.albedo_texture = _photo(kind)
 		m.normal_texture = _photo(kind + "_n")
@@ -205,7 +235,7 @@ static func glow(color: Color, alpha: float = 1.0) -> StandardMaterial3D:
 static func add(parent: Node3D, mesh: Mesh, material: Material, pos: Vector3 = Vector3.ZERO) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	if grime_root != null and material is StandardMaterial3D and (material as StandardMaterial3D).shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+	if grime_root != null and not toy and material is StandardMaterial3D and (material as StandardMaterial3D).shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
 		mi.mesh = _grimed(mesh, parent, pos)
 	mi.material_override = material
 	mi.position = pos

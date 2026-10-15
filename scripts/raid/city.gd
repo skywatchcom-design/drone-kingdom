@@ -54,18 +54,36 @@ func roof_top(cell: Array) -> Vector3:
 ## worn ground under its buildings and a camp around it (lamps, crates, a gate booth...).
 func build(seed_value: int, pad_cells: Array, used_cells: Array = []) -> void:
 	_rng.seed = seed_value
-	MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.surface("grass", Color(0.36, 0.46, 0.24), 1.0, 0.0, true), Vector3(0, -0.2, 0))
+	var diorama := MeshKit.look in ["diorama", "town"]
+	if diorama:
+		_add_slab()
+	else:
+		MeshKit.add(self, MeshKit.box(Vector3(800.0, 0.4, 800.0)), MeshKit.surface("grass", Color(0.36, 0.46, 0.24), 1.0, 0.0, true), Vector3(0, -0.2, 0))
 	_add_compound(pad_cells, used_cells)
 	_add_patches(used_cells)
 	if not used_cells.is_empty():
 		_add_camp()
-	_add_stream()
-	_add_fields()
+	if not diorama:
+		_add_stream()
+		_add_fields()
+		_add_turbines()
+		_add_hills()
 	_add_road()
-	_add_turbines()
-	_add_hills()
 	_scatter_nature()
 	_flush_multimeshes()
+
+
+## Look trial "diorama": the world is one block of land with earth and rock layers on its
+## sides, floating on a light background.
+const SLAB := 54.0
+
+
+func _add_slab() -> void:
+	var w := SLAB * 2.0
+	MeshKit.add(self, MeshKit.box(Vector3(w, 0.4, w)), MeshKit.surface("grass", Color(0.36, 0.46, 0.24), 1.0, 0.0, true), Vector3(0, -0.2, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(w, 3.2, w)), MeshKit.mat(Color(0.56, 0.4, 0.26), 0.95), Vector3(0, -2.0, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(w - 0.6, 2.4, w - 0.6)), MeshKit.mat(Color(0.42, 0.3, 0.2), 0.95), Vector3(0, -4.8, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(w - 1.2, 0.6, w - 1.2)), MeshKit.mat(Color(0.62, 0.6, 0.56), 0.95), Vector3(0, -6.3, 0))
 
 
 func _process(delta: float) -> void:
@@ -77,7 +95,10 @@ func _process(delta: float) -> void:
 
 func _add_compound(pad_cells: Array, used_cells: Array = []) -> void:
 	var lawn := YARD * 2.0
-	MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.surface("grass", Color(0.4, 0.5, 0.26), 1.0, 0.0, true), Vector3(0, 0.03, 0))
+	if MeshKit.look == "town":
+		_add_streets(lawn)
+	else:
+		MeshKit.add(self, MeshKit.box(Vector3(lawn, 0.06, lawn)), MeshKit.surface("grass", Color(0.4, 0.5, 0.26), 1.0, 0.0, true), Vector3(0, 0.03, 0))
 	for c in GRID:
 		for r in GRID:
 			heights[_key([c, r])] = PAD_H + 0.06
@@ -105,6 +126,24 @@ func _add_compound(pad_cells: Array, used_cells: Array = []) -> void:
 	_add_tufts(pad_cells)
 
 
+## Look trial "town": the lanes between pads are streets with white dashes and a curb around
+## the block, like the owner's toy-city reference.
+func _add_streets(lawn: float) -> void:
+	MeshKit.add(self, MeshKit.box(Vector3(lawn + 1.0, 0.1, lawn + 1.0)), MeshKit.mat(Color(0.86, 0.85, 0.8), 0.9), Vector3(0, 0.05, 0))
+	MeshKit.add(self, MeshKit.box(Vector3(lawn - 1.0, 0.06, lawn - 1.0)), MeshKit.surface("asphalt", Color(0.42, 0.44, 0.48), 1.0, 0.0, true), Vector3(0, 0.08, 0))
+	var dashes := []
+	var half := GRID * SPACING / 2.0
+	for k in GRID + 1:
+		var lane := -half + k * SPACING
+		var t := -half
+		while t < half:
+			dashes.append(Transform3D(Basis(), Vector3(lane, 0.115, t + 0.6)))
+			dashes.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(t + 0.6, 0.115, lane)))
+			t += 2.0
+	var d := MeshKit.multi(self, MeshKit.box(Vector3(0.16, 0.02, 0.9)), MeshKit.mat(Color(0.97, 0.97, 0.94), 0.8), dashes)
+	d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
 ## Free building plots: a faint gravel square with a small white stake at each corner, so the
 ## grid stays readable without looking like a car park.
 func _add_plots(centers: Array) -> void:
@@ -125,10 +164,11 @@ func _add_plots(centers: Array) -> void:
 ## Soft patches on the ground: worn dirt under the buildings, and lighter and darker grass
 ## around, so the field isn't one flat green.
 func _add_patches(used_cells: Array) -> void:
-	for cell in used_cells:
+	for cell in used_cells if MeshKit.look != "town" else []:
 		_patch(cell_pos(cell), PAD + 3.4, Color(0.5, 0.42, 0.3), 0.75)
 	for i in 70:
-		var p := Vector3(_rng.randf_range(-90.0, 90.0), 0, _rng.randf_range(-90.0, 90.0))
+		var spread := SLAB - 10.0 if MeshKit.look in ["diorama", "town"] else 90.0
+		var p := Vector3(_rng.randf_range(-spread, spread), 0, _rng.randf_range(-spread, spread))
 		var light := _rng.randf() < 0.5
 		_patch(p, _rng.randf_range(8.0, 20.0), Color(0.52, 0.6, 0.3) if light else Color(0.22, 0.34, 0.14), 0.32)
 	for i in 14:
@@ -240,14 +280,15 @@ func _add_tufts(pad_cells: Array) -> void:
 	var tries := 0
 	while xfs.size() < 2200 and tries < 12000:
 		tries += 1
-		var p := Vector3(_rng.randf_range(-YARD - 30.0, YARD + 30.0), 0, _rng.randf_range(-YARD - 30.0, YARD + 30.0))
+		var spread := SLAB - 1.0 if MeshKit.look in ["diorama", "town"] else YARD + 30.0
+		var p := Vector3(_rng.randf_range(-spread, spread), 0, _rng.randf_range(-spread, spread))
 		var on_pad := false
 		for cell in pad_cells:
 			var c := cell_pos(cell)
 			if absf(p.x - c.x) < PAD / 2.0 + 0.2 and absf(p.z - c.z) < PAD / 2.0 + 0.2:
 				on_pad = true
 				break
-		if on_pad or (absf(p.x) < 4.0 and p.z > YARD - 3.0):
+		if on_pad or (absf(p.x) < 4.0 and p.z > YARD - 3.0) or (MeshKit.look == "town" and absf(p.x) < YARD + 1.0 and absf(p.z) < YARD + 1.0):
 			continue
 		var h := _rng.randf_range(0.5, 1.3)
 		var b := Basis(Vector3.UP, _rng.randf() * TAU).rotated(Vector3.RIGHT, _rng.randf_range(-0.3, 0.3)).scaled(Vector3(1, h, 1))
@@ -263,7 +304,8 @@ func _add_tufts(pad_cells: Array) -> void:
 
 func _add_road() -> void:
 	var dirt := MeshKit.surface("dirt", Color(0.66, 0.55, 0.4), 1.0, 0.0, true)
-	MeshKit.add(self, MeshKit.box(Vector3(6.0, 0.05, 120.0)), dirt, Vector3(0, 0.025, YARD + 60.0))
+	var length := SLAB - YARD if MeshKit.look in ["diorama", "town"] else 120.0
+	MeshKit.add(self, MeshKit.box(Vector3(6.0, 0.05, length)), dirt, Vector3(0, 0.025, YARD + length / 2.0))
 	MeshKit.add(self, MeshKit.box(Vector3(7.0, 0.06, 4.0)), dirt, Vector3(0, 0.03, YARD - 1.0))
 
 
@@ -342,7 +384,8 @@ func _scatter_nature() -> void:
 	var tries := 0
 	while placed < 260 and tries < 3000:
 		tries += 1
-		var p := Vector3(_rng.randf_range(-100.0, 100.0), 0, _rng.randf_range(-100.0, 100.0))
+		var reach := SLAB - 2.0 if MeshKit.look in ["diorama", "town"] else 100.0
+		var p := Vector3(_rng.randf_range(-reach, reach), 0, _rng.randf_range(-reach, reach))
 		if not _free_ground(p):
 			continue
 		placed += 1
