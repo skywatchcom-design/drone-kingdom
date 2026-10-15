@@ -11,10 +11,12 @@ Read the GDD before changing gameplay: it records every product decision made wi
 ## Working with the owner (agreed 7.10.2026)
 - **Every line to the owner is in Hebrew**, including short status lines and final summaries. Code,
   commits and comments stay in English.
-- **After every change, without asking** (skill `/ship`): import + tests, an in-game screenshot for
-  anything visible, update this file, commit (message via a file), `git push origin main`, publish
-  the web build (`tools/publish_web.ps1`), then a short Hebrew summary with the iPad link
-  (`?v=N`, private tab for a new player) and what still needs the owner.
+- **Nothing enters `main` without the owner's approval (owner, 15.10.2026).** Each session works on its
+  own branch/worktree (`.claude/worktrees/<topic>`), and after every change (skill `/ship`): import +
+  tests, an in-game screenshot, update this file on the branch, commit and push the branch, publish a
+  preview (`tools/publish_web.ps1 -Preview <topic>` -> `/preview/<topic>/`), and ask the owner in Hebrew.
+  Only after an explicit yes for that change: rebase on `origin/main`, push to `main`, publish the real
+  site (`tools/publish_web.ps1`) and send the `?v=N` link. Approval of one change never covers the next.
 - **Sketch first only for new screens, characters and big design changes** (skill `/sketch`): 2-3
   working directions over real game screenshots, the owner picks. Small UI fixes go straight into
   the game, shown with a screenshot.
