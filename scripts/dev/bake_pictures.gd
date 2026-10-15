@@ -35,13 +35,22 @@ func _ready() -> void:
 
 
 func _bake(dir: String, name: String, type: String, level: int) -> void:
+	# One scene for both passes, only the background colour changes, so the two shots match
+	# exactly (two separate scenes could catch different moments and leave a dark ghost).
+	var pic := ShopUI.live_picture(type, level, Color.BLACK)
+	pic.size = Vector2(SIZE, SIZE)
+	add_child(pic)
+	var vp := pic.get_child(0) as SubViewport
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Freeze every unit in its first pose (engineers would otherwise start kneeling mid-bake).
+	for n in vp.find_children("*", "Node3D", true, false):
+		if n is Unit:
+			n.process_mode = Node.PROCESS_MODE_DISABLED
+	var env := (vp.find_children("*", "WorldEnvironment", true, false)[0] as WorldEnvironment).environment
 	for bg: String in ["black", "white"]:
-		var pic := ShopUI.live_picture(type, level, Color.BLACK if bg == "black" else Color.WHITE)
-		pic.size = Vector2(SIZE, SIZE)
-		add_child(pic)
+		env.background_color = Color.BLACK if bg == "black" else Color.WHITE
 		for i in 4:
 			await RenderingServer.frame_post_draw
-		var vp := pic.get_child(0) as SubViewport
 		vp.get_texture().get_image().save_png("%s/%s_%s.png" % [dir, name, bg])
-		pic.queue_free()
+	pic.queue_free()
 	print("baked ", name)

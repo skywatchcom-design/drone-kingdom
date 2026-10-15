@@ -117,6 +117,13 @@ In game (7.10.2026): Poly Haven CC0 photo textures in `assets/textures` used by 
 in `assets/models/incoming` (git-ignored), slimmed by `scripts/dev/slim_model.gd` into
 `assets/models/<name>.res` + `<name>_albedo.webp`; see `docs/model-prompts.md`. Done: infantry, tank
 (hull + turret). Tripo's free plan cannot export, so it is not used.
+Combat engineer (15.10.2026, owner approved): TRELLIS model from the owner's Gemini picture (`assets/models/engineer.res`
++ `engineer_albedo.webp`, 7,299 tris), warm sand tint `UnitModels.AI_TINTS`, on the same leg skeleton as the infantry
+(`_ai_soldier(..., rifle_gear = false)`: level patches, Lv5 amber goggles). Rejected looks (owner, 12-13.10.2026): code-built
+gear on top of a model ("Roblox"), Mixamo characters, the Fab "Military FREE" low-poly pack. Next characters go the same
+TRELLIS way: robot guard, then drones. Gemini attachment for style: `assets/models/incoming/reference_soldier.png` (the
+`<name>_0.webp` files there are extracted textures, not pictures). Picture bake: both passes now come from one scene with
+units frozen (`process_mode` disabled), so pictures no longer get a dark ghost.
 7.10.2026 (owner feedback): AI soldiers walk on a 5-bone leg skeleton (`UnitModels._leg_skeleton`,
 weights painted by height in `_skinned`); small coin/fuel markers with no number; softer coin chime;
 slow martial base music (D minor, 70 BPM) `assets/audio/base_theme.ogg` composed by `tools/make_music.py` (Sfx.music, settings

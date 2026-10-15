@@ -30,8 +30,11 @@ static func build(kind: String, root: Node3D, level: int = 1) -> Dictionary:
 				p = _tank(root)
 				_tank_level(root, p, level)
 		"engineers":
-			p = _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
-			_engineer_level(root, p, level)
+			if ResourceLoader.exists(AI_MODEL % "engineer" + ".res"):
+				p = _ai_soldier(root, "engineer", level, false)
+			else:
+				p = _soldier(root, Color(0.77, 0.54, 0.17), Color(0.42, 0.35, 0.2), true)
+				_engineer_level(root, p, level)
 		"robot":
 			p = _robot(root, level)
 		_:
@@ -49,12 +52,16 @@ const AI_MODEL := "res://assets/models/%s"
 static var _ai_cache := {}
 
 
+## Warm sand over the generated engineer's texture, so it reads khaki next to the olive infantry.
+const AI_TINTS := {"engineer": Color(1.0, 0.88, 0.66)}
+
+
 static func _ai_parts(name: String, darken: float) -> Array:
 	var key := "%s@%.2f" % [name, darken]
 	if not _ai_cache.has(key):
 		var m := StandardMaterial3D.new()
 		m.albedo_texture = load(AI_MODEL % name + "_albedo.webp")
-		m.albedo_color = Color.WHITE.darkened(darken)
+		m.albedo_color = (AI_TINTS.get(name, Color.WHITE) as Color).darkened(darken)
 		m.roughness = 0.9
 		_ai_cache[key] = [load(AI_MODEL % name + ".res"), m]
 	return _ai_cache[key]
@@ -115,7 +122,9 @@ static func _ai_tank(root: Node3D, level: int) -> Dictionary:
 ## its legs are skinned to a small skeleton that walks and kneels (the hips are empty pivots). Levels add parts and darker armor:
 ## Lv2 level patches; Lv3 a light machine gun with a drum and a helmet band; Lv4 dark armor
 ## and a radio antenna; Lv5 near-black armor and a glowing visor.
-static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
+## `rifle_gear` adds the infantry's weapon upgrades (drum, barrels, cyan visor); the generated
+## engineer carries no rifle, so it gets level patches and, at Lv5, amber goggles instead.
+static func _ai_soldier(root: Node3D, name: String, level: int, rifle_gear := true) -> Dictionary:
 	var hips := []
 	for x in [-0.09, 0.09]:
 		var hip := Node3D.new()
@@ -144,6 +153,14 @@ static func _ai_soldier(root: Node3D, name: String, level: int) -> Dictionary:
 	muzzle.position = Vector3(-0.05, 0.2, 0.32)
 	torso.add_child(muzzle)
 	var mark := level_material(level)
+	if not rifle_gear:
+		if level >= 2:
+			for sx in [-1.0, 1.0]:
+				MeshKit.add(torso, MeshKit.box(Vector3(0.05, 0.06, 0.13)), mark, Vector3(sx * 0.2, 0.42, 0))
+		if level >= 5:
+			var goggles := MeshKit.add(torso, MeshKit.box(Vector3(0.17, 0.04, 0.03)), MeshKit.glow(Color(1.0, 0.75, 0.29)), Vector3(0, 0.58, 0.12))
+			goggles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		return {"hips": hips, "torso": torso, "helmet": helmet, "muzzle": muzzle, "wheels": [], "turret": null, "gun": null, "skeleton": skeleton}
 	if level >= 2:
 		for sx in [-1.0, 1.0]:
 			MeshKit.add(torso, MeshKit.box(Vector3(0.05, 0.06, 0.13)), mark, Vector3(sx * 0.2, 0.42, 0))
