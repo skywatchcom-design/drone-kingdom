@@ -35,6 +35,11 @@ static func build(parent: Node3D, type: String, level: int, top: Vector3) -> Nod
 	MeshKit.grime_root = root
 	MeshKit.grime_top = 1.3
 	MeshKit.blob(root, Vector2(6.6, 6.6), Vector3.ZERO, 0.5)
+	if LeoModels.has(type):
+		height = LeoModels.build(root, type, level)
+		MeshKit.grime_root = null
+		level_label(root, level, height + 1.2)
+		return root
 	match type:
 		"hq":
 			height = _hq(root, level)
