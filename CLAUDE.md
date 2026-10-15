@@ -36,6 +36,11 @@ Approved 15.10.2026: the owner moves to Base Wars and builds it as a **separate 
 `scenes/merge/town.tscn -- --tone leo`, after the owner's Leonardo picture): isometric 9x9 base on a floating block of earth,
 grey concrete blocks between dark streets with crosswalks, khaki walls, olive ribbed metal roofs, red only on fuel tanks,
 control-tower Command Tower, stronger shading. Portrait 720x1280. Previews go to `/preview/basewars/`.
+Decided 15.10.2026: battles are option C "hybrid" (merge-defense missions and Clash-style attacks), and the city is built
+on SkyWatch's existing systems (save, economy, buildings, workers, gems, Supabase accounts); only the look and the screen
+change. For the owner it is the same game: same name and brand, same Play app, same YouTube channel. Plan: 1 city screen
+in the new look (portrait), 2 merge-defense battles with a stage campaign, 3 attacks in the new look, 4 Noa, missions,
+store, account, then PvP.
 
 ## Base Wars pivot history (15.10.2026, branch `diorama`)
 The owner decided to change the concept completely to **Base Wars**: tower defense + merge (owner's docs "Base Wars Game
