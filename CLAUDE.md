@@ -279,5 +279,7 @@ Still waiting on the owner: the Apple Developer account (Google Play is approved
 - Owner uploads it: Alpha > create new release > upload > release notes (`<en-US>` and `<iw-IL>`) > send for review.
 - Players already have saves: any save-format change needs a migration (as v4..v11), and Supabase changes must keep
   working for older installed builds (web and Android update at different times).
+- Each bundle sent to Google gets a git tag on the commit it was built from: `play-<name>-v<code>` (first one:
+  `play-0.1.0-v1` = a61cfbf, uploaded 10.10.2026). Work after that tag reaches Play only with the next "גרסה לגוגל".
 - The upload key (`tmp/skywatch-release.keystore` + password, main checkout) is the only key Play accepts; never
   make a new one. Google holds the app-signing key (Play App Signing).
