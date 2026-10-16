@@ -3,7 +3,8 @@ extends RefCounted
 ## Tiny translation layer. Code is written with English strings as keys; t() returns the
 ## Hebrew version when the game runs in Hebrew. English stays the fallback for the global launch.
 
-static var lang := "he"
+## English by default (owner, 16.10.2026); a saved choice in Settings wins.
+static var lang := "en"
 
 const HE := {
 	# Base Wars prototype

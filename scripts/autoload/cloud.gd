@@ -121,6 +121,12 @@ func sign_in(login: String, password: String) -> String:
 	login = login.strip_edges()
 	var address := login.to_lower() if login.contains("@") else email_for(login)
 	var r := await _call(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email": address, "password": password}, false)
+	if not login.contains("@") and r["code"] in [400, 401]:
+		# An account with an email, logged into by its commander name: the server gives back
+		# the email only for the right password (login_email, migration 20261016).
+		var found := await _call(HTTPClient.METHOD_POST, "/rest/v1/rpc/login_email", {"p_name": login, "p_password": password}, false)
+		if found["code"] == 200 and found["data"] is String and str(found["data"]) != "":
+			r = await _call(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email": str(found["data"]), "password": password}, false)
 	if r["code"] != 200 or not (r["data"] is Dictionary) or not r["data"].has("access_token"):
 		if r["code"] in [400, 401]:
 			return I18n.t("Wrong email or password") if login.contains("@") else I18n.t("Wrong name or password. From age 13, log in with your email.")
