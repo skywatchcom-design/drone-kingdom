@@ -301,6 +301,10 @@ static func _field(parent: Control, label: String, secret: bool, placeholder: St
 	var e := LineEdit.new()
 	e.secret = secret
 	e.placeholder_text = placeholder
+	# The phone keyboard must not capitalize or "correct" what is typed (owner, 16.10.2026: on the
+	# iPad a login kept failing): a password keyboard for passwords, an email keyboard (no
+	# capitals, no autocorrect) for names and emails.
+	e.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_PASSWORD if secret else LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
 	e.custom_minimum_size = Vector2(0, 52)
 	e.add_theme_font_size_override("font_size", 23)
 	e.add_theme_color_override("font_color", INK)
@@ -315,6 +319,23 @@ static func _field(parent: Control, label: String, secret: bool, placeholder: St
 	focus.border_color = GREEN
 	focus.set_border_width_all(3)
 	e.add_theme_stylebox_override("focus", focus)
+	if secret:
+		# An eye button on the field shows what was typed, so a wrong letter is easy to spot.
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		parent.add_child(row)
+		e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(e)
+		var eye := Button.new()
+		eye.text = I18n.t("Show")
+		eye.custom_minimum_size = Vector2(96, 52)
+		eye.focus_mode = Control.FOCUS_NONE
+		eye.add_theme_font_size_override("font_size", 20)
+		eye.pressed.connect(func() -> void:
+			e.secret = not e.secret
+			eye.text = I18n.t("Show") if e.secret else I18n.t("Hide"))
+		row.add_child(eye)
+		return e
 	parent.add_child(e)
 	return e
 

@@ -8,6 +8,8 @@ static var lang := "en"
 
 const HE := {
 	# Base Wars prototype
+	"Hide": "הסתר",
+	"Show": "הצג",
 	"Rapid fire": "אש מהירה",
 	"Armor piercing": "חודר שריון",
 	"Wide blast": "פיצוץ רחב",
