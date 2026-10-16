@@ -67,6 +67,13 @@ var _modal_sheet: PanelContainer
 ## A locked window has no close button and ignores taps outside it (sign-up is required).
 var _modal_locked := false
 var _modal_body: MarginContainer
+## Portrait + military look: windows open as a sheet from the bottom (plan sketch
+## SQhYwaeWJpKTv5HjygjboU, the owner's pick: "full" for long lists such as the Shop and the Army,
+## "half" for one building's upgrade or info so the base stays in view). "" = the centred window.
+var _sheet_mode := ""
+var _grab: Control
+var _parchment: StyleBox
+var _sheet_drag := 0.0
 
 
 func _ready() -> void:
@@ -269,6 +276,32 @@ func _ready() -> void:
 		hide_modal())
 	_modal.add_child(x)
 	_modal_close = x
+	_parchment = sheet.get_theme_stylebox("panel")
+	# The sheet's handle: a short bar on top; dragging it (or the top strip) down closes the sheet.
+	_grab = Control.new()
+	_grab.anchor_right = 1.0
+	_grab.offset_bottom = 46
+	_grab.visible = false
+	_grab.mouse_filter = Control.MOUSE_FILTER_STOP
+	_modal.add_child(_grab)
+	var bar := Panel.new()
+	bar.anchor_left = 0.5
+	bar.anchor_right = 0.5
+	bar.offset_left = -44
+	bar.offset_right = 44
+	bar.offset_top = 14
+	bar.offset_bottom = 22
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_theme_stylebox_override("panel", UiTheme.box(Color(UiTheme.SAND, 0.55), 4))
+	_grab.add_child(bar)
+	_grab.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventScreenTouch and e.pressed:
+			_sheet_drag = 0.0
+		elif e is InputEventScreenDrag:
+			_sheet_drag += (e as InputEventScreenDrag).relative.y
+			if _sheet_drag > 70.0 and not _modal_locked:
+				hide_modal())
+	_modal.move_child(x, -1)
 
 	_toast = make_label(root, "", 34)
 	_toast.anchor_right = 1.0
@@ -597,8 +630,23 @@ func actions_open() -> bool:
 ## Opens `content` in the parchment window in the middle, `size` pixels big. A `locked` window
 ## can only be closed by the game (hide_modal), not by the player. A `bare` window leaves out the
 ## parchment, for content that draws its own card.
-func show_modal(content: Control, size: Vector2, locked: bool = false, bare: bool = false) -> void:
+func show_modal(content: Control, size: Vector2, locked: bool = false, bare: bool = false, kind: String = "") -> void:
 	_modal_locked = locked
+	var view := get_viewport().get_visible_rect().size
+	_sheet_mode = ""
+	if view.y > view.x and UiTheme.on() and not bare:
+		_sheet_mode = kind if kind != "" else ("full" if size.x >= 1000.0 else "half")
+		_open_sheet(content, locked)
+		return
+	_modal.set_anchors_preset(Control.PRESET_CENTER)
+	_modal_sheet.add_theme_stylebox_override("panel", _parchment)
+	_grab.visible = false
+	_dim.color = Color(0, 0, 0, 0.5)
+	_modal_close.offset_left = -34
+	_modal_close.offset_right = 20
+	_modal_close.offset_top = -20
+	_modal_close.offset_bottom = 34
+	_style_button(_modal_close, Color(0.85, 0.26, 0.16), 10, Color.WHITE, 3)
 	# Windows were laid out for landscape. In portrait they take the screen's width and grow
 	# taller, so their containers reflow; whatever still does not fit shrinks (below).
 	var screen := get_viewport().get_visible_rect().size
@@ -622,12 +670,78 @@ func show_modal(content: Control, size: Vector2, locked: bool = false, bare: boo
 	_fit_modal()
 
 
+## A window as a sheet from the bottom: full width, a dark plate with a sand line on top, the
+## handle and the close button in its top strip; "full" reaches up under the top bar, "half"
+## is as tall as its content (at most about 60% of the screen). It slides up when it opens.
+func _open_sheet(content: Control, locked: bool) -> void:
+	var sb := UiTheme.box(UiTheme.SHEET, 0, UiTheme.SAND_LINE, 0)
+	sb.corner_radius_top_left = 22
+	sb.corner_radius_top_right = 22
+	sb.border_width_top = 1
+	_modal_sheet.add_theme_stylebox_override("panel", sb)
+	_modal_sheet.self_modulate.a = 1.0
+	for side in ["margin_left", "margin_right", "margin_bottom"]:
+		_modal_body.add_theme_constant_override(side, 18)
+	_modal_body.add_theme_constant_override("margin_top", 46)
+	_modal_close.visible = not locked
+	_modal_close.offset_left = -70
+	_modal_close.offset_right = -16
+	_modal_close.offset_top = 8
+	_modal_close.offset_bottom = 54
+	_style_button(_modal_close, Color(0, 0, 0, 0), 6)
+	_grab.visible = true
+	for child in _modal_body.get_children():
+		child.queue_free()
+	_modal_body.add_child(content)
+	UiTheme.darken_tree(content)
+	var view := get_viewport().get_visible_rect().size
+	_modal.anchor_left = 0.0
+	_modal.anchor_right = 1.0
+	_modal.anchor_bottom = 1.0
+	_modal.offset_left = 0.0
+	_modal.offset_right = 0.0
+	_modal.offset_bottom = 0.0
+	_modal.scale = Vector2.ONE
+	if _sheet_mode == "full":
+		_modal.anchor_top = 0.0
+		_modal.offset_top = 150.0
+	else:
+		_modal.anchor_top = 1.0
+		_modal.offset_top = -view.y * 0.5
+	_dim.color = Color(0, 0, 0, 0.45 if _sheet_mode == "full" else 0.22)
+	_dim.visible = true
+	_modal.visible = true
+	_fit_modal()
+
+
 ## Some windows need more room than they were given (fixed-width rows): once laid out, the
-## window is centred on its real size and shrunk to fit the screen.
+## window is centred on its real size and shrunk to fit the screen. A half sheet takes its
+## content's height instead, and both slide up.
 func _fit_modal() -> void:
 	for i in 2:
 		await get_tree().process_frame
 	if not _modal.visible:
+		return
+	if _sheet_mode != "":
+		var view := get_viewport().get_visible_rect().size
+		var need := _modal_sheet.get_combined_minimum_size()
+		if _sheet_mode == "half":
+			_modal.offset_top = -clampf(need.y, 320.0, view.y * 0.62)
+		if need.x > view.x:
+			# Too wide for the screen: shrink from the bottom-left corner so it fits the width
+			# and keeps its full height.
+			var k := view.x / need.x
+			_modal.offset_right = need.x - view.x
+			if _sheet_mode == "full":
+				_modal.offset_top = 150.0 - (_modal.size.y / k - _modal.size.y)
+			_modal.pivot_offset = Vector2(0.0, _modal.size.y)
+			_modal.scale = Vector2.ONE * k
+		var top := _modal.offset_top
+		var drop := view.y - (_modal.offset_top if _sheet_mode == "half" else 0.0)
+		_modal.position.y += minf(drop, 400.0)
+		var tw := _modal.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_modal, "offset_top", top, 0.22)
+		tw.parallel().tween_property(_modal, "offset_bottom", 0.0, 0.22)
 		return
 	var screen := get_viewport().get_visible_rect().size
 	var real := _modal.size.max(_modal_sheet.get_combined_minimum_size())
