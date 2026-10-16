@@ -72,7 +72,7 @@ func set_hum(level: float) -> void:
 
 
 func buzz(ms: int) -> void:
-	if enabled and OS.has_feature("mobile"):
+	if enabled and GameState.vibrate_on and OS.has_feature("mobile"):
 		Input.vibrate_handheld(ms)
 
 

@@ -308,6 +308,17 @@ func _ready() -> void:
 	_toast.anchor_top = 0.24
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.modulate.a = 0.0
+	if UiTheme.on():
+		# A small plate under the top bar instead of big text in the middle of the base.
+		_toast.add_theme_font_size_override("font_size", 24)
+		_toast.add_theme_constant_override("outline_size", 0)
+		var tsb := UiTheme.box(UiTheme.PLATE, UiTheme.RADIUS, Color(UiTheme.OK, 0.7), 1)
+		tsb.set_content_margin_all(10)
+		_toast.add_theme_stylebox_override("normal", tsb)
+		_toast.anchor_left = 0.14
+		_toast.anchor_right = 0.86
+		_toast.anchor_top = 0.2
+		_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
 ## Places a control in a screen corner (same in both languages), anchored there and growing
@@ -504,7 +515,16 @@ func set_shop_badge(count: int) -> void:
 
 func _set_bar(key: String, value: int, cap: int, infinite: bool) -> void:
 	var b: Dictionary = _bars[key]
-	(b["value"] as Label).text = "∞" if infinite else _thousands(value)
+	var label := b["value"] as Label
+	var shown: int = b.get("shown", -1)
+	b["shown"] = value
+	if UiTheme.on() and not infinite and shown >= 0 and value > shown:
+		# Collected resources count up on the bar once the flying coins arrive.
+		var tw := label.create_tween()
+		tw.tween_interval(0.45)
+		tw.tween_method(func(n: float) -> void: label.text = _thousands(int(n)), float(shown), float(value), 0.6)
+	else:
+		label.text = "∞" if infinite else _thousands(value)
 	(b["cap"] as Label).text = "" if cap <= 0 or infinite else I18n.t("Max %s") % _thousands(cap)
 	(b["bar"] as ProgressBar).max_value = maxi(cap, 1)
 	(b["bar"] as ProgressBar).value = cap if infinite else value
@@ -763,6 +783,29 @@ func modal_open() -> bool:
 	return _modal.visible
 
 
+## Coins or fuel fly from `from` (a screen point) up to their bar.
+func fly(from: Vector2, key: String, amount: int) -> void:
+	if not UiTheme.on() or not _bars.has(key):
+		return
+	var target := (_bars[key]["value"] as Label).get_global_rect()
+	var to := Vector2(target.end.x + 20.0, target.get_center().y)
+	for i in clampi(amount / 40 + 4, 4, 9):
+		var icon := TextureRect.new()
+		icon.texture = Icons.tex("coin" if key == "coins" else "fuel", 48)
+		icon.size = Vector2(34, 34)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.position = from + Vector2(randf_range(-26, 26), randf_range(-26, 26)) - icon.size / 2.0
+		add_child(icon)
+		var p0 := icon.position
+		var end := to - icon.size / 2.0
+		var mid := (p0 + end) / 2.0 + Vector2(randf_range(-60, 60), -90)
+		var tw := icon.create_tween()
+		tw.tween_interval(i * 0.04)
+		tw.tween_method(func(k: float) -> void: icon.position = p0.lerp(mid, k).lerp(mid.lerp(end, k), k), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)
+		tw.tween_callback(icon.queue_free)
+
+
 func toast(text: String) -> void:
 	_toast.text = text
 	_toast.modulate.a = 1.6
@@ -825,6 +868,8 @@ static func make_button(parent: Control, text: String, font_size: int, height: f
 	b.custom_minimum_size = Vector2(0, height)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_font_size_override("font_size", font_size)
+	if UiTheme.on():
+		_style_button(b, UiTheme.CARD, 6, UiTheme.SAND_LINE, 1)
 	b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 	parent.add_child(b)
 	return b

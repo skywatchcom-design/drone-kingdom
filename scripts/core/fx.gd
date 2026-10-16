@@ -5,6 +5,8 @@ extends RefCounted
 ## level). Fire and smoke are camera-facing soft puffs (textures made in code, no assets), so
 ## they read as clouds rather than balls; they work on the web (Compatibility) renderer too.
 
+## Calm mode (Settings): no camera shake. GameState sets it.
+static var calm := false
 static var _soft: ImageTexture
 static var _cloud: ImageTexture
 static var _scorch: ImageTexture
@@ -122,6 +124,8 @@ static func scorch(parent: Node3D, ground: Vector3, size: float) -> void:
 
 ## Shakes the camera a little (by its offsets, so it never fights the panning).
 static func shake(parent: Node3D, strength: float) -> void:
+	if calm:
+		return
 	var cam := parent.get_viewport().get_camera_3d() if parent.is_inside_tree() else null
 	if cam == null or cam.has_meta("shaking"):
 		return

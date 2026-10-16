@@ -7,6 +7,16 @@ static var lang := "he"
 
 const HE := {
 	# Base Wars prototype
+	"Vibration on": "רטט: פועל",
+	"Vibration off": "רטט: כבוי",
+	"Calm mode on": "מצב רגוע: פועל",
+	"Calm mode off": "מצב רגוע: כבוי",
+	"Large text on": "טקסט גדול: פועל",
+	"Large text off": "טקסט גדול: כבוי",
+	"Attack again": "תקוף שוב",
+	"Watch out: AA, Jammer": "להיזהר מ: נ\"מ, משבש",
+	"Watch out: AT Gun": "להיזהר מ: תותח נ\"ט",
+	"Watch out: MG, Mortar": "להיזהר מ: מקלע, מרגמה",
 	"Attack!": "תקיפה!",
 	"Iron Fang tower %d%%": "מגדל ניב הברזל %d%%",
 	"Destroyed %d%%": "הושמד %d%%",

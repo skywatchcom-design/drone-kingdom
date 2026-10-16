@@ -81,10 +81,16 @@ const SETTINGS_PATH := "user://settings.json"
 var infinite_coins := false
 var sound_on := true
 var music_on := true
+## Comfort settings (UI plan stage 7): vibration, calm mode (no screen shake, no fades) and
+## bigger text and buttons everywhere.
+var vibrate_on := true
+var calm := false
+var big_text := false
 
 
 func _ready() -> void:
 	I18n.setup_font()
+	UiFeel.install(get_tree())
 	load_settings()
 	# Dev: `-- --fresh` shows a brand-new player's base without touching the real save.
 	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fresh"):
@@ -124,6 +130,21 @@ func set_music(on: bool) -> void:
 	save_settings()
 
 
+func set_comfort(vibrate: bool, calm_mode: bool, big: bool) -> void:
+	vibrate_on = vibrate
+	calm = calm_mode
+	big_text = big
+	apply_comfort()
+	save_settings()
+
+
+func apply_comfort() -> void:
+	Fx.calm = calm
+	var root := get_tree().root if is_inside_tree() else null
+	if root != null:
+		root.content_scale_factor = 1.12 if big_text else 1.0
+
+
 func set_language(lang: String) -> void:
 	I18n.lang = lang
 	save_settings()
@@ -139,6 +160,10 @@ func load_settings() -> void:
 		infinite_coins = bool(data.get("infinite_coins", true)) and dev_tools_available()
 		sound_on = bool(data.get("sound", true))
 		music_on = bool(data.get("music", true))
+		vibrate_on = bool(data.get("vibrate", true))
+		calm = bool(data.get("calm", false))
+		big_text = bool(data.get("big_text", false))
+		apply_comfort.call_deferred()
 
 
 func save_settings() -> void:
@@ -146,7 +171,8 @@ func save_settings() -> void:
 		return
 	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"lang": I18n.lang, "infinite_coins": infinite_coins, "sound": sound_on, "music": music_on}))
+		file.store_string(JSON.stringify({"lang": I18n.lang, "infinite_coins": infinite_coins, "sound": sound_on, "music": music_on,
+			"vibrate": vibrate_on, "calm": calm, "big_text": big_text}))
 
 
 ## Pays for something. With infinite coins on, nothing is taken.

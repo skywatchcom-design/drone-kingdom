@@ -39,6 +39,32 @@ const SVG := {
 	"t_fence": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#a0642a" stroke="#ffffff" stroke-width="1.6"/><path d="M5 8h6v3.5H5zM13 8h6v3.5h-6zM8 13h8v3.5H8z" fill="#ffffff"/></svg>',
 }
 
+## Base Wars "military clean" icons (UI plan, sketch SQhYwaeWJpKTv5HjygjboU): one thin-line set in
+## light sand on the dark plates; only the resources keep a (muted) color. They replace the
+## drawn ones of the same name while the military look is on.
+const LINE := {
+	"swords": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l10 10M20 4L10 14M7 16l-3 3 1 1 3-3M17 16l3 3-1 1-3-3"/></svg>',
+	"cart": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h3l3 11h10l2-8H8"/><circle cx="10" cy="19" r="1.4" fill="#ece7d6"/><circle cx="17" cy="19" r="1.4" fill="#ece7d6"/></svg>',
+	"army": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7-5 7 5M5 14l7-5 7 5M5 19l7-5 7 5"/></svg>',
+	"gear": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>',
+	"info": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.1"/></svg>',
+	"up": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 11l6-6 6 6"/></svg>',
+	"move": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>',
+	"clock": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+	"tasks": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="1.5"/><path d="M9 9l2 2 4-4M9 16h6"/></svg>',
+	"worker": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11a6 6 0 0112 0zM4 11h16"/><circle cx="12" cy="16" r="3.4"/></svg>',
+	"lock": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="1.5"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+	"drone": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>',
+	"train": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="7" r="2.6"/><circle cx="16" cy="7" r="2.6"/><path d="M3 20c0-4 2.5-6 5-6s5 2 5 6M11 20c0-4 2.5-6 5-6s5 2 5 6"/></svg>',
+	"plane": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2 7 8 4v2l-8-2-1 6 3 2v1l-4-1-4 1v-1l3-2-1-6-8 2v-2l8-4z"/></svg>',
+	"box": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8"/></svg>',
+	"brush": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3l7 7-8 8-7-7zM6 11l-3 3c-1 1-1 3 0 4l1 1c1 1 3 1 4 0l3-3"/></svg>',
+	"range": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ece7d6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="2.5" fill="#ece7d6"/></svg>',
+	"coin": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#c9a227" stroke="#5e4a0c" stroke-width="1.6"/><circle cx="12" cy="12" r="4.8" fill="none" stroke="#8a6d12" stroke-width="1.6"/></svg>',
+	"fuel": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2.5C9.5 7 5.5 9.8 5.5 14.5a6.5 6.5 0 0013 0c0-4.7-4-7.5-6.5-12z" fill="#a8483f" stroke="#4e1c17" stroke-width="1.6"/></svg>',
+	"gem": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 3.5h12l4 5.5-10 12.5L2 9z" fill="#3f9f7a" stroke="#123d2d" stroke-width="1.6"/><path d="M2 9h20M9 3.5l3 18M15 3.5l-3 18" stroke="#123d2d" stroke-width="1"/></svg>',
+}
+
 ## Colors of the target badges, for lines and rings drawn in the world.
 const TARGET_COLORS := {"any": Color(0.6, 0.66, 0.72), "loot": Color(1.0, 0.75, 0.15),
 	"defense": Color(0.95, 0.3, 0.25), "fence": Color(0.85, 0.55, 0.25), "hq": Color(0.3, 0.6, 0.95)}
@@ -59,7 +85,8 @@ static func tex(name: String, size: int = 48) -> Texture2D:
 	if _cache.has(key):
 		return _cache[key]
 	var image := Image.new()
-	image.load_svg_from_string(SVG.get(name, SVG["info"]), size / 24.0)
+	var src: String = LINE[name] if UiTheme.on() and LINE.has(name) else SVG.get(name, SVG["info"])
+	image.load_svg_from_string(src, size / 24.0)
 	var t := ImageTexture.create_from_image(image)
 	_cache[key] = t
 	return t

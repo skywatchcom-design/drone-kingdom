@@ -268,11 +268,36 @@ func _autoplay() -> void:
 
 # ---------------------------------------------------------------- battle
 
-func _unhandled_input(_event: InputEvent) -> void:
-	pass
+## Holding a finger on the board shows every defense's reach (green ground, blue air) until it
+## lets go (plan sketch SQhYwaeWJpKTv5HjygjboU).
+var _ranges_hold := -1
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_ranges_hold = Time.get_ticks_msec()
+		else:
+			_ranges_hold = -1
+			_show_ranges(false)
+
+
+func _show_ranges(on: bool) -> void:
+	for t: Dictionary in towers.values():
+		var d: Defense = t["node"]
+		if is_instance_valid(d):
+			var ring = d.get("_ring")
+			if ring is Node3D:
+				# The battle reaches 1.8x the stat radius; the defense node is scaled 1.5.
+				(ring as Node3D).scale = Vector3.ONE * 1.2
+			d.show_range(on)
 
 
 func _process(delta: float) -> void:
+	if _ranges_hold > 0 and Time.get_ticks_msec() - _ranges_hold > 420:
+		_ranges_hold = -1
+		_show_ranges(true)
+		Audio.buzz(15)
 	if state == State.WAVE:
 		_jam(delta)
 		_move_foes(delta)
@@ -561,6 +586,18 @@ func _finish(won: bool) -> void:
 		extra = I18n.t("Razor: \"%s\"") % I18n.t(lines[randi() % lines.size()])
 	(hud as StreetHud).show_result(stars, int(round(ratio * 100.0)), gained, extra)
 	Audio.play("star" if stars > 0 else "collapse")
+
+
+## True when the army has units left for another attack on this target.
+func can_attack_again() -> bool:
+	if autoplay:
+		return true
+	if GameState.raid_target == "syndicate":
+		return true
+	for k in GameState.army:
+		if int(GameState.army[k]) > 0:
+			return true
+	return false
 
 
 func go_home() -> void:

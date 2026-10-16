@@ -8,6 +8,10 @@ extends MergeHud
 var _counts := {}
 var _loot_label: Label
 var _title: Label
+## Holding a card shows what the unit is good at instead of sending it (plan sketch
+## SQhYwaeWJpKTv5HjygjboU, battle tab).
+var _tip: PanelContainer
+var _hold := {"type": "", "t": 0, "shown": false}
 
 
 func _top(root: Control) -> void:
@@ -77,10 +81,24 @@ func _bottom(root: Control) -> void:
 		name.clip_text = true
 		tag.add_child(name)
 		card.gui_input.connect(func(e: InputEvent) -> void:
-			if e is InputEventScreenTouch and e.pressed:
-				g.send(type))
+			if e is InputEventScreenTouch:
+				if e.pressed:
+					_hold = {"type": type, "t": Time.get_ticks_msec(), "shown": false}
+				else:
+					var was_tip: bool = _hold["shown"]
+					_hold = {"type": "", "t": 0, "shown": false}
+					_tip.visible = false
+					if not was_tip:
+						g.send(type))
 		_cards[type] = card
 		x += w + 8.0
+	_tip = PanelContainer.new()
+	_tip.add_theme_stylebox_override("panel", _style(Color(0.1, 0.12, 0.09, 0.95), 6, SAND))
+	_tip.position = Vector2(150, -170)
+	_tip.custom_minimum_size = Vector2(420, 0)
+	_tip.visible = false
+	_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_tip)
 	_speed = _small(panel, "x2", Vector2(560, 12))
 	_speed.toggle_mode = true
 	_speed.toggled.connect(func(on: bool) -> void:
@@ -123,7 +141,28 @@ func refresh() -> void:
 
 
 func _process(_delta: float) -> void:
-	pass
+	if _hold["type"] != "" and not _hold["shown"] and Time.get_ticks_msec() - int(_hold["t"]) > 420:
+		_hold["shown"] = true
+		_show_tip(_hold["type"])
+
+
+func _show_tip(type: String) -> void:
+	for c in _tip.get_children():
+		c.queue_free()
+	var g := game as StreetRaid
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	_tip.add_child(col)
+	var lvl: int = g.unit_levels.get(type, 1)
+	col.add_child(_label("%s · %s" % [Catalog.display_name(type), I18n.t("Lv %d") % lvl], 24, Color(0.91, 0.85, 0.66)))
+	var role := _label(I18n.t(Catalog.unit_def(type)["role"]), 18, Color.WHITE)
+	role.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	role.custom_minimum_size.x = 400
+	col.add_child(role)
+	var weak := I18n.t("Watch out: AA, Jammer") if Catalog.DRONES.has(type) else (I18n.t("Watch out: AT Gun") if type == "armor" else I18n.t("Watch out: MG, Mortar"))
+	col.add_child(_label(weak, 18, Color(0.91, 0.6, 0.52)))
+	_tip.visible = true
+	Audio.buzz(15)
 
 
 func show_result(stars: int, percent: int, gained: Dictionary, extra: String) -> void:
@@ -144,9 +183,28 @@ func show_result(stars: int, percent: int, gained: Dictionary, extra: String) ->
 	var title := _label(I18n.t("Base taken!") if stars >= 2 else (I18n.t("Victory!") if won else I18n.t("Attack failed")), 50, GOLD if won else Color(0.95, 0.4, 0.32))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
-	var star_row := _label("★".repeat(stars) + "☆".repeat(3 - stars), 64, GOLD)
-	star_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Stars pop in one by one, then the loot counts up.
+	var star_row := HBoxContainer.new()
+	star_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	star_row.add_theme_constant_override("separation", 14)
 	col.add_child(star_row)
+	for i in 3:
+		var st := TextureRect.new()
+		st.texture = Icons.tex("star", 96)
+		st.custom_minimum_size = Vector2(84, 84)
+		st.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		st.pivot_offset = Vector2(42, 42)
+		st.modulate = Color.WHITE if i < stars else Color(0.25, 0.27, 0.22)
+		st.scale = Vector2.ZERO
+		star_row.add_child(st)
+		var tw := st.create_tween()
+		tw.tween_interval(0.25 + 0.3 * i)
+		tw.tween_property(st, "scale", Vector2.ONE * 1.2, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(st, "scale", Vector2.ONE, 0.1)
+		if i < stars:
+			tw.tween_callback(func() -> void:
+				Audio.play("star", -4.0)
+				Audio.buzz(25))
 	var pct := _label(I18n.t("Destroyed %d%%") % percent, 30, Color.WHITE)
 	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(pct)
@@ -155,9 +213,16 @@ func show_result(stars: int, percent: int, gained: Dictionary, extra: String) ->
 	loot.add_theme_constant_override("separation", 10)
 	col.add_child(loot)
 	loot.add_child(_icon(Icons.tex("coin")))
-	loot.add_child(_label("+%d" % int(gained.get("coins", 0)), 30, GOLD))
+	var coin_l := _label("+0", 30, GOLD)
+	loot.add_child(coin_l)
 	loot.add_child(_icon(Icons.tex("fuel")))
-	loot.add_child(_label("+%d" % int(gained.get("fuel", 0)), 30, Color(0.95, 0.5, 0.7)))
+	var fuel_l := _label("+0", 30, Color(0.95, 0.5, 0.7))
+	loot.add_child(fuel_l)
+	var lt := coin_l.create_tween()
+	lt.tween_interval(1.1)
+	lt.tween_method(func(k: float) -> void:
+		coin_l.text = "+%d" % int(round(int(gained.get("coins", 0)) * k))
+		fuel_l.text = "+%d" % int(round(int(gained.get("fuel", 0)) * k)), 0.0, 1.0, 0.7)
 	if extra != "":
 		var x := _label(extra, 22, Color(0.85, 0.85, 0.8))
 		x.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -173,4 +238,18 @@ func show_result(stars: int, percent: int, gained: Dictionary, extra: String) ->
 	home.add_theme_stylebox_override("hover", _style(GO.lightened(0.1), 38))
 	home.add_theme_stylebox_override("pressed", _style(GO.darkened(0.2), 38))
 	home.pressed.connect(func() -> void: (game as StreetRaid).go_home())
-	col.add_child(home)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	col.add_child(row)
+	home.custom_minimum_size = Vector2(250, 76)
+	if (game as StreetRaid).can_attack_again():
+		var again := Button.new()
+		again.text = I18n.t("Attack again")
+		again.custom_minimum_size = Vector2(250, 76)
+		again.add_theme_font_size_override("font_size", 30)
+		for st2 in ["normal", "hover", "pressed"]:
+			again.add_theme_stylebox_override(st2, _style(HomeHud.ATTACK_RED if HomeHud.mil() else Color(0.75, 0.3, 0.2), 38, SAND))
+		again.pressed.connect(func() -> void: game.restart())
+		row.add_child(again)
+	row.add_child(home)

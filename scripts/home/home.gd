@@ -64,6 +64,10 @@ var marker: MeshInstance3D
 var press_pos := Vector2.ZERO
 var header_timer := 0.0
 var focus := Vector3(0, 10, 0)
+## Base Wars city UX (plan sketch SQhYwaeWJpKTv5HjygjboU): a green arrow over every building
+## that can be upgraded right now, and a double tap on open ground brings the camera home.
+var _arrows: Array[Node3D] = []
+var _last_tap := {"t": 0, "pos": Vector2.ZERO}
 
 
 func _ready() -> void:
@@ -214,7 +218,7 @@ func _rebuild() -> void:
 	var life := BaseLife.new()
 	level.add_child(life)
 	life.setup(level, sites)
-	marker = MeshKit.add(level, MeshKit.ring(3.4, 0.3), MeshKit.glow(Color(1, 1, 1), 0.9))
+	marker = MeshKit.add(level, MeshKit.ring(3.4, 0.3), MeshKit.glow(UiTheme.SAND if UiTheme.on() else Color(1, 1, 1), 0.9))
 	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	marker.visible = false
 	_refresh_header()
@@ -264,8 +268,10 @@ func _construction(s: Dictionary) -> void:
 		MeshKit.add(frame, MeshKit.box(Vector3(1.6, 1.0, 1.6)), MeshKit.mat(Color(0.6, 0.45, 0.28), 0.9), Vector3(-0.6, 0.5, 0.4))
 		MeshKit.add(frame, MeshKit.box(Vector3(1.1, 0.8, 1.1)), MeshKit.mat(Color(0.55, 0.42, 0.26), 0.9), Vector3(0.9, 0.4, -0.5))
 	var label := StructureModels.level_label(frame, 0, 6.5)
-	label.modulate = Color(1.0, 0.85, 0.35)
-	label.font_size = 64
+	label.modulate = UiTheme.SAND if UiTheme.on() else Color(1.0, 0.85, 0.35)
+	label.font_size = 56 if UiTheme.on() else 64
+	# The countdown always shows, even when level labels are hidden.
+	label.visible = true
 	timers[_key(s["cell"])] = {"label": label, "cell": s["cell"]}
 	_update_timers()
 
@@ -274,6 +280,14 @@ func _update_timers() -> void:
 	for key in timers:
 		var s := GameState.structure_at(timers[key]["cell"])
 		(timers[key]["label"] as Label3D).text = HomeHud.clock(GameState.seconds_left(s))
+
+
+func _recenter() -> void:
+	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(f: Vector3) -> void:
+		focus = f
+		WorldSetup.place_camera(cam, f), focus, Vector3(0, 10, 0), 0.35)
+	tw.tween_property(cam, "size", VIEW_SIZE * WorldSetup.size_scale, 0.35)
 
 
 func _key(cell: Array) -> String:
@@ -286,6 +300,10 @@ func _process(delta: float) -> void:
 	if _free_pads != null and _free_pads.visible:
 		_blink += delta
 		_free_pad_mat.albedo_color.a = 0.25 + 0.3 * (0.5 + 0.5 * sin(_blink * 6.0))
+	var t := Time.get_ticks_msec() / 1000.0
+	for a in _arrows:
+		if is_instance_valid(a):
+			a.position.y = float(a.get_meta("y")) + sin(t * 3.0 + a.position.x) * 0.35
 	header_timer -= delta
 	if header_timer <= 0.0:
 		header_timer = 1.0
@@ -320,7 +338,36 @@ func _tick_second() -> void:
 		_open_support()
 
 
+## Green arrows over the buildings the player can upgrade right now (enough coins, a free
+## worker, the Command Tower allows the next level).
+func _refresh_arrows() -> void:
+	for a in _arrows:
+		if is_instance_valid(a):
+			a.queue_free()
+	_arrows.clear()
+	if not UiTheme.on() or level == null:
+		return
+	var green := MeshKit.glow(Color(0.62, 0.92, 0.42))
+	for st in GameState.structures:
+		var type: String = st["type"]
+		if Catalog.is_trap(type) or GameState.is_busy(st) or int(st["level"]) >= Catalog.MAX_LEVEL:
+			continue
+		if GameState.upgrade_block_reason(st["cell"]) != "":
+			continue
+		var a := Node3D.new()
+		a.position = city.roof_top(st["cell"]) + Vector3(2.0, 6.2, 2.0)
+		level.add_child(a)
+		a.scale = Vector3.ONE * 1.7
+		MeshKit.add(a, MeshKit.cyl(0.0, 0.8, 0.85, 4), green, Vector3(0, 0.45, 0)).rotation.y = PI / 4.0
+		MeshKit.add(a, MeshKit.box(Vector3(0.42, 0.8, 0.42)), green, Vector3(0, -0.35, 0))
+		for m in a.get_children():
+			(m as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		a.set_meta("y", a.position.y)
+		_arrows.append(a)
+
+
 func _refresh_header() -> void:
+	_refresh_arrows()
 	var target := Bases.enemy(GameState.enemy_index, GameState.hq_level())
 	hud.set_header(GameState.hq_level(), target["name"], GameState.infinite_coins)
 	hud.set_shop_badge(ShopUI.new_count())
@@ -388,6 +435,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	placing = ""
 	hud.hide_panel()
+	if UiTheme.on():
+		# Double tap on open ground: the camera goes back to the whole base.
+		var now := Time.get_ticks_msec()
+		var empty := cell.is_empty() or GameState.structure_at(cell).is_empty()
+		if empty and now - int(_last_tap["t"]) < 320 and (_last_tap["pos"] as Vector2).distance_to(touch.position) < 80.0:
+			_recenter()
+			_last_tap["t"] = 0
+			return
+		_last_tap = {"t": now, "pos": touch.position}
+		# A tap on a free plot opens the Shop, so building is one tap away.
+		if not cell.is_empty() and GameState.structure_at(cell).is_empty() and GameState.tutorial < 0:
+			_deselect()
+			_open_shop()
+			return
 	if cell.is_empty():
 		_deselect()
 	else:
@@ -440,6 +501,7 @@ func _try_collect(screen_pos: Vector2) -> bool:
 			GameState.tutorial_event("collect_fuel" if bubble.fuel else "collect_coins")
 			hud.toast(I18n.t("+%d fuel") % got if bubble.fuel else I18n.t("+%d coins") % got)
 			bubble.pop()
+			hud.fly(screen_pos, "fuel" if bubble.fuel else "coins", got)
 			Audio.play("coin", -8.0)
 			Audio.buzz(20)
 		elif bubble.fuel:
@@ -1174,6 +1236,18 @@ func _open_settings() -> void:
 		GameState.set_music(not GameState.music_on)
 		Audio.refresh_music()
 		music.text = I18n.t("Music on") if GameState.music_on else I18n.t("Music off"))
+	var vib := HomeHud.make_button(grid, I18n.t("Vibration on") if GameState.vibrate_on else I18n.t("Vibration off"), 24, 80)
+	vib.pressed.connect(func() -> void:
+		GameState.set_comfort(not GameState.vibrate_on, GameState.calm, GameState.big_text)
+		vib.text = I18n.t("Vibration on") if GameState.vibrate_on else I18n.t("Vibration off"))
+	var calm := HomeHud.make_button(grid, I18n.t("Calm mode on") if GameState.calm else I18n.t("Calm mode off"), 24, 80)
+	calm.pressed.connect(func() -> void:
+		GameState.set_comfort(GameState.vibrate_on, not GameState.calm, GameState.big_text)
+		calm.text = I18n.t("Calm mode on") if GameState.calm else I18n.t("Calm mode off"))
+	var big := HomeHud.make_button(grid, I18n.t("Large text on") if GameState.big_text else I18n.t("Large text off"), 24, 80)
+	big.pressed.connect(func() -> void:
+		GameState.set_comfort(GameState.vibrate_on, GameState.calm, not GameState.big_text)
+		big.text = I18n.t("Large text on") if GameState.big_text else I18n.t("Large text off"))
 	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
 	var account := I18n.t("Account: %s") % Cloud.commander if Cloud.signed_in() else I18n.t("Save my base")
 	HomeHud.make_button(grid, account, 24, 80).pressed.connect(_open_account_settings)
