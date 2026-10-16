@@ -32,6 +32,9 @@ var _reinforce: Button
 func _ready() -> void:
 	layer = 5
 	var root := Control.new()
+	# Built left to right; without this a device set to Hebrew mirrors it and the cards land off
+	# screen (owner's iPad, 16.10.2026).
+	root.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)

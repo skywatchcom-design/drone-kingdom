@@ -93,7 +93,15 @@ func _ready() -> void:
 	# The screens choose right-to-left themselves (I18n.rtl()). Without this, a device set to Hebrew
 	# (the owner's iPad) flipped every layout that was built left-to-right, and the battle's cards
 	# and buttons landed off screen.
-	get_tree().root.set_layout_direction(Window.LAYOUT_DIRECTION_LTR)
+	# Dev: `-- --locale he` acts like a device set to Hebrew.
+	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--locale"):
+		TranslationServer.set_locale(OS.get_cmdline_user_args()[OS.get_cmdline_user_args().find("--locale") + 1])
+	if not OS.get_cmdline_user_args().has("--no-ltr-fix"):
+		# Godot also picks right-to-left for controls that are not in the tree yet from the device
+		# locale, which mirrors positions set before add_child. The game translates by itself
+		# (I18n), so the engine's locale stays English.
+		TranslationServer.set_locale("en")
+		get_tree().root.set_layout_direction(Window.LAYOUT_DIRECTION_LTR)
 	UiFeel.install(get_tree())
 	WebUpdate.install(get_tree())
 	load_settings()
