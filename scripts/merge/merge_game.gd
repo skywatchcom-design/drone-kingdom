@@ -192,10 +192,10 @@ func _trees(half: float, edge: float) -> void:
 		if _rng.randf() < 0.55:
 			trunks.append(Transform3D(Basis().scaled(Vector3.ONE * s), p + Vector3(0, 0.75 * s, 0)))
 			crowns.append(Transform3D(Basis().scaled(Vector3(1.0, 0.9, 1.0) * 1.3 * s), p + Vector3(0, 2.3 * s, 0)))
-			crown_colors.append(Color(0.36, 0.62, 0.26).lerp(Color(0.5, 0.72, 0.3), _rng.randf()))
+			crown_colors.append(Color(0.36, 0.62, 0.26).lerp(Color(0.5, 0.72, 0.3), _rng.randf()) if MeshKit.palette != "mil" else Color(0.28, 0.36, 0.2).lerp(Color(0.38, 0.42, 0.24), _rng.randf()))
 		else:
 			pines.append(Transform3D(Basis().scaled(Vector3.ONE * s), p + Vector3(0, 2.0 * s, 0)))
-			pine_colors.append(Color(0.2, 0.46, 0.3).lerp(Color(0.28, 0.55, 0.32), _rng.randf()))
+			pine_colors.append(Color(0.2, 0.46, 0.3).lerp(Color(0.28, 0.55, 0.32), _rng.randf()) if MeshKit.palette != "mil" else Color(0.18, 0.26, 0.18).lerp(Color(0.24, 0.32, 0.2), _rng.randf()))
 			trunks.append(Transform3D(Basis().scaled(Vector3(0.7, 0.5, 0.7) * s), p + Vector3(0, 0.4 * s, 0)))
 	MeshKit.multi(self, MeshKit.cyl(0.16, 0.22, 1.5, 8), MeshKit.mat(Color(0.48, 0.33, 0.2), 0.9), trunks)
 	MeshKit.multi(self, MeshKit.sphere(1.0, 10), MeshKit.mat(Color.WHITE, 0.9), crowns, crown_colors)

@@ -112,7 +112,7 @@ func refresh() -> void:
 	var k := clampf(g.hq_hp / g.hq_max, 0.0, 1.0)
 	_hp_fill.size.x = maxf(34.0, 664.0 * k)
 	_hp_fill.visible = k > 0.0
-	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.83, 0.33, 0.25), 17))
+	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.56, 0.21, 0.15) if HomeHud.mil() else Color(0.83, 0.33, 0.25), 17))
 	_hp_text.text = I18n.t("Command Tower %d%%") % int(round(k * 100.0))
 	_wave.text = I18n.t("Destroyed %d%%") % int(round(g.destroyed_ratio() * 100.0))
 	_coins.text = str(int(round(g._loot_total.x * g.destroyed_ratio())))

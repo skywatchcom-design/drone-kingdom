@@ -46,11 +46,20 @@ func _ready() -> void:
 
 
 func _style(color: Color, radius: int = 18, border: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
+	if HomeHud.mil():
+		# Direction A "military clean": olive instead of green, almost square, thin sand lines.
+		radius = mini(radius, 6)
+		if color == GO:
+			color = HomeHud.OLIVE
+		elif color == DARK or color.a < 0.95 and color.v < 0.25:
+			color = HomeHud.PLATE
+		if border.a > 0.0:
+			border = HomeHud.SAND_LINE
 	var s := StyleBoxFlat.new()
 	s.bg_color = color
 	s.set_corner_radius_all(radius)
 	if border.a > 0.0:
-		s.set_border_width_all(3)
+		s.set_border_width_all(3 if not HomeHud.mil() else 1)
 		s.border_color = border
 	return s
 

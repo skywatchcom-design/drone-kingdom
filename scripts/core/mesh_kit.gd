@@ -43,15 +43,16 @@ static func toy_color(c: Color) -> Color:
 	return Color.from_hsv(c.h, minf(1.0, c.s * 1.15), minf(1.0, c.v * 1.02), c.a)
 
 
-## Design trial (owner, 16.10.2026: "too childish, should be military, realistic and clean"):
-## `-- --palette mil` mutes every flat color toward a military palette.
+## Approved 16.10.2026 (owner: "too childish, should be military, realistic and clean", sketch
+## H2WYiqcnCPrV8Wo1yEMSiE): "mil" mutes every flat color toward a military palette. It is the
+## default; `-- --palette bright` shows the earlier colors.
 static var palette := _palette_arg()
 
 
 static func _palette_arg() -> String:
 	var args := OS.get_cmdline_user_args()
 	var i := args.find("--palette")
-	return args[i + 1] if i >= 0 and i + 1 < args.size() else ""
+	return args[i + 1] if i >= 0 and i + 1 < args.size() else "mil"
 
 
 ## The everyday material: painted metal / plaster grain under the given color.

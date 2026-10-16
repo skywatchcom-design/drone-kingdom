@@ -26,6 +26,17 @@ const DARK := Color(0.06, 0.07, 0.06, 0.78)
 const PARCHMENT := Color(0.914, 0.894, 0.831)
 const INK := Color(0.17, 0.16, 0.13)
 const GOLD_TOP := Color(0.94, 0.7, 0.21)
+## HUD direction A "military clean" (approved 16.10.2026, sketch H2WYiqcnCPrV8Wo1yEMSiE): dark olive
+## plates with a thin sand line and almost square corners, a deep red-brown Attack, an olive Shop,
+## muted resource colors. On while the military palette is on.
+const PLATE := Color(0.086, 0.1, 0.07, 0.86)
+const SAND_LINE := Color(0.85, 0.77, 0.54, 0.45)
+const OLIVE := Color(0.24, 0.29, 0.17)
+const ATTACK_RED := Color(0.43, 0.165, 0.12)
+
+
+static func mil() -> bool:
+	return MeshKit.palette == "mil"
 
 var _badge: Label
 var _rank: Label
@@ -86,7 +97,7 @@ func _ready() -> void:
 	column.add_child(player)
 	var badge := PanelContainer.new()
 	badge.custom_minimum_size = Vector2(60, 60)
-	var badge_style := _box(Color(0.2, 0.42, 0.85), 12, Color(0.8, 0.88, 1.0), 3)
+	var badge_style := _box(OLIVE, 4, Color(0.73, 0.65, 0.43), 2) if mil() else _box(Color(0.2, 0.42, 0.85), 12, Color(0.8, 0.88, 1.0), 3)
 	badge.add_theme_stylebox_override("panel", badge_style)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	player.add_child(badge)
@@ -101,7 +112,7 @@ func _ready() -> void:
 	_rank = make_label(names, "", 17, Color(0.88, 0.92, 0.88))
 	_missions = _small_button(column, "tasks", I18n.t("Missions"))
 	_missions.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_style_button(_missions, Color(0.2, 0.42, 0.75), 12, Color(1, 1, 1, 0.8), 3)
+	_style_button(_missions, PLATE if mil() else Color(0.2, 0.42, 0.75), 12, Color(1, 1, 1, 0.8), 3)
 	_missions.pressed.connect(func() -> void: missions_pressed.emit())
 	_missions_badge = _corner_badge(_missions)
 	Tutorial.tag(_missions, "missions_button")
@@ -112,7 +123,7 @@ func _ready() -> void:
 	_workers.icon = Icons.tex("worker", 64)
 	_workers.expand_icon = false
 	_workers.add_theme_constant_override("icon_max_width", 30)
-	_style_button(_workers, DARK, 10, Color(1, 1, 1, 0.25))
+	_style_button(_workers, PLATE if mil() else DARK, 10, Color(1, 1, 1, 0.25))
 	_workers.anchor_left = 0.5
 	_workers.anchor_right = 0.5
 	_workers.offset_left = -75
@@ -302,6 +313,11 @@ static func _box(color: Color, radius: int, border: Color = Color(0, 0, 0, 0), w
 ## Gives a button the same flat look in every state (lighter on hover, darker when pressed),
 ## with a drop shadow underneath.
 static func _style_button(b: Button, color: Color, radius: int, border: Color = Color(0, 0, 0, 0), width: int = 2) -> void:
+	if mil():
+		radius = mini(radius, 6)
+		width = mini(width, 2)
+		if border.a > 0.0:
+			border = SAND_LINE
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var c := color
 		if state == "hover":
@@ -311,15 +327,15 @@ static func _style_button(b: Button, color: Color, radius: int, border: Color = 
 		elif state == "disabled":
 			c = color.lerp(Color(0.4, 0.4, 0.4), 0.7)
 		var s := _box(c, radius, border, width)
-		s.shadow_color = Color(0, 0, 0, 0.4)
-		s.shadow_offset = Vector2(0, 4)
+		s.shadow_color = Color(0, 0, 0, 0.4 if not mil() else 0.3)
+		s.shadow_offset = Vector2(0, 4 if not mil() else 2)
 		s.shadow_size = 1
 		if state == "focus":
 			s.draw_center = false
 			s.shadow_size = 0
 		b.add_theme_stylebox_override(state, s)
 	b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	b.add_theme_constant_override("outline_size", 7)
+	b.add_theme_constant_override("outline_size", 7 if not mil() else 3)
 
 
 ## A big square corner button (Attack, Shop): gold, an icon over a word.
@@ -332,7 +348,10 @@ func _big_button(parent: Control, icon: String, text: String) -> Button:
 	b.expand_icon = true
 	b.custom_minimum_size = Vector2(132, 132)
 	b.add_theme_font_size_override("font_size", 24)
-	_style_button(b, GOLD_TOP, 16, Color(1, 1, 1, 0.9), 4)
+	_style_button(b, (ATTACK_RED if icon == "swords" else OLIVE) if mil() else GOLD_TOP, 16, Color(1, 1, 1, 0.9), 4)
+	if mil():
+		b.custom_minimum_size = Vector2(150, 104)
+		b.add_theme_constant_override("icon_max_width", 52)
 	b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 	parent.add_child(b)
 	return b
@@ -349,7 +368,7 @@ func _small_button(parent: Control, icon: String, text: String) -> Button:
 	b.custom_minimum_size = Vector2(74, 74)
 	b.size_flags_vertical = Control.SIZE_SHRINK_END
 	b.add_theme_font_size_override("font_size", 14)
-	_style_button(b, Color(0.3, 0.35, 0.29), 12, Color(1, 1, 1, 0.6), 3)
+	_style_button(b, PLATE if mil() else Color(0.3, 0.35, 0.29), 12, Color(1, 1, 1, 0.6), 3)
 	b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 	parent.add_child(b)
 	return b
@@ -375,6 +394,8 @@ static func _corner_badge(parent: Control) -> Label:
 ## the cap in small print above.
 func _resource_bar(parent: Control, key: String) -> Dictionary:
 	var color: Color = {"coins": COIN, "fuel": FUEL, "gems": GEM}[key]
+	if mil():
+		color = {"coins": Color(0.79, 0.64, 0.15), "fuel": Color(0.66, 0.28, 0.25), "gems": Color(0.25, 0.62, 0.48)}[key]
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(240 if key != "gems" else 160, 36)
 	holder.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -385,8 +406,8 @@ func _resource_bar(parent: Control, key: String) -> Dictionary:
 	bar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bar.offset_right = -22
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_theme_stylebox_override("background", _box(DARK, 8, Color(1, 1, 1, 0.2), 2))
-	bar.add_theme_stylebox_override("fill", _box(Color(color, 0.55 if key != "gems" else 0.0), 6))
+	bar.add_theme_stylebox_override("background", _box(PLATE, 4, SAND_LINE, 1) if mil() else _box(DARK, 8, Color(1, 1, 1, 0.2), 2))
+	bar.add_theme_stylebox_override("fill", _box(Color(color, (0.75 if mil() else 0.55) if key != "gems" else 0.0), 3 if mil() else 6))
 	holder.add_child(bar)
 	var value := make_label(holder, "", 22)
 	value.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -409,7 +430,7 @@ func _resource_bar(parent: Control, key: String) -> Dictionary:
 		plus.custom_minimum_size = Vector2(30, 30)
 		plus.position = Vector2(-36, 3)
 		plus.add_theme_font_size_override("font_size", 22)
-		_style_button(plus, GEM, 6, Color.WHITE, 2)
+		_style_button(plus, Color(0.25, 0.62, 0.48) if mil() else GEM, 6, Color.WHITE, 2)
 		plus.pressed.connect(func() -> void: gems_pressed.emit())
 		holder.add_child(plus)
 	return {"bar": bar, "value": value, "cap": cap}
@@ -549,7 +570,7 @@ func show_actions(title: String, actions: Array) -> void:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.custom_minimum_size = Vector2(92, 92)
 		b.disabled = a.get("disabled", false)
-		_style_button(b, Color(0.95, 0.93, 0.86), 16, Color.WHITE, 3)
+		_style_button(b, PLATE if mil() else Color(0.95, 0.93, 0.86), 16, Color.WHITE, 3)
 		b.pressed.connect(func() -> void: Audio.play("click", -6.0))
 		b.pressed.connect(a["call"])
 		Tutorial.tag(b, "action_" + str(a["icon"]))
