@@ -409,6 +409,14 @@ func show_pause() -> void:
 ## The first-time hint over the cards, until the first tower stands.
 func hint(text: String) -> void:
 	_banner.text = text
+	_banner.add_theme_font_size_override("font_size", 30)
+	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner.anchor_left = 0.0
+	_banner.anchor_right = 1.0
+	_banner.offset_left = 30
+	_banner.offset_right = -30
+	_banner.offset_top = 180
+	_banner.offset_bottom = 280
 	_banner.modulate.a = 1.0
 	var tw := _banner.create_tween().set_loops(3)
 	tw.tween_property(_banner, "modulate:a", 0.55, 0.6)
@@ -423,6 +431,14 @@ func hide_tower() -> void:
 
 func banner(text: String) -> void:
 	_banner.text = text
+	_banner.add_theme_font_size_override("font_size", 36)
+	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner.anchor_left = 0.0
+	_banner.anchor_right = 1.0
+	_banner.offset_left = 30
+	_banner.offset_right = -30
+	_banner.offset_top = 180
+	_banner.offset_bottom = 280
 	var tw := _banner.create_tween()
 	_banner.modulate.a = 0.0
 	tw.tween_property(_banner, "modulate:a", 1.0, 0.2)

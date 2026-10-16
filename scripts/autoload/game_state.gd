@@ -90,6 +90,10 @@ var big_text := false
 
 func _ready() -> void:
 	I18n.setup_font()
+	# The screens choose right-to-left themselves (I18n.rtl()). Without this, a device set to Hebrew
+	# (the owner's iPad) flipped every layout that was built left-to-right, and the battle's cards
+	# and buttons landed off screen.
+	get_tree().root.set_layout_direction(Window.LAYOUT_DIRECTION_LTR)
 	UiFeel.install(get_tree())
 	WebUpdate.install(get_tree())
 	load_settings()

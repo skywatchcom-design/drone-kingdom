@@ -106,7 +106,8 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 	size_scale = 1.0
 	if screen.y > screen.x:
 		cam.keep_aspect = Camera3D.KEEP_WIDTH
-		size_scale = 1.4
+		# Wider portrait screens (the iPad) see more of the base.
+		size_scale = 1.45 + 2.2 * clampf(screen.x / screen.y - 0.5625, 0.0, 0.25)
 		cam.size = view_height * size_scale
 	cam.near = 0.1
 	cam.far = 600.0
