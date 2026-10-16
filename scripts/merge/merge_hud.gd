@@ -176,7 +176,7 @@ func _bottom(root: Control) -> void:
 		panel.add_child(card)
 		# The baked pictures sit low in their square; show the part with the model.
 		var crop := AtlasTexture.new()
-		crop.atlas = load("res://assets/textures/pictures/%s_1.webp" % type)
+		crop.atlas = load("res://assets/textures/pictures/tower_%s_1.webp" % type)
 		crop.region = Rect2(0, 70, 256, 186)
 		var pic := TextureRect.new()
 		pic.texture = crop

@@ -3,7 +3,10 @@ extends Control
 ## Command Tower), to tmp/bake/<name>_<black|white>.png, once over black and once over white, so
 ## tools/bake_pictures.py can work out true transparency (see-through parts like solar panels
 ## included) and write assets/textures/pictures/<name>.webp for ShopUI.picture and the store.
-## Run again after a model changes (`-- --skins` bakes only the cosmetics):
+## The defense battle's towers bake as tower_<kind>_<level> (MergeHud's cards), apart from the
+## city's defenses of the same name.
+## Run again after a model changes (`-- --skins` bakes only the cosmetics, `-- --towers` only
+## the battle towers):
 ##   godot --path . res://scenes/dev/bake_pictures.tscn
 ##   python tools/bake_pictures.py
 
@@ -13,6 +16,10 @@ const SIZE := 256
 func _ready() -> void:
 	var dir := ProjectSettings.globalize_path("res://tmp/bake")
 	DirAccess.make_dir_recursive_absolute(dir)
+	if OS.get_cmdline_user_args().has("--towers"):
+		await _bake_towers(dir)
+		get_tree().quit()
+		return
 	if not OS.get_cmdline_user_args().has("--skins"):
 		var types: Array = ["hq"]
 		for tab in Catalog.SHOP_ORDER:
@@ -23,6 +30,8 @@ func _ready() -> void:
 		var args := OS.get_cmdline_user_args()
 		if args.has("--only"):
 			types = Array(args[args.find("--only") + 1].split(","))
+		else:
+			await _bake_towers(dir)
 		for type: String in types:
 			# Traps have a single look.
 			for level in range(1, (1 if Catalog.is_trap(type) else Catalog.MAX_LEVEL) + 1):
@@ -32,6 +41,11 @@ func _ready() -> void:
 		await _bake(dir, "skin_" + id, "hq", 3)
 	StructureModels.skin = {}
 	get_tree().quit()
+
+
+func _bake_towers(dir: String) -> void:
+	for kind: String in MergeGame.TOWER_ORDER:
+		await _bake(dir, "tower_%s_1" % kind, "tower_" + kind, 1)
 
 
 func _bake(dir: String, name: String, type: String, level: int) -> void:

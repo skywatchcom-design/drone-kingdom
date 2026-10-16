@@ -642,6 +642,12 @@ static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58,
 		stage.add_child(d)
 		look = Vector3(0, 0, 0)
 		eye = Vector3(2.4, 2.6, 4.2) * (1.5 if type == "heavy" else 1.05) * (0.85 + 0.08 * level)
+	elif type.begins_with("tower_"):
+		# A defense-battle tower ("tower_mg"), as MergeGame builds it.
+		var t := BattleTower.new()
+		stage.add_child(t)
+		t.setup({"radius": 3.0, "level": level, "kind": type.trim_prefix("tower_")}, 0.12)
+		t.show_range(false)
 	elif type == "wall":
 		StructureModels.wall(stage, [0, 0, 1], level).position = Vector3.ZERO
 	elif Catalog.is_defense(type):
@@ -661,7 +667,7 @@ static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58,
 		# The control tower is tall: frame it from further back, looking higher up.
 		far = 1.55
 		look = Vector3(0, 3.4, 0)
-	elif Catalog.is_defense(type) and MeshKit.look == "leo":
+	elif (Catalog.is_defense(type) or type.begins_with("tower_")) and MeshKit.look == "leo":
 		far = 1.2
 	cam.look_at_from_position(eye * far, look)
 	return frame

@@ -77,6 +77,7 @@
   הרמה קובעת את העמדה: שקי חול, משטח, בונקר, מגדל שמירה ומבצר. המסלול מחליף את הנשק עצמו: A בכתום ו־B בכחול, עם
   דגל בצבע המסלול ופס לבן לכל שלב. דף השוואה: `scenes/dev/tower_sheet.tscn -- --type mg|mortar|aa`, ואחריו
   `python tools/tower_sheet.py`. הדגמים הישנים (`MgNest` ודומיו) נשארו בשביל העיר.
+  כרטיסי המגדלים בקרב מציגים תמונות של `BattleTower` (`tower_mg_1` וכו'), בנפרד מתמונות ההגנות של העיר (`mg_1`).
 - **מסלולי שדרוג:** לכל מגדל שני מסלולים של 3 שלבים כל אחד (`MergeGame.PATHS`, `upgrade_path`). נגיעה במגדל פותחת את
   החלון, ומגדל ממוזג שומר את המסלול שלו.
 - **אויבים:** חיילים (דגמי החיילים האמיתיים, צבועים כהה), מהנדסים, טנקים, רחפנים, בוס, נגמ"ש שמפיל שלושה חיילים,
@@ -126,7 +127,8 @@
   - דגלים לבית: `--fresh --showcase N --anon --lang he|en --screenshot-<מסך>`.
   - בבית, `--no-hud` מסתיר את הממשק.
 - **הרכב שלב לפי מה שמשתמש במשחק:** תמונות היחידות והמבנים מצולמות מראש. אחרי שינוי בדגם מצלמים מחדש:
-  `godot --path . res://scenes/dev/bake_pictures.tscn`, ואז `python tools/bake_pictures.py`.
+  `godot --path . res://scenes/dev/bake_pictures.tscn`, ואז `python tools/bake_pictures.py`. רק מגדלי הקרב:
+  `-- --towers`.
 - **בדיקת חשבונות מול השרת:** `godot --headless --path . res://scenes/dev/cloud_check.tscn`.
 - **מאגר:** https://github.com/skywatchcom-design/drone-kingdom. הודעות commit נכתבות לקובץ, עם `git commit -F`.
 
