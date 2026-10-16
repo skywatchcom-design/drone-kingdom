@@ -276,20 +276,26 @@ func free_plot(cell: Array) -> bool:
 
 # ---------------------------------------------------------------- towers
 
-func _make_tower(type: String, level: int) -> Defense:
-	var d: Defense
-	match type:
-		"mortar":
-			d = MortarPit.new()
-		"aa":
-			d = AaBattery.new()
-		_:
-			d = MgNest.new()
-	add_child(d)
+func _make_tower(type: String, level: int, path := "", tier := 0) -> Defense:
+	return make_tower_node(self, type, level, path, tier)
+
+
+## The tower's model for a merge level and (once bought) an upgrade path step. Also used by the
+## dev contact sheet.
+static func make_tower_node(parent: Node3D, type: String, level: int, path := "", tier := 0) -> Defense:
+	var d := BattleTower.new()
+	parent.add_child(d)
 	var vs := {"air": 1.0} if TOWERS[type]["air"] else {"soldier": 1.0, "tank": 1.0}
-	d.setup({"radius": TOWERS[type]["range"][level - 1] * CELL, "level": level, "vs": vs}, 0.27)
+	d.setup({"radius": TOWERS[type]["range"][level - 1] * CELL, "level": level, "vs": vs, "kind": type, "path": path, "tier": tier}, 0.27)
 	d.scale = Vector3.ONE * 2.1
 	return d
+
+
+## Swaps the tower's model for its current level and path step.
+func _rebuild(t: Dictionary) -> void:
+	(t["node"] as Node3D).queue_free()
+	t["node"] = _make_tower(t["type"], t["level"], t.get("path", ""), int(t.get("tier", 0)))
+	(t["node"] as Node3D).position = cell_pos(t["cell"][0], t["cell"][1])
 
 
 func _place(type: String, level: int, cell: Array) -> Dictionary:
@@ -638,11 +644,9 @@ func _merge_target_for(d: Dictionary, cell: Array) -> Dictionary:
 
 func _merge(t: Dictionary) -> void:
 	var cell: Array = t["cell"]
-	(t["node"] as Node3D).queue_free()
 	t["level"] += 1
-	t["node"] = _make_tower(t["type"], t["level"])
+	_rebuild(t)
 	var node: Node3D = t["node"]
-	node.position = cell_pos(cell[0], cell[1])
 	_pop(node, 0.3)
 	var at := node.position + Vector3(0, 2.5, 0)
 	Fx.flash(self, at, 3.0, Color(1.0, 0.85, 0.3))
@@ -925,6 +929,7 @@ func upgrade_path(t: Dictionary, p: String) -> bool:
 	coins -= path_cost(t)
 	t["path"] = p
 	t["tier"] = int(t.get("tier", 0)) + 1
+	_rebuild(t)
 	var at := (t["node"] as Node3D).position + Vector3(0, 3, 0)
 	Fx.flash(self, at, 2.2, Color(0.6, 0.95, 0.5))
 	hud.float_text(at + Vector3(0, 3, 0), "▲", Color(0.6, 0.95, 0.5), true)
