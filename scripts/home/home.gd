@@ -77,7 +77,12 @@ func _ready() -> void:
 	cam = WorldSetup.create(self, VIEW_SIZE)
 	hud = HomeHud.new()
 	add_child(hud)
-	hud.attack_pressed.connect(_open_attack_choice)
+	# Base Wars is defense-only (owner, 16.10.2026): Attack opens the defense battle.
+	hud.attack_pressed.connect(func() -> void:
+		if UiTheme.on():
+			get_tree().change_scene_to_file("res://scenes/merge/merge.tscn")
+		else:
+			_open_attack_choice())
 	hud.army_pressed.connect(_open_army)
 	hud.build_pressed.connect(func() -> void: _open_shop())
 	hud.actions_closed.connect(func() -> void:

@@ -44,6 +44,12 @@ store, account, then PvP.
 Approved 16.10.2026: attacks are "reverse Bloons" (sketch https://claude.ai/artifact/7nbqfinTw2uAC1eV2iE7h9):
 `StreetRaid` (`scenes/attack/street_raid.tscn`, opened by Attack and the campaign map) puts the target base on the
 street board, defenses along the street by their real stats, and the player sends the trained army card by card.
+Changed 16.10.2026 (owner: "the attack is boring"): Base Wars becomes **defense-only, in the spirit of Bloons TD**.
+Attack in the city opens the merge defense (`scenes/merge/merge.tscn`); prototype round 1 added two upgrade paths per tower
+(three steps each, bought in battle, kept through merges: `MergeGame.PATHS`, `upgrade_path`, tap a tower to open them,
+drag it to move or merge), new enemies (armored APC that drops soldiers, camo drones only a Radar AA reveals) and a free air
+strike on a 30 s cooldown. Street attacks (`StreetRaid`) stay in the code but are no longer reached. Next: let the owner
+judge the fun on the iPad, then campaign maps, city unlocks for towers, daily challenge.
 Buildings in the leo look are `LeoModels`; the web export leaves out the photo textures (the flat look never loads
 them), which halved the download.
 

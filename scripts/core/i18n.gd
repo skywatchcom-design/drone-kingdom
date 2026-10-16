@@ -7,6 +7,23 @@ static var lang := "he"
 
 const HE := {
 	# Base Wars prototype
+	"Rapid fire": "אש מהירה",
+	"Armor piercing": "חודר שריון",
+	"Wide blast": "פיצוץ רחב",
+	"Long range": "טווח ארוך",
+	"Twin missiles": "טילים כפולים",
+	"Radar": "מכ\"ם",
+	"Fires 22% faster each step": "יורה 22% מהר יותר בכל שלב",
+	"Ignores armor, +30% damage each step": "עוקף שריון, +30% נזק בכל שלב",
+	"+35% blast radius each step": "+35% רדיוס פיצוץ בכל שלב",
+	"+0.7 range and +20% damage each step": "+0.7 טווח ו־+20% נזק בכל שלב",
+	"One more target each step": "מטרה נוספת בכל שלב",
+	"Reveals camo drones, +25% damage each step": "חושף רחפני הסוואה, +25% נזק בכל שלב",
+	"Closed": "סגור",
+	"Max": "מקסימום",
+	"Ready": "מוכן",
+	"Aim…": "בחר מקום…",
+	"Tap the street to bomb it": "גע בכביש כדי להפציץ",
 	"New version, tap to update": "יש גרסה חדשה · לחץ לעדכון",
 	"Refresh game": "רענון המשחק",
 	"Vibration on": "רטט: פועל",

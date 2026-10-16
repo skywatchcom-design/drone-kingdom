@@ -130,7 +130,7 @@ func refresh() -> void:
 	var k := clampf(g.hq_hp / g.hq_max, 0.0, 1.0)
 	_hp_fill.size.x = maxf(34.0, 664.0 * k)
 	_hp_fill.visible = k > 0.0
-	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.56, 0.21, 0.15) if HomeHud.mil() else Color(0.83, 0.33, 0.25), 17))
+	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.56, 0.21, 0.15) if UiTheme.on() else Color(0.83, 0.33, 0.25), 17))
 	_hp_text.text = I18n.t("Command Tower %d%%") % int(round(k * 100.0))
 	_wave.text = I18n.t("Destroyed %d%%") % int(round(g.destroyed_ratio() * 100.0))
 	_coins.text = str(int(round(g._loot_total.x * g.destroyed_ratio())))
@@ -249,7 +249,7 @@ func show_result(stars: int, percent: int, gained: Dictionary, extra: String) ->
 		again.custom_minimum_size = Vector2(250, 76)
 		again.add_theme_font_size_override("font_size", 30)
 		for st2 in ["normal", "hover", "pressed"]:
-			again.add_theme_stylebox_override(st2, _style(HomeHud.ATTACK_RED if HomeHud.mil() else Color(0.75, 0.3, 0.2), 38, SAND))
+			again.add_theme_stylebox_override(st2, _style(UiTheme.ATTACK_RED if UiTheme.on() else Color(0.75, 0.3, 0.2), 38, SAND))
 		again.pressed.connect(func() -> void: game.restart())
 		row.add_child(again)
 	row.add_child(home)

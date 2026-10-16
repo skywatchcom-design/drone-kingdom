@@ -42,7 +42,8 @@ func _ready() -> void:
 	_button = Button.new()
 	_button.text = I18n.t("New version, tap to update")
 	_button.add_theme_font_size_override("font_size", 24)
-	HomeHud._style_button(_button, UiTheme.OLIVE, 6, UiTheme.SAND_LINE, 1)
+	for st in ["normal", "hover", "pressed"]:
+		_button.add_theme_stylebox_override(st, UiTheme.box(UiTheme.OLIVE.lightened(0.1 if st == "hover" else 0.0), UiTheme.RADIUS, UiTheme.SAND_LINE, 1))
 	_button.anchor_left = 0.5
 	_button.anchor_right = 0.5
 	_button.offset_left = -230

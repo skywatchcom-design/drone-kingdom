@@ -77,7 +77,7 @@ func refresh() -> void:
 	var k := clampf(g.hq_hp / AttackGame.ENEMY_HQ, 0.0, 1.0)
 	_hp_fill.size.x = maxf(34.0, 664.0 * k)
 	_hp_fill.visible = k > 0.0
-	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.56, 0.21, 0.15) if HomeHud.mil() else Color(0.83, 0.33, 0.25), 17))
+	_hp_fill.add_theme_stylebox_override("panel", _style(Color(0.56, 0.21, 0.15) if UiTheme.on() else Color(0.83, 0.33, 0.25), 17))
 	_hp_text.text = I18n.t("Iron Fang tower %d%%") % int(round(k * 100.0))
 	_wave.text = I18n.t("Destroyed %d%%") % int(round((1.0 - k) * 100.0))
 	_coins.text = str(g.loot)

@@ -21,6 +21,11 @@ var _cards := {}
 var _overlay: Control
 var _floats: Array = []
 var _banner: Label
+## The tapped tower's upgrade paths, and the air strike button (defense-only direction,
+## owner 16.10.2026).
+var _tower_panel: PanelContainer
+var _tower: Dictionary = {}
+var _strike: Button
 
 
 func _ready() -> void:
@@ -46,20 +51,20 @@ func _ready() -> void:
 
 
 func _style(color: Color, radius: int = 18, border: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
-	if HomeHud.mil():
+	if UiTheme.on():
 		# Direction A "military clean": olive instead of green, almost square, thin sand lines.
 		radius = mini(radius, 6)
 		if color == GO:
-			color = HomeHud.OLIVE
+			color = UiTheme.OLIVE
 		elif color == DARK or color.a < 0.95 and color.v < 0.25:
-			color = HomeHud.PLATE
+			color = UiTheme.PLATE
 		if border.a > 0.0:
-			border = HomeHud.SAND_LINE
+			border = UiTheme.SAND_LINE
 	var s := StyleBoxFlat.new()
 	s.bg_color = color
 	s.set_corner_radius_all(radius)
 	if border.a > 0.0:
-		s.set_border_width_all(3 if not HomeHud.mil() else 1)
+		s.set_border_width_all(3 if not UiTheme.on() else 1)
 		s.border_color = border
 	return s
 
@@ -191,19 +196,40 @@ func _bottom(root: Control) -> void:
 	panel.add_child(_speed)
 	_start = Button.new()
 	_start.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_start.position = Vector2(210, 1280 - 340)
-	_start.size = Vector2(300, 74)
+	_start.offset_left = -150
+	_start.offset_right = 150
+	_start.offset_top = -340
+	_start.offset_bottom = -266
 	_start.add_theme_font_size_override("font_size", 32)
 	_start.add_theme_stylebox_override("normal", _style(GO, 37, Color(0.75, 0.94, 0.66)))
 	_start.add_theme_stylebox_override("hover", _style(GO.lightened(0.1), 37, Color(0.75, 0.94, 0.66)))
 	_start.add_theme_stylebox_override("pressed", _style(GO.darkened(0.2), 37, Color(0.75, 0.94, 0.66)))
 	_start.pressed.connect(func() -> void: game.start_wave())
 	root.add_child(_start)
+	_strike = Button.new()
+	_strike.position = Vector2(560, 1280 - 352)
+	_strike.size = Vector2(140, 88)
+	_strike.add_theme_font_size_override("font_size", 20)
+	var red := UiTheme.ATTACK_RED if UiTheme.on() else Color(0.75, 0.3, 0.2)
+	_strike.add_theme_stylebox_override("normal", _style(red, 10, SAND))
+	_strike.add_theme_stylebox_override("hover", _style(red.lightened(0.1), 10, SAND))
+	_strike.add_theme_stylebox_override("pressed", _style(red.darkened(0.2), 10, SAND))
+	_strike.add_theme_stylebox_override("disabled", _style(Color(0.2, 0.2, 0.18), 10, SAND))
+	_strike.pressed.connect(func() -> void: game.aim_strike())
+	root.add_child(_strike)
+	_tower_panel = PanelContainer.new()
+	_tower_panel.add_theme_stylebox_override("panel", _style(Color(0.09, 0.11, 0.08, 0.97), 10, SAND))
+	_tower_panel.position = Vector2(20, 1280 - 250 - 300)
+	_tower_panel.custom_minimum_size = Vector2(680, 0)
+	_tower_panel.visible = false
+	root.add_child(_tower_panel)
 
 
 func refresh() -> void:
 	if game == null or _hp_fill == null:
 		return
+	if _tower_panel != null and _tower_panel.visible and not _tower.is_empty():
+		show_tower(_tower)
 	var k := clampf(game.hq_hp / MergeGame.HQ_HP, 0.0, 1.0)
 	_hp_fill.size.x = maxf(34.0, 664.0 * k)
 	_hp_fill.visible = k > 0.0
@@ -220,6 +246,71 @@ func refresh() -> void:
 func _process(_delta: float) -> void:
 	if game != null and game.state == MergeGame.State.BREAK:
 		_start.text = I18n.t("Wave %d in %d") % [game.wave + 1, ceili(game._break)]
+	if _strike != null and game != null:
+		var wait := game.strike_ready
+		_strike.disabled = wait > 0.0
+		_strike.text = (I18n.t("Air strike") + "\n" + (I18n.t("Ready") if wait <= 0.0 else "%ds" % ceili(wait))) if not game.aiming else I18n.t("Aim…")
+
+
+## The tapped tower: its name and level, and its two upgrade paths with the next step's cost.
+## Once a path is taken the other one is closed; three steps each.
+func show_tower(t: Dictionary) -> void:
+	_tower = t
+	for c in _tower_panel.get_children():
+		c.queue_free()
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	_tower_panel.add_child(col)
+	var head := HBoxContainer.new()
+	col.add_child(head)
+	var title := _label("%s · %s" % [I18n.t(NAMES[t["type"]]), I18n.t("Lv %d") % int(t["level"])], 26, SAND)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := Button.new()
+	close.text = "✕"
+	close.custom_minimum_size = Vector2(52, 44)
+	close.add_theme_font_size_override("font_size", 24)
+	close.add_theme_stylebox_override("normal", _style(Color(0, 0, 0, 0), 6))
+	close.pressed.connect(hide_tower)
+	head.add_child(close)
+	var paths: Dictionary = MergeGame.PATHS[t["type"]]
+	var taken: String = t.get("path", "")
+	var tier := int(t.get("tier", 0))
+	for p in ["a", "b"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		col.add_child(row)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.add_theme_constant_override("separation", 2)
+		row.add_child(info)
+		var mine: bool = taken == p
+		var steps: int = tier if mine else 0
+		info.add_child(_label("%s  %s" % [I18n.t(paths[p]), "■".repeat(steps) + "□".repeat(3 - steps)], 22, Color.WHITE))
+		var desc := _label(I18n.t(paths[p + "_desc"]), 16, Color(0.75, 0.73, 0.64))
+		desc.add_theme_constant_override("outline_size", 0)
+		info.add_child(desc)
+		var buy := Button.new()
+		buy.custom_minimum_size = Vector2(170, 64)
+		buy.add_theme_font_size_override("font_size", 22)
+		var closed: bool = taken != "" and not mine
+		var done: bool = mine and tier >= 3
+		var cost := game.path_cost(t)
+		buy.text = I18n.t("Closed") if closed else (I18n.t("Max") if done else "▲ %d" % cost)
+		buy.disabled = closed or done or game.coins < cost
+		buy.add_theme_stylebox_override("normal", _style(GO, 8, SAND))
+		buy.add_theme_stylebox_override("hover", _style(GO.lightened(0.1), 8, SAND))
+		buy.add_theme_stylebox_override("pressed", _style(GO.darkened(0.2), 8, SAND))
+		buy.add_theme_stylebox_override("disabled", _style(Color(0.2, 0.2, 0.18), 8, SAND))
+		buy.pressed.connect(func() -> void: game.upgrade_path(t, p))
+		row.add_child(buy)
+	_tower_panel.visible = true
+
+
+func hide_tower() -> void:
+	_tower = {}
+	if _tower_panel != null:
+		_tower_panel.visible = false
 
 
 func banner(text: String) -> void:
@@ -308,3 +399,14 @@ func show_end(won: bool, stars: int) -> void:
 	again.add_theme_stylebox_override("pressed", _style(GO.darkened(0.2), 38))
 	again.pressed.connect(func() -> void: game.restart())
 	col.add_child(again)
+	if UiTheme.on() and not (game is AttackGame):
+		var home := Button.new()
+		home.text = I18n.t("Back to base")
+		home.custom_minimum_size = Vector2(300, 64)
+		home.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		home.add_theme_font_size_override("font_size", 26)
+		home.add_theme_stylebox_override("normal", _style(Color(0.17, 0.2, 0.14), 32, SAND))
+		home.pressed.connect(func() -> void:
+			Engine.time_scale = 1.0
+			game.get_tree().change_scene_to_file("res://scenes/home/home.tscn"))
+		col.add_child(home)

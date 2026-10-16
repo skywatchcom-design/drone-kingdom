@@ -24,6 +24,19 @@ const TOWERS := {
 	"aa": {"cost": 150, "dmg": [80, 200, 500, 1250, 3500], "rate": [1.5, 1.3, 1.1, 0.9, 0.7], "range": [4.0, 4.5, 5.0, 5.5, 6.0], "air": true},
 }
 const TOWER_ORDER := ["mg", "mortar", "aa"]
+## Defense-only direction (owner, 16.10.2026: "like Bloons TD, develop the defense during the
+## game"): every tower can take one of two upgrade paths, three steps each, bought in the
+## battle. Merging keeps the path. a / b per tower: name, what each step does.
+const PATHS := {
+	"mg": {"a": "Rapid fire", "b": "Armor piercing", "a_desc": "Fires 22% faster each step", "b_desc": "Ignores armor, +30% damage each step"},
+	"mortar": {"a": "Wide blast", "b": "Long range", "a_desc": "+35% blast radius each step", "b_desc": "+0.7 range and +20% damage each step"},
+	"aa": {"a": "Twin missiles", "b": "Radar", "a_desc": "One more target each step", "b_desc": "Reveals camo drones, +25% damage each step"},
+}
+const PATH_COST := [80, 160, 320]
+const PATH_COST_MUL := {"mg": 1.0, "mortar": 1.4, "aa": 1.4}
+## Air strike: free, on a cooldown; a line of bombs where the player taps.
+const STRIKE_COOLDOWN := 30.0
+const STRIKE_DAMAGE := 320.0
 ## Enemies: hit points, speed in plots a second, damage to the tower when they reach it.
 const ENEMIES := {
 	"soldier": {"hp": 100.0, "speed": 0.9, "hit": 50.0},
@@ -31,6 +44,10 @@ const ENEMIES := {
 	"tank": {"hp": 800.0, "speed": 0.5, "hit": 150.0, "armor": 0.5},
 	"drone": {"hp": 150.0, "speed": 1.4, "hit": 80.0, "air": true},
 	"boss": {"hp": 5000.0, "speed": 0.3, "hit": 1000.0, "armor": 0.5},
+	## Needs armor piercing or the mortar; drops three soldiers when it is destroyed.
+	"apc": {"hp": 600.0, "speed": 0.75, "hit": 120.0, "armor": 0.75, "drops": 3},
+	## Only towers in reach of a Radar AA can see (and shoot) it.
+	"camo": {"hp": 180.0, "speed": 1.3, "hit": 90.0, "air": true, "camo": true},
 }
 
 enum State { READY, WAVE, BREAK, WON, LOST }
@@ -52,6 +69,9 @@ var _drag := {}
 var _marker: MeshInstance3D
 var _ring: MeshInstance3D
 var _rng := RandomNumberGenerator.new()
+var strike_ready := 0.0
+var aiming := false
+var _press := {}
 
 
 static func cell_pos(c: float, r: float) -> Vector3:
@@ -95,9 +115,26 @@ func _bot() -> void:
 	timer.timeout.connect(func() -> void:
 		if state in [State.WON, State.LOST]:
 			return
-		if state == State.READY and towers.size() >= 4:
+		if OS.get_cmdline_user_args().has("--tower-panel") and towers.size() >= 2 and not has_meta("panel"):
+			set_meta("panel", true)
+			var first: Dictionary = towers.values()[0]
+			first["path"] = "b"
+			first["tier"] = 1
+			hud.show_tower(first)
+		if state == State.READY and (towers.size() >= 4 or coins < 50):
 			start_wave()
 			return
+		if strike_ready <= 0.0 and foes.size() >= 8:
+			var f: Dictionary = foes[foes.size() / 2]
+			if not f["air"]:
+				_air_strike((f["node"] as Node3D).position)
+				return
+		if coins >= 260:
+			for t: Dictionary in towers.values():
+				var want: String = {"mg": "b", "mortar": "a", "aa": "b"}[t["type"]]
+				if t.get("path", "") in ["", want] and int(t.get("tier", 0)) < 3 and coins >= path_cost(t) + 60:
+					upgrade_path(t, want)
+					return
 		for t: Dictionary in towers.values():
 			for o: Dictionary in towers.values():
 				if o != t and o["type"] == t["type"] and o["level"] == t["level"] and t["level"] < 5:
@@ -271,14 +308,61 @@ func begin_new(type: String, screen: Vector2) -> void:
 	_drag_move(screen)
 
 
+## A tap on a tower opens its upgrade paths; dragging it (past a few pixels) moves or merges
+## it. While aiming the air strike, a tap on the board drops the bombs there.
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch and event.pressed and _drag.is_empty() and state not in [State.WON, State.LOST]:
+	if state in [State.WON, State.LOST]:
+		return
+	if event is InputEventScreenTouch and event.pressed and aiming:
+		aiming = false
+		_air_strike(ground_at(event.position))
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenTouch and event.pressed and _drag.is_empty():
 		var cell := cell_at(event.position)
 		var key := "%d,%d" % [cell[0], cell[1]]
-		if towers.has(key):
-			var t: Dictionary = towers[key]
+		_press = {"t": towers[key], "pos": event.position} if towers.has(key) else {}
+		if _press.is_empty():
+			hud.hide_tower()
+	elif event is InputEventScreenDrag and not _press.is_empty() and _drag.is_empty():
+		if (event.position - (_press["pos"] as Vector2)).length() > 18.0:
+			var t: Dictionary = _press["t"]
+			_press = {}
+			hud.hide_tower()
 			_drag = {"type": t["type"], "level": t["level"], "node": t["node"], "from": t}
 			_drag_move(event.position)
+	elif event is InputEventScreenTouch and not event.pressed and not _press.is_empty():
+		var t: Dictionary = _press["t"]
+		_press = {}
+		if towers.values().has(t):
+			hud.show_tower(t)
+			Audio.play("click", -8.0)
+
+
+func aim_strike() -> void:
+	if strike_ready > 0.0 or state not in [State.WAVE, State.BREAK, State.READY]:
+		Audio.play("click", -12.0)
+		return
+	aiming = true
+	hud.banner(I18n.t("Tap the street to bomb it"))
+
+
+## Five bombs walk along a short line across the tap; they hurt everything on the ground.
+func _air_strike(at: Vector3) -> void:
+	strike_ready = STRIKE_COOLDOWN
+	Audio.play("jet", -2.0)
+	var dir := Vector3(1, 0, -1).normalized()
+	for i in 5:
+		var p := at + dir * (i - 2) * CELL * 0.7
+		p.y = 0.3
+		get_tree().create_timer(0.35 + 0.12 * i).timeout.connect(func() -> void:
+			Fx.boom(self, p, 1.2)
+			Fx.shake(self, 0.6)
+			Audio.play("cannon", -6.0, 0.02)
+			for f: Dictionary in foes:
+				if not f["air"] and not f.get("gone", false) and (f["node"] as Node3D).position.distance_to(p) <= CELL * 1.2:
+					_hurt(f, STRIKE_DAMAGE))
+	hud.refresh()
 
 
 func _input(event: InputEvent) -> void:
@@ -331,6 +415,12 @@ func _drop(screen: Vector2) -> void:
 	if not target.is_empty():
 		node.queue_free()
 		if from != null:
+			# The merged tower keeps an upgrade path: the target's, or else the dragged one's.
+			if target.get("path", "") == "" and from.get("path", "") != "":
+				target["path"] = from["path"]
+				target["tier"] = from["tier"]
+			elif target.get("path", "") == from.get("path", "x"):
+				target["tier"] = maxi(int(target["tier"]), int(from["tier"]))
 			towers.erase("%d,%d" % [from["cell"][0], from["cell"][1]])
 		else:
 			coins -= TOWERS[d["type"]]["cost"]
@@ -390,8 +480,12 @@ func _merge(t: Dictionary) -> void:
 
 static func wave_list(n: int) -> Array:
 	if n == WAVES:
-		return [["boss", 1], ["soldier", 14], ["drone", 5]]
+		return [["boss", 1], ["soldier", 14], ["drone", 5], ["apc", 3], ["camo", 3]]
 	var l := [["soldier", 5 + 3 * n]]
+	if n >= 3:
+		l.append(["apc", n - 2])
+	if n >= 4:
+		l.append(["camo", n - 3])
 	if n >= 3:
 		l.append(["engineer", (n - 2) * 2])
 	if n >= 4:
@@ -431,10 +525,13 @@ func _spawn_foe(kind: String) -> void:
 		"tank", "boss":
 			parts = UnitModels.build("armor", model, 5 if kind == "boss" else 1)
 			model.scale = Vector3.ONE * (3.6 if kind == "boss" else 2.5)
-		"drone":
-			parts = DroneModels.build("scout", model)
+		"drone", "camo":
+			parts = DroneModels.build("scout" if kind == "drone" else "courier", model)
 			model.scale = Vector3.ONE * 3.4
 			model.position.y = 8.0
+		"apc":
+			parts = UnitModels.build("armor", model, 2)
+			model.scale = Vector3.ONE * 2.1
 		_:
 			parts = UnitModels.build("robot", model, 3 if kind == "engineer" else 1)
 			model.scale = Vector3.ONE * 5.6
@@ -442,9 +539,43 @@ func _spawn_foe(kind: String) -> void:
 	MeshKit.blob(root, Vector2(4.6, 4.6) * (2.0 if kind in ["tank", "boss"] else 1.0), Vector3(0, 0.25, 0), 0.4)
 	var start := cell_pos(PATH[0].x, PATH[0].y)
 	root.position = start
+	if kind == "apc":
+		UnitModels.recolor(model, UnitModels.SINAI, Color(0.3, 0.32, 0.3))
 	foes.append({"kind": kind, "e": e, "hp": hp, "max": hp, "node": root, "model": model, "parts": parts,
 		"seg": 0, "prog": 0.0, "air": e.has("air"), "t": _rng.randf() * 6.0})
 	_pop(root, 0.2)
+
+
+## Soldiers jumping out of a destroyed APC carry on from where it stopped.
+func _drop_soldiers(f: Dictionary) -> void:
+	var at := (f["node"] as Node3D).position
+	for i in int(f["e"].get("drops", 0)):
+		_spawn_foe("soldier")
+		var n: Dictionary = foes[-1]
+		(n["node"] as Node3D).position = at + Vector3(_rng.randf_range(-2.0, 2.0), 0, _rng.randf_range(-2.0, 2.0))
+		n["seg"] = f["seg"]
+		n["prog"] = f["prog"]
+
+
+## Camo drones show only as a faint shape until a Radar AA has them in reach.
+func _reveal() -> void:
+	var radars := []
+	for t: Dictionary in towers.values():
+		if t["type"] == "aa" and t.get("path", "") == "b" and int(t.get("tier", 0)) > 0:
+			radars.append(t)
+	for f: Dictionary in foes:
+		if not f["e"].get("camo", false) or f.get("gone", false):
+			continue
+		var p: Vector3 = (f["node"] as Node3D).position
+		var seen := false
+		for t: Dictionary in radars:
+			var d: Node3D = t["node"]
+			if Vector2(p.x - d.position.x, p.z - d.position.z).length() <= tower_range(t):
+				seen = true
+		if seen != f.get("seen", true):
+			f["seen"] = seen
+			for m in (f["node"] as Node3D).find_children("*", "GeometryInstance3D", true, false):
+				(m as GeometryInstance3D).transparency = 0.0 if seen else 0.75
 
 
 func _process(delta: float) -> void:
@@ -467,7 +598,9 @@ func _process(delta: float) -> void:
 		if _break <= 0.0:
 			start_wave()
 	if state in [State.WAVE, State.BREAK]:
+		strike_ready = maxf(0.0, strike_ready - delta)
 		_move_foes(delta)
+		_reveal()
 		_fire(delta)
 	hud.queue_redraw_overlay()
 
@@ -538,19 +671,87 @@ func _leak(f: Dictionary) -> void:
 	hud.refresh()
 
 
+## A tower's numbers after its upgrade path: range in meters, seconds between shots, damage,
+## blast radius in plots, how many targets, and whether it ignores armor.
+func tower_range(t: Dictionary) -> float:
+	var r: float = TOWERS[t["type"]]["range"][t["level"] - 1]
+	if t.get("path", "") == "b" and t["type"] in ["mortar", "aa"]:
+		r += (0.7 if t["type"] == "mortar" else 0.5) * int(t.get("tier", 0))
+	return r * CELL
+
+
+func tower_rate(t: Dictionary) -> float:
+	var r: float = TOWERS[t["type"]]["rate"][t["level"] - 1]
+	if t["type"] == "mg" and t.get("path", "") == "a":
+		r *= pow(0.78, int(t.get("tier", 0)))
+	return r
+
+
+func tower_damage(t: Dictionary) -> float:
+	var dmg: float = TOWERS[t["type"]]["dmg"][t["level"] - 1]
+	var tier := int(t.get("tier", 0))
+	if t.get("path", "") == "b":
+		dmg *= 1.0 + {"mg": 0.3, "mortar": 0.2, "aa": 0.25}[t["type"]] * tier
+	return dmg
+
+
+func tower_splash(t: Dictionary) -> float:
+	var sp: float = TOWERS[t["type"]].get("splash", [1.0, 1.0, 1.0, 1.0, 1.0])[t["level"] - 1]
+	if t["type"] == "mortar" and t.get("path", "") == "a":
+		sp *= 1.0 + 0.35 * int(t.get("tier", 0))
+	return sp
+
+
+func tower_targets(t: Dictionary) -> int:
+	return 1 + (int(t.get("tier", 0)) if t["type"] == "aa" and t.get("path", "") == "a" else 0)
+
+
+func _pierce(t: Dictionary) -> bool:
+	return t["type"] == "mg" and t.get("path", "") == "b" and int(t.get("tier", 0)) > 0
+
+
+func path_cost(t: Dictionary) -> int:
+	var tier := int(t.get("tier", 0))
+	if tier >= PATH_COST.size():
+		return 0
+	return int(PATH_COST[tier] * float(PATH_COST_MUL[t["type"]]))
+
+
+## Buys the next step of path `p` ("a" or "b") for tower `t`. The first step fixes the path.
+func upgrade_path(t: Dictionary, p: String) -> bool:
+	if t.get("path", "") not in ["", p] or int(t.get("tier", 0)) >= 3 or coins < path_cost(t):
+		Audio.play("click", -12.0)
+		return false
+	coins -= path_cost(t)
+	t["path"] = p
+	t["tier"] = int(t.get("tier", 0)) + 1
+	var at := (t["node"] as Node3D).position + Vector3(0, 3, 0)
+	Fx.flash(self, at, 2.2, Color(0.6, 0.95, 0.5))
+	hud.float_text(at + Vector3(0, 3, 0), "▲", Color(0.6, 0.95, 0.5), true)
+	_pop(t["node"], 0.85)
+	Audio.play("build", -4.0)
+	Audio.buzz(20)
+	hud.refresh()
+	return true
+
+
 func _fire(delta: float) -> void:
 	for t: Dictionary in towers.values():
 		var d: Defense = t["node"]
 		var spec: Dictionary = TOWERS[t["type"]]
 		var lv: int = t["level"] - 1
-		var range_m: float = spec["range"][lv] * CELL
-		var best = null
+		var range_m: float = tower_range(t)
+		var picks: Array = []
 		for f: Dictionary in foes:
 			if f["hp"] <= 0.0 or f.get("gone", false) or f["air"] != spec["air"]:
 				continue
+			if f["e"].get("camo", false) and not f.get("seen", false):
+				continue
 			var p: Vector3 = (f["node"] as Node3D).position
-			if Vector2(p.x - d.position.x, p.z - d.position.z).length() <= range_m and (best == null or f["prog"] > best["prog"]):
-				best = f
+			if Vector2(p.x - d.position.x, p.z - d.position.z).length() <= range_m:
+				picks.append(f)
+		picks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["prog"] > b["prog"])
+		var best = picks[0] if not picks.is_empty() else null
 		var pivot = d.get("_pivot")
 		if best == null:
 			continue
@@ -561,8 +762,11 @@ func _fire(delta: float) -> void:
 		t["cd"] -= delta
 		if t["cd"] > 0.0:
 			continue
-		t["cd"] = spec["rate"][lv]
-		var dmg: float = spec["dmg"][lv]
+		t["cd"] = tower_rate(t)
+		var dmg: float = tower_damage(t)
+		if _pierce(t):
+			# Armor piercing: the hit ignores armor (undone again in _hurt).
+			dmg /= maxf(0.05, 1.0 - float(best["e"].get("armor", 0.0)))
 		var head := d.position + Vector3(0, 4.6, 0)
 		match t["type"]:
 			"mg":
@@ -572,7 +776,7 @@ func _fire(delta: float) -> void:
 				_hurt(best, dmg)
 			"mortar":
 				var ground := Vector3(aim.x, 0.3, aim.z)
-				var splash: float = spec["splash"][lv] * CELL * 0.6
+				var splash: float = tower_splash(t) * CELL * 0.6
 				Fx.flash(self, head, 0.6)
 				Audio.play("cannon", -10.0, 0.1)
 				Fx.lob(self, head, ground, 0.7, func() -> void:
@@ -581,13 +785,14 @@ func _fire(delta: float) -> void:
 						if not o["air"] and o["hp"] > 0.0 and not o.get("gone", false) and (o["node"] as Node3D).position.distance_to(ground) <= splash:
 							_hurt(o, dmg))
 			"aa":
-				var target: Dictionary = best
-				Fx.flash(self, head + Vector3(0, 0.5, 0), 0.5, Color(0.7, 0.9, 1.0))
 				Audio.play("impact", -14.0, 0.1)
-				Fx.shell(self, head + Vector3(0, 0.5, 0), aim, 0.25, func() -> void:
-					if is_instance_valid(target["node"]):
-						Fx.flash(self, (target["node"] as Node3D).position + Vector3(0, 8, 0), 1.8)
-					_hurt(target, dmg))
+				for target: Dictionary in picks.slice(0, tower_targets(t)):
+					var to: Vector3 = (target["node"] as Node3D).position + Vector3(0, 8.0, 0)
+					Fx.flash(self, head + Vector3(0, 0.5, 0), 0.5, Color(0.7, 0.9, 1.0))
+					Fx.shell(self, head + Vector3(0, 0.5, 0), to, 0.25, func() -> void:
+						if is_instance_valid(target["node"]):
+							Fx.flash(self, (target["node"] as Node3D).position + Vector3(0, 8, 0), 1.8)
+						_hurt(target, dmg))
 
 
 func _hurt(f: Dictionary, dmg: float) -> void:
@@ -599,7 +804,9 @@ func _hurt(f: Dictionary, dmg: float) -> void:
 	f["gone"] = true
 	var node: Node3D = f["node"]
 	var at := node.position + Vector3(0, 8.0 if f["air"] else 2.0, 0)
-	if f["kind"] in ["tank", "boss", "drone"]:
+	if f["e"].has("drops"):
+		_drop_soldiers(f)
+	if f["kind"] in ["tank", "boss", "drone", "camo", "apc"]:
 		Fx.boom(self, at, 0.8 if f["kind"] != "boss" else 2.0)
 		Audio.play("drone_down" if f["air"] else "tank_down", -6.0)
 	else:
