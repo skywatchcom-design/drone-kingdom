@@ -6,7 +6,7 @@ extends Control
 ## Run with `-- --mission N` to open that briefing on start (screenshots).
 
 const HOME_SCENE := "res://scenes/home/home.tscn"
-const RAID_SCENE := "res://scenes/raid/raid.tscn"
+const RAID_SCENE := "res://scenes/attack/street_raid.tscn"
 ## Mission spots on a 1950 x 900 map, scaled to the screen.
 const SPOTS := [[820, 720], [960, 600], [900, 430], [1080, 320], [1280, 400], [1420, 580], [1600, 650], [1760, 480], [1640, 290], [1820, 170]]
 const SAND := Color(0.85, 0.77, 0.56)

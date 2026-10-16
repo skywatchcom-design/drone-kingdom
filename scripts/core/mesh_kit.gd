@@ -49,6 +49,12 @@ static func mat(color: Color, rough: float = 0.8, metal: float = 0.0) -> Standar
 	m.metallic = metal
 	m.vertex_color_use_as_albedo = true
 	m.vertex_color_is_srgb = true
+	if toy:
+		# The flat look never loads the photo textures (they are left out of the web build).
+		m.albedo_color = toy_color(color)
+		m.roughness = maxf(rough, 0.7)
+		m.metallic = metal * 0.3
+		return m
 	m.albedo_texture = _photo("painted")
 	m.normal_enabled = true
 	m.normal_texture = _photo("painted_n")

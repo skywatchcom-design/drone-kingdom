@@ -8,7 +8,7 @@ extends Node3D
 ## `--screenshot-hangar` / `--screenshot-garage` / `--screenshot-build` / `--screenshot-settings` to open a
 ## sheet on start.
 
-const RAID_SCENE := "res://scenes/raid/raid.tscn"
+const RAID_SCENE := "res://scenes/attack/street_raid.tscn"
 ## Height of the view in meters (the screen is held sideways).
 const VIEW_SIZE := 52.0
 const TAP_SLOP := 24.0
