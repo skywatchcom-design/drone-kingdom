@@ -72,7 +72,7 @@ static func create(parent: Node3D, view_height: float) -> Camera3D:
 			env.fog_enabled = false
 		if MeshKit.look == "leo":
 			# Firmer shading, a grey backdrop.
-			env.background_color = Color(0.88, 0.88, 0.88)
+			env.background_color = Color(0.82, 0.82, 0.8) if MeshKit.palette == "mil" else Color(0.88, 0.88, 0.88)
 			env.ambient_light_energy *= 0.63
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env

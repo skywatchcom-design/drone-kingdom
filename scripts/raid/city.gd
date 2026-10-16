@@ -158,6 +158,8 @@ func _add_streets(lawn: float) -> void:
 			dashes.append(Transform3D(Basis(), Vector3(lane, 0.115, t + 0.6)))
 			dashes.append(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(t + 0.6, 0.115, lane)))
 			t += 2.0
+	if MeshKit.palette == "mil":
+		return
 	var d := MeshKit.multi(self, MeshKit.box(Vector3(0.16, 0.02, 0.9)), MeshKit.mat(Color(0.97, 0.97, 0.94), 0.8), dashes)
 	d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
@@ -174,6 +176,13 @@ func _add_plots(centers: Array) -> void:
 		for sx in [-1.0, 1.0]:
 			for sz in [-1.0, 1.0]:
 				stakes.append(Transform3D(Basis(), c + Vector3(sx * (PAD / 2.0 - 0.15), 0.3, sz * (PAD / 2.0 - 0.15))))
+	if MeshKit.palette == "mil":
+		# Military trial: free plots are packed sand, so the compound reads as plots between lanes.
+		var raised := gravel.map(func(t: Transform3D) -> Transform3D: return t.translated(Vector3(0, 0.07, 0)))
+		var sand := MeshKit.multi(self, MeshKit.box(Vector3(PAD + 0.6, 0.04, PAD + 0.6)), MeshKit.mat(Color(0.64, 0.58, 0.45), 0.95), raised)
+		sand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		MeshKit.multi(self, MeshKit.box(Vector3(0.14, 0.5, 0.14)), MeshKit.mat(Color(0.93, 0.92, 0.88), 0.6), stakes)
+		return
 	var g := MeshKit.multi(self, MeshKit.box(Vector3(PAD, 0.03, PAD)), MeshKit.surface("concrete", Color(0.5, 0.52, 0.4) if RenderingServer.get_current_rendering_method() != "gl_compatibility" else Color(0.4, 0.43, 0.32), 1.0, 0.0, true), gravel)
 	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	MeshKit.multi(self, MeshKit.box(Vector3(0.14, 0.5, 0.14)), MeshKit.mat(Color(0.93, 0.92, 0.88), 0.6), stakes)
@@ -414,6 +423,8 @@ func _scatter_nature() -> void:
 			_trunks.append(Transform3D(Basis().scaled(Vector3.ONE * size), p + Vector3(0, 0.75 * size, 0)))
 			# A crown of several leafy clumps in slightly different greens.
 			var base := Color(0.24, 0.48, 0.2).lerp(Color(0.42, 0.6, 0.24), _rng.randf())
+			if MeshKit.palette == "mil":
+				base = Color(0.28, 0.36, 0.2).lerp(Color(0.38, 0.42, 0.24), _rng.randf())
 			for k in 5:
 				var off := Vector3(_rng.randf_range(-0.7, 0.7), _rng.randf_range(-0.3, 0.7), _rng.randf_range(-0.7, 0.7)) * size
 				var r := _rng.randf_range(0.6, 0.95) * size * 1.15
@@ -426,7 +437,7 @@ func _scatter_nature() -> void:
 		elif roll < 0.7:
 			_pines.append(Transform3D(Basis().scaled(Vector3(1.0, 1.0, 1.0) * size), p + Vector3(0, 2.4 * size, 0)))
 			_blobs.append(Transform3D(Basis().scaled(Vector3.ONE * size * 2.8), p + Vector3(0, 0.05, 0)))
-			_pine_colors.append(Color(0.14, 0.36, 0.2).lerp(Color(0.22, 0.45, 0.25), _rng.randf()))
+			_pine_colors.append(Color(0.14, 0.36, 0.2).lerp(Color(0.22, 0.45, 0.25), _rng.randf()) if MeshKit.palette != "mil" else Color(0.18, 0.26, 0.18).lerp(Color(0.24, 0.32, 0.2), _rng.randf()))
 			_trunks.append(Transform3D(Basis().scaled(Vector3(0.7, 0.6, 0.7) * size), p + Vector3(0, 0.45 * size, 0)))
 		elif roll < 0.88:
 			_bushes.append(Transform3D(Basis().scaled(Vector3(1.0, 0.7, 1.0) * size), p + Vector3(0, 0.4 * size, 0)))

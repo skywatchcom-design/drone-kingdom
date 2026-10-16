@@ -39,6 +39,12 @@ func _ready() -> void:
 	cam.keep_aspect = Camera3D.KEEP_WIDTH
 	cam.size = 94.0
 	WorldSetup.place_camera(cam, Vector3(0, -3.0, 0))
+	# Dev: `--close X,Z` zooms in on a spot of the board (close-up pictures).
+	var args := OS.get_cmdline_user_args()
+	if OS.is_debug_build() and args.has("--close"):
+		var xz := args[args.find("--close") + 1].split(",")
+		cam.size = 34.0
+		WorldSetup.place_camera(cam, Vector3(float(xz[0]), 0, float(xz[1])))
 	_mark_road()
 	_build_board()
 	_load_base()
@@ -50,6 +56,8 @@ func _ready() -> void:
 	hud.banner(I18n.t("Attack!"))
 	if autoplay:
 		_autoplay()
+	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--no-hud"):
+		hud.visible = false
 
 
 # ---------------------------------------------------------------- the enemy base
@@ -210,6 +218,7 @@ func _spawn_unit(type: String) -> void:
 	var model := Node3D.new()
 	root.add_child(model)
 	var parts := {}
+	var men: Array = []
 	match type:
 		"armor":
 			parts = UnitModels.build("armor", model, lvl)
@@ -221,6 +230,7 @@ func _spawn_unit(type: String) -> void:
 				man.position = Vector3((i - 1) * 1.6, 0, (i % 2) * 1.4 - 0.7)
 				model.add_child(man)
 				var p := UnitModels.build(type, man, lvl)
+				men.append(p)
 				if i == 0:
 					parts = p
 			model.scale = Vector3.ONE * 3.4
@@ -228,10 +238,14 @@ func _spawn_unit(type: String) -> void:
 			parts = DroneModels.build(type, model)
 			model.scale = Vector3.ONE * 3.0
 			model.position.y = 8.0
-	MeshKit.blob(root, Vector2(5.0, 5.0) * (1.6 if type == "armor" else 1.0), Vector3(0, 0.25, 0), 0.4)
+	# Each unit keeps its own lane across the street, so they don't stand inside one another.
+	if not air:
+		model.position.x = _rng.randf_range(-2.0, 2.0)
+	MeshKit.blob(model, Vector2(5.0, 5.0) / model.scale.x * (1.6 if type == "armor" else 1.0), Vector3(0, 0.25 / model.scale.x, 0), 0.4)
 	root.position = cell_pos(PATH[0].x, PATH[0].y)
 	foes.append({"kind": type, "e": e, "hp": hp, "max": hp, "node": root, "model": model, "parts": parts,
-		"seg": 0, "prog": 0.0, "air": air, "t": _rng.randf() * 6.0, "cd": 0.0})
+		"seg": 0, "prog": 0.0, "air": air, "t": _rng.randf() * 6.0, "cd": 0.0, "men": men, "phase": _rng.randf() * TAU,
+		"aim": 0.0, "recoil": 0.0})
 	_pop(root, 0.2)
 
 
@@ -287,6 +301,47 @@ func _jam(_delta: float) -> void:
 		for f: Dictionary in foes:
 			if f["air"] and not f.get("gone", false) and (f["node"] as Node3D).position.distance_to((t["node"] as Node3D).position) < r:
 				f["e"]["speed"] = f["e"]["base_speed"] * 0.5
+
+
+func _move_foes(delta: float) -> void:
+	super._move_foes(delta)
+	for f: Dictionary in foes:
+		if f.get("gone", false):
+			continue
+		f["recoil"] = maxf(0.0, float(f["recoil"]) - delta * 3.0)
+		var speed: float = float(f["e"]["speed"]) * CELL
+		if f["kind"] in ["infantry", "engineers"]:
+			# The soldiers walk on their leg skeletons, like in the old raid (GroundUnit).
+			f["phase"] = float(f["phase"]) + delta * speed * 2.6 / 2.2
+			for i in (f["men"] as Array).size():
+				var p: Dictionary = f["men"][i]
+				var ph: float = float(f["phase"]) + i * 1.7
+				var swing := sin(ph) * 0.6
+				var sk: Skeleton3D = p.get("skeleton")
+				if sk != null:
+					sk.set_bone_pose_rotation(1, Quaternion(Vector3.RIGHT, -swing))
+					sk.set_bone_pose_rotation(2, Quaternion(Vector3.RIGHT, swing))
+					sk.set_bone_pose_rotation(3, Quaternion(Vector3.RIGHT, maxf(0.0, cos(ph)) * 0.6))
+					sk.set_bone_pose_rotation(4, Quaternion(Vector3.RIGHT, maxf(0.0, -cos(ph)) * 0.6))
+				else:
+					var hips: Array = p.get("hips", [])
+					if hips.size() == 2:
+						(hips[0] as Node3D).rotation.x = swing
+						(hips[1] as Node3D).rotation.x = -swing
+				var torso = p.get("torso")
+				if torso is Node3D:
+					(torso as Node3D).position.y = 0.5 + absf(sin(ph)) * 0.03
+					(torso as Node3D).position.z = -0.04 * float(f["recoil"])
+		elif f["kind"] == "armor":
+			var parts: Dictionary = f["parts"]
+			for wheel in parts.get("wheels", []):
+				(wheel as Node3D).rotation.x += speed * delta / 0.3
+			var turret = parts.get("turret")
+			if turret is Node3D:
+				(turret as Node3D).rotation.y = lerp_angle((turret as Node3D).rotation.y, float(f["aim"]), delta * 4.0)
+			var gun = parts.get("gun")
+			if gun is Node3D:
+				(gun as Node3D).position.z = 1.0 - float(f["recoil"]) * 0.45
 
 
 ## Defenses fire by their own stats: steady fire (dps) or single heavy shots (damage, cooldown),
@@ -376,7 +431,7 @@ func _units_fire(delta: float) -> void:
 			continue
 		var e: Dictionary = f["e"]
 		var at: Vector3 = (f["node"] as Node3D).position
-		var reach: float = (CELL * 1.3) if e["kind"] == "engineers" else maxf(float(e["range"]) * 1.6, CELL * 1.5)
+		var reach: float = (CELL * 1.3) if e["kind"] == "engineers" else maxf(float(e["range"]) * 1.8, CELL * 2.2)
 		var best = null
 		var best_d := INF
 		for t: Dictionary in towers.values():
@@ -387,15 +442,24 @@ func _units_fire(delta: float) -> void:
 		if best == null:
 			continue
 		var heavy: bool = e["kind"] in ["armor", "heavy"]
-		var every := 1.5 if heavy else 0.6
+		var every := 1.5 if heavy else 0.45
 		f["cd"] = every
 		var dmg: float = float(e["dps"]) * every * (2.0 if e["kind"] == "engineers" else 1.0)
 		var hit: Dictionary = best
 		var from := at + Vector3(0, 8.0 if f["air"] else 2.6, 0)
 		var to: Vector3 = (hit["node"] as Node3D).position + Vector3(0, 2.0, 0)
+		f["recoil"] = 1.0
+		if e["kind"] == "armor":
+			# The turret swings to the target and the shell leaves its muzzle.
+			var model: Node3D = f["model"]
+			var local := model.global_transform.basis.inverse() * (to - model.global_position)
+			f["aim"] = atan2(local.x, local.z)
+			var muzzle = (f["parts"] as Dictionary).get("muzzle")
+			if muzzle is Node3D:
+				from = (muzzle as Node3D).global_position
 		if heavy:
-			Fx.flash(self, from, 0.6)
-			Audio.play("cannon", -12.0, 0.1)
+			Fx.flash(self, from, 0.9)
+			Audio.play("cannon", -8.0, 0.1)
 			Fx.shell(self, from, to, 0.3, func() -> void:
 				Fx.boom(self, to, 0.5)
 				_damage_tower(hit, dmg))
@@ -404,7 +468,17 @@ func _units_fire(delta: float) -> void:
 			Audio.play("breach", -10.0, 0.2)
 			_damage_tower(hit, dmg)
 		else:
-			Fx.tracer(self, from, to, Color(0.6, 1.0, 0.5), 0.06, 0.06)
+			# Every soldier of the squad (or the drone) fires: a muzzle flash and a tracer each.
+			var guns: Array = []
+			for p: Dictionary in f["men"]:
+				if p.get("muzzle") is Node3D:
+					guns.append((p["muzzle"] as Node3D).global_position)
+			if guns.is_empty():
+				guns.append(from)
+			for g: Vector3 in guns:
+				Fx.flash(self, g, 0.35)
+				Fx.tracer(self, g, to + Vector3(randf_range(-0.8, 0.8), randf_range(-0.5, 0.8), randf_range(-0.8, 0.8)), Color(1.0, 0.86, 0.45), 0.12, 0.14)
+			Audio.play("rifle", -12.0, 0.06)
 			_damage_tower(hit, dmg)
 
 

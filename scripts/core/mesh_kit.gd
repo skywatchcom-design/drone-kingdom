@@ -38,7 +38,20 @@ static func _look_arg() -> String:
 
 ## Toy colors: a little brighter and more saturated than the photo look.
 static func toy_color(c: Color) -> Color:
+	if palette == "mil":
+		return Color.from_hsv(c.h, c.s * 0.72, c.v * 0.93, c.a)
 	return Color.from_hsv(c.h, minf(1.0, c.s * 1.15), minf(1.0, c.v * 1.02), c.a)
+
+
+## Design trial (owner, 16.10.2026: "too childish, should be military, realistic and clean"):
+## `-- --palette mil` mutes every flat color toward a military palette.
+static var palette := _palette_arg()
+
+
+static func _palette_arg() -> String:
+	var args := OS.get_cmdline_user_args()
+	var i := args.find("--palette")
+	return args[i + 1] if i >= 0 and i + 1 < args.size() else ""
 
 
 ## The everyday material: painted metal / plaster grain under the given color.
@@ -79,7 +92,7 @@ static func surface(kind: String, color: Color = Color.WHITE, rough: float = 0.9
 	m.uv1_world_triplanar = world
 	if toy and kind != "net":
 		match kind:
-			"grass": m.albedo_color = toy_color(color.lerp(Color(0.5, 0.74, 0.34), 0.85))
+			"grass": m.albedo_color = Color(0.46, 0.5, 0.33) if palette == "mil" else toy_color(color.lerp(Color(0.5, 0.74, 0.34), 0.85))
 			"dirt": m.albedo_color = toy_color(color.lerp(Color(0.74, 0.62, 0.44), 0.7))
 			"asphalt": m.albedo_color = toy_color(color.lerp(Color(0.42, 0.44, 0.48), 0.8))
 			"wood", "canvas": m.albedo_color = toy_color(color.lerp(Color.WHITE, 0.3))
