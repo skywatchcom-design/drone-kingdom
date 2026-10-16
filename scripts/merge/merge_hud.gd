@@ -26,6 +26,7 @@ var _banner: Label
 var _tower_panel: PanelContainer
 var _tower: Dictionary = {}
 var _strike: Button
+var _reinforce: Button
 
 
 func _ready() -> void:
@@ -39,8 +40,26 @@ func _ready() -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.draw.connect(_draw_overlay)
 	root.add_child(_overlay)
+	# Everything sits in a 720 px column in the middle, so wider screens (the iPad) keep the
+	# layout; the bottom bar's background still spans the whole width.
+	var strip := Panel.new()
+	strip.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	strip.offset_top = -250
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_theme_stylebox_override("panel", _style(Color(0.11, 0.13, 0.09, 0.94), 0))
+	root.add_child(strip)
+	var col := Control.new()
+	col.anchor_left = 0.5
+	col.anchor_right = 0.5
+	col.anchor_bottom = 1.0
+	col.offset_left = -360
+	col.offset_right = 360
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(col)
+	root = col
 	_top(root)
 	_bottom(root)
+	_pause_button(root)
 	_banner = _label("", 44, Color.WHITE)
 	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_banner.position = Vector2(-300, 190)
@@ -179,6 +198,7 @@ func _bottom(root: Control) -> void:
 		card.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventScreenTouch and e.pressed:
 				game.begin_new(type, card.get_global_transform_with_canvas() * e.position))
+		card.pivot_offset = Vector2(90, 100)
 		_cards[type] = card
 		x += 196.0
 	_speed = Button.new()
@@ -207,8 +227,12 @@ func _bottom(root: Control) -> void:
 	_start.pressed.connect(func() -> void: game.start_wave())
 	root.add_child(_start)
 	_strike = Button.new()
-	_strike.position = Vector2(560, 1280 - 352)
-	_strike.size = Vector2(140, 88)
+	_strike.anchor_top = 1.0
+	_strike.anchor_bottom = 1.0
+	_strike.offset_left = 560
+	_strike.offset_right = 700
+	_strike.offset_top = -352
+	_strike.offset_bottom = -264
 	_strike.add_theme_font_size_override("font_size", 20)
 	var red := UiTheme.ATTACK_RED if UiTheme.on() else Color(0.75, 0.3, 0.2)
 	_strike.add_theme_stylebox_override("normal", _style(red, 10, SAND))
@@ -217,9 +241,28 @@ func _bottom(root: Control) -> void:
 	_strike.add_theme_stylebox_override("disabled", _style(Color(0.2, 0.2, 0.18), 10, SAND))
 	_strike.pressed.connect(func() -> void: game.aim_strike())
 	root.add_child(_strike)
+	_reinforce = Button.new()
+	_reinforce.anchor_top = 1.0
+	_reinforce.anchor_bottom = 1.0
+	_reinforce.offset_left = 20
+	_reinforce.offset_right = 160
+	_reinforce.offset_top = -352
+	_reinforce.offset_bottom = -264
+	_reinforce.add_theme_font_size_override("font_size", 20)
+	_reinforce.add_theme_stylebox_override("normal", _style(Color(0.16, 0.27, 0.42), 10, SAND))
+	_reinforce.add_theme_stylebox_override("hover", _style(Color(0.2, 0.32, 0.5), 10, SAND))
+	_reinforce.add_theme_stylebox_override("pressed", _style(Color(0.12, 0.2, 0.32), 10, SAND))
+	_reinforce.add_theme_stylebox_override("disabled", _style(Color(0.2, 0.2, 0.18), 10, SAND))
+	_reinforce.pressed.connect(func() -> void: game.send_reinforcement())
+	root.add_child(_reinforce)
 	_tower_panel = PanelContainer.new()
 	_tower_panel.add_theme_stylebox_override("panel", _style(Color(0.09, 0.11, 0.08, 0.97), 10, SAND))
-	_tower_panel.position = Vector2(20, 1280 - 250 - 300)
+	_tower_panel.anchor_top = 1.0
+	_tower_panel.anchor_bottom = 1.0
+	_tower_panel.offset_left = 20
+	_tower_panel.offset_right = 700
+	_tower_panel.offset_bottom = -262
+	_tower_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_tower_panel.custom_minimum_size = Vector2(680, 0)
 	_tower_panel.visible = false
 	root.add_child(_tower_panel)
@@ -228,6 +271,9 @@ func _bottom(root: Control) -> void:
 func refresh() -> void:
 	if game == null or _hp_fill == null:
 		return
+	for type in _cards:
+		# The card being placed stands out.
+		(_cards[type] as Control).scale = Vector2.ONE * (1.06 if game.placing == type else 1.0)
 	if _tower_panel != null and _tower_panel.visible and not _tower.is_empty():
 		show_tower(_tower)
 	var k := clampf(game.hq_hp / MergeGame.HQ_HP, 0.0, 1.0)
@@ -246,6 +292,10 @@ func refresh() -> void:
 func _process(_delta: float) -> void:
 	if game != null and game.state == MergeGame.State.BREAK:
 		_start.text = I18n.t("Wave %d in %d") % [game.wave + 1, ceili(game._break)]
+	if _reinforce != null and game != null:
+		var n := game.reserve_count()
+		_reinforce.disabled = n == 0
+		_reinforce.text = I18n.t("Reinforce") + "\n" + (I18n.t("Army x%d") % n if n > 0 else I18n.t("Train in base"))
 	if _strike != null and game != null:
 		var wait := game.strike_ready
 		_strike.disabled = wait > 0.0
@@ -305,6 +355,64 @@ func show_tower(t: Dictionary) -> void:
 		buy.pressed.connect(func() -> void: game.upgrade_path(t, p))
 		row.add_child(buy)
 	_tower_panel.visible = true
+
+
+## Top-left pause: freezes the battle and offers Continue, Restart and Back to base.
+func _pause_button(root: Control) -> void:
+	var b := Button.new()
+	b.text = "II"
+	b.position = Vector2(24, 16)
+	b.size = Vector2(64, 50)
+	b.add_theme_font_size_override("font_size", 26)
+	for st in ["normal", "hover", "pressed"]:
+		b.add_theme_stylebox_override(st, _style(DARK, 8, SAND))
+	b.pressed.connect(show_pause)
+	root.add_child(b)
+
+
+func show_pause() -> void:
+	if game.state in [MergeGame.State.WON, MergeGame.State.LOST]:
+		return
+	var speed := Engine.time_scale
+	Engine.time_scale = 0.0
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.6)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(shade)
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	col.offset_left = -170
+	col.offset_right = 170
+	col.offset_top = -170
+	col.offset_bottom = 170
+	col.add_theme_constant_override("separation", 16)
+	shade.add_child(col)
+	var title := _label(I18n.t("Paused"), 44, SAND)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var buttons := [[I18n.t("Continue"), func() -> void:
+		Engine.time_scale = speed if speed > 0.0 else 1.0
+		shade.queue_free()],
+		[I18n.t("Restart"), func() -> void: game.restart()],
+		[I18n.t("Back to base"), func() -> void: game.go_home()]]
+	for pair: Array in buttons:
+		var b := Button.new()
+		b.text = pair[0]
+		b.custom_minimum_size = Vector2(340, 72)
+		b.add_theme_font_size_override("font_size", 28)
+		for st in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(st, _style(GO if pair == buttons[0] else Color(0.17, 0.2, 0.14), 8, SAND))
+		b.pressed.connect(pair[1])
+		col.add_child(b)
+
+
+## The first-time hint over the cards, until the first tower stands.
+func hint(text: String) -> void:
+	_banner.text = text
+	_banner.modulate.a = 1.0
+	var tw := _banner.create_tween().set_loops(3)
+	tw.tween_property(_banner, "modulate:a", 0.55, 0.6)
+	tw.tween_property(_banner, "modulate:a", 1.0, 0.6)
 
 
 func hide_tower() -> void:
@@ -386,7 +494,8 @@ func show_end(won: bool, stars: int) -> void:
 	var star_row := _label("★".repeat(stars) + "☆".repeat(3 - stars), 64, GOLD)
 	star_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(star_row)
-	var line := _label(I18n.t("+850 coins · +50 gems") if won else I18n.t("Fell in wave %d of %d") % [game.wave, MergeGame.WAVES], 28, Color.WHITE)
+	var paid: Dictionary = game.reward
+	var line := _label((I18n.t("+%d coins · +%d fuel to your base") % [int(paid["coins"]), int(paid["fuel"])]) if won else (I18n.t("Fell in wave %d of %d") % [game.wave, MergeGame.WAVES] + "\n" + I18n.t("+%d coins to your base") % int(paid["coins"])), 28, Color.WHITE)
 	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(line)
 	var again := Button.new()
@@ -406,7 +515,5 @@ func show_end(won: bool, stars: int) -> void:
 		home.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		home.add_theme_font_size_override("font_size", 26)
 		home.add_theme_stylebox_override("normal", _style(Color(0.17, 0.2, 0.14), 32, SAND))
-		home.pressed.connect(func() -> void:
-			Engine.time_scale = 1.0
-			game.get_tree().change_scene_to_file("res://scenes/home/home.tscn"))
+		home.pressed.connect(func() -> void: game.go_home())
 		col.add_child(home)

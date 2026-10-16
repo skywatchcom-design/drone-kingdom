@@ -70,6 +70,20 @@ var _marker: MeshInstance3D
 var _ring: MeshInstance3D
 var _rng := RandomNumberGenerator.new()
 var strike_ready := 0.0
+## Tap-to-place (owner, 16.10.2026: "it doesn't show I can place anything"): tapping a card arms
+## it, the free plots light up, and a tap on one builds there. Dragging still works.
+var placing := ""
+var _plots_hint: MultiMeshInstance3D
+var _placed_any := false
+## Reinforcements (owner, 16.10.2026: "why train an army if we only defend?"): the army
+## trained in the city waits by the Command Tower. A tap on the Army button sends the next unit
+## down the street toward the enemy; it fights whatever it meets and uses up that unit.
+var reserve := {}
+var _sent := {}
+var allies: Array = []
+const ALLY_ORDER := ["armor", "heavy", "infantry", "engineers", "scout", "courier"]
+## What the finished battle paid into the city ({coins, fuel}).
+var reward := {"coins": 0, "fuel": 0}
 var aiming := false
 var _press := {}
 
@@ -99,7 +113,15 @@ func _ready() -> void:
 	_marker.visible = false
 	_ring = MeshKit.add(self, MeshKit.ring(1.0, 0.04), MeshKit.glow(Color(0.5, 1.0, 0.45), 0.8))
 	_ring.visible = false
+	var state := get_tree().root.get_node_or_null("GameState")
+	if state != null and not OS.get_cmdline_user_args().has("--merge-bot"):
+		reserve = (state.army as Dictionary).duplicate()
+	if OS.get_cmdline_user_args().has("--merge-bot"):
+		reserve = {"infantry": 3, "armor": 1, "courier": 2}
 	hud.refresh()
+	hud.hint(I18n.t("Tap a tower below, then a lit plot by the street"))
+	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--arm"):
+		_arm(OS.get_cmdline_user_args()[OS.get_cmdline_user_args().find("--arm") + 1])
 	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--merge-bot"):
 		_bot()
 
@@ -123,6 +145,9 @@ func _bot() -> void:
 			hud.show_tower(first)
 		if state == State.READY and (towers.size() >= 4 or coins < 50):
 			start_wave()
+			return
+		if reserve_count() > 0 and foes.size() >= 6 and allies.is_empty():
+			send_reinforcement()
 			return
 		if strike_ready <= 0.0 and foes.size() >= 8:
 			var f: Dictionary = foes[foes.size() / 2]
@@ -304,7 +329,7 @@ func begin_new(type: String, screen: Vector2) -> void:
 		Audio.play("click", -12.0)
 		return
 	var node := _make_tower(type, 1)
-	_drag = {"type": type, "level": 1, "node": node, "from": null}
+	_drag = {"type": type, "level": 1, "node": node, "from": null, "start": screen}
 	_drag_move(screen)
 
 
@@ -317,6 +342,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		aiming = false
 		_air_strike(ground_at(event.position))
 		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenTouch and event.pressed and _drag.is_empty() and placing != "":
+		var at := cell_at(event.position)
+		var type := placing
+		if free_plot(at) and coins >= TOWERS[type]["cost"]:
+			coins -= TOWERS[type]["cost"]
+			_pop(_place(type, 1, at)["node"], 0.5)
+			Audio.play("build", -6.0)
+			_first_tower()
+			_arm(type if coins >= TOWERS[type]["cost"] else "")
+		else:
+			_arm("")
+		hud.refresh()
 		return
 	if event is InputEventScreenTouch and event.pressed and _drag.is_empty():
 		var cell := cell_at(event.position)
@@ -337,6 +375,146 @@ func _unhandled_input(event: InputEvent) -> void:
 		if towers.values().has(t):
 			hud.show_tower(t)
 			Audio.play("click", -8.0)
+
+
+func reserve_count() -> int:
+	var n := 0
+	for k in reserve:
+		n += int(reserve[k])
+	return n
+
+
+## Sends the strongest unit left in reserve from the tower down the street.
+func send_reinforcement() -> void:
+	if state not in [State.WAVE, State.BREAK] or reserve_count() == 0:
+		Audio.play("click", -12.0)
+		return
+	var type := ""
+	for t in ALLY_ORDER:
+		if int(reserve.get(t, 0)) > 0:
+			type = t
+			break
+	reserve[type] = int(reserve[type]) - 1
+	_sent[type] = int(_sent.get(type, 0)) + 1
+	var stats := Catalog.unit_stats(type, 1)
+	var state := get_tree().root.get_node_or_null("GameState")
+	if state != null:
+		stats = state.unit_stats_for(type)
+	var squad := int(stats.get("squad", 1))
+	var root := Node3D.new()
+	add_child(root)
+	var model := Node3D.new()
+	root.add_child(model)
+	var air := Catalog.DRONES.has(type)
+	var parts: Dictionary
+	if air:
+		parts = DroneModels.build(type, model)
+		model.scale = Vector3.ONE * 3.0
+		model.position.y = 8.0
+	elif type == "armor":
+		parts = UnitModels.build("armor", model, 1)
+		model.scale = Vector3.ONE * 2.5
+	else:
+		parts = UnitModels.build(type, model, 1)
+		model.scale = Vector3.ONE * 3.6
+	# A blue ring marks them as ours.
+	MeshKit.add(root, MeshKit.ring(2.4, 0.18), MeshKit.glow(Color(0.35, 0.65, 1.0), 0.9), Vector3(0, 0.35, 0))
+	var last := PATH.size() - 1
+	root.position = cell_pos(PATH[last].x, PATH[last].y)
+	allies.append({"type": type, "node": root, "model": model, "parts": parts, "air": air, "seg": last,
+		"hp": float(stats["health"]) * squad, "max": float(stats["health"]) * squad,
+		"dps": float(stats["dps"]) * squad, "speed": float(stats["speed"]) / CELL * 0.8, "cd": 0.0, "t": 0.0})
+	_pop(root, 0.3)
+	Audio.play("deploy", -4.0)
+	hud.refresh()
+
+
+## Our units walk the street backwards (from the tower toward the entry), stop to fight the
+## nearest enemy in reach, and fall when the enemy wins. Enemies they reach hit back.
+func _move_allies(delta: float) -> void:
+	for a: Dictionary in allies:
+		var node: Node3D = a["node"]
+		a["t"] += delta
+		var near = null
+		var near_d := INF
+		for f: Dictionary in foes:
+			if f.get("gone", false) or (f["air"] and not a["air"] and a["type"] != "infantry"):
+				continue
+			var d := Vector2((f["node"] as Node3D).position.x - node.position.x, (f["node"] as Node3D).position.z - node.position.z).length()
+			if d < near_d:
+				near = f
+				near_d = d
+		if near != null and near_d < CELL * 1.6:
+			a["cd"] -= delta
+			if a["cd"] <= 0.0:
+				a["cd"] = 0.5
+				var to: Vector3 = (near["node"] as Node3D).position + Vector3(0, 8.0 if near["air"] else 2.0, 0)
+				var from := node.position + Vector3(0, 8.0 if a["air"] else 2.4, 0)
+				Fx.flash(self, from, 0.4)
+				Fx.tracer(self, from, to, Color(0.6, 0.85, 1.0), 0.09, 0.08)
+				Audio.play("rifle", -14.0, 0.06)
+				_hurt(near, float(a["dps"]) * 0.5)
+			# The enemy fights back while they are face to face.
+			if not near["air"]:
+				a["hp"] -= float(near["e"]["hit"]) * 0.25 * delta
+			var to2: Vector3 = (near["node"] as Node3D).position - node.position
+			node.rotation.y = lerp_angle(node.rotation.y, atan2(to2.x, to2.z), 0.2)
+		else:
+			var step: float = float(a["speed"]) * CELL * delta
+			if a["seg"] <= 0:
+				a["hp"] = 0.0
+			else:
+				var target := cell_pos(PATH[a["seg"] - 1].x, PATH[a["seg"] - 1].y)
+				var d2 := node.position.distance_to(target)
+				if d2 <= step:
+					node.position = target
+					a["seg"] -= 1
+				else:
+					var dir := (target - node.position).normalized()
+					node.position += dir * step
+					node.rotation.y = lerp_angle(node.rotation.y, atan2(dir.x, dir.z), 0.25)
+			var hips: Array = (a["parts"] as Dictionary).get("hips", [])
+			for i in hips.size():
+				(hips[i] as Node3D).rotation.x = sin(float(a["t"]) * 9.0 + PI * i) * 0.5
+		if a["air"]:
+			(a["model"] as Node3D).position.y = 8.0 + sin(float(a["t"]) * 3.0) * 0.3
+			for prop in (a["parts"] as Dictionary).get("props", []):
+				(prop as Node3D).rotation.y += delta * 40.0
+		if float(a["hp"]) <= 0.0:
+			a["gone"] = true
+			Fx.boom(self, node.position + Vector3(0, 2, 0), 0.6)
+			node.queue_free()
+	allies = allies.filter(func(a: Dictionary) -> bool: return not a.get("gone", false))
+
+
+## Arms `type` for tap-to-place ("" disarms) and lights every free plot while armed.
+func _arm(type: String) -> void:
+	placing = type
+	if _plots_hint != null:
+		_plots_hint.queue_free()
+		_plots_hint = null
+	if type != "":
+		var spots := []
+		for c in GRID:
+			for r in GRID:
+				if free_plot([c, r]):
+					spots.append(Transform3D(Basis(), cell_pos(c, r) + Vector3(0, 0.32, 0)))
+		_plots_hint = MeshKit.multi(self, MeshKit.box(Vector3(CELL - 1.2, 0.06, CELL - 1.2)), MeshKit.glow(Color(0.55, 0.95, 0.45), 0.45), spots)
+		_plots_hint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hud.banner(I18n.t("Tap a lit plot to build"))
+	hud.refresh()
+
+
+func _first_tower() -> void:
+	if not _placed_any:
+		_placed_any = true
+		hud.banner(I18n.t("Drag a tower onto the same tower to merge it"))
+
+
+## Back to the city. A finished battle pays into the city's coins and fuel.
+func go_home() -> void:
+	Engine.time_scale = 1.0
+	get_tree().change_scene_to_file("res://scenes/home/home.tscn")
 
 
 func aim_strike() -> void:
@@ -437,11 +615,16 @@ func _drop(screen: Vector2) -> void:
 			var t := _place(d["type"], 1, cell)
 			_pop(t["node"], 0.5)
 			Audio.play("build", -6.0)
+			_first_tower()
+			_arm("")
 	else:
 		if from != null:
 			node.position = cell_pos(from["cell"][0], from["cell"][1])
 		else:
 			node.queue_free()
+			# Let go where it started (a tap on the card): arm it and light the plots instead.
+			if (screen - (d.get("start", screen) as Vector2)).length() < 30.0:
+				_arm(d["type"] if placing != d["type"] else "")
 	hud.refresh()
 
 
@@ -533,8 +716,11 @@ func _spawn_foe(kind: String) -> void:
 			parts = UnitModels.build("armor", model, 2)
 			model.scale = Vector3.ONE * 2.1
 		_:
-			parts = UnitModels.build("robot", model, 3 if kind == "engineer" else 1)
-			model.scale = Vector3.ONE * 5.6
+			# Iron Fang troopers: the generated soldier and engineer models, darkened to the
+			# enemy's charcoal (owner: the robots looked strange).
+			parts = UnitModels.build("engineers" if kind == "engineer" else "infantry", model, 2 if kind == "engineer" else 1)
+			model.scale = Vector3.ONE * 3.6
+			_enemy_tint(model)
 	Syndicate.paint(model)
 	MeshKit.blob(root, Vector2(4.6, 4.6) * (2.0 if kind in ["tank", "boss"] else 1.0), Vector3(0, 0.25, 0), 0.4)
 	var start := cell_pos(PATH[0].x, PATH[0].y)
@@ -544,6 +730,19 @@ func _spawn_foe(kind: String) -> void:
 	foes.append({"kind": kind, "e": e, "hp": hp, "max": hp, "node": root, "model": model, "parts": parts,
 		"seg": 0, "prog": 0.0, "air": e.has("air"), "t": _rng.randf() * 6.0})
 	_pop(root, 0.2)
+
+
+## Darkens a textured model to Iron Fang's charcoal with a red cast.
+func _enemy_tint(model: Node3D) -> void:
+	for m in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := m as MeshInstance3D
+		var mat := mi.material_override
+		if mat == null and mi.mesh != null and mi.mesh.get_surface_count() > 0:
+			mat = mi.mesh.surface_get_material(0)
+		if mat is StandardMaterial3D:
+			var dup := (mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+			dup.albedo_color = dup.albedo_color * Color(0.5, 0.45, 0.45)
+			mi.material_override = dup
 
 
 ## Soldiers jumping out of a destroyed APC carry on from where it stopped.
@@ -600,6 +799,7 @@ func _process(delta: float) -> void:
 	if state in [State.WAVE, State.BREAK]:
 		strike_ready = maxf(0.0, strike_ready - delta)
 		_move_foes(delta)
+		_move_allies(delta)
 		_reveal()
 		_fire(delta)
 	hud.queue_redraw_overlay()
@@ -825,6 +1025,17 @@ func _finish(won: bool) -> void:
 	var stars := 0
 	if won:
 		stars = 1 + (1 if hq_hp >= HQ_HP else 0) + (1 if hq_hp > HQ_HP * 0.8 else 0)
+	var paid := {"coins": 0, "fuel": 0}
+	if not OS.get_cmdline_user_args().has("--merge-bot"):
+		var state := get_tree().root.get_node_or_null("GameState")
+		if state != null:
+			paid["coins"] = state.add_coins((300 + 150 * stars) if won else 40 * wave)
+			paid["fuel"] = state.add_fuel((80 * stars) if won else 0)
+	reward = paid
+	if not OS.get_cmdline_user_args().has("--merge-bot") and not _sent.is_empty():
+		var gs := get_tree().root.get_node_or_null("GameState")
+		if gs != null:
+			gs.use_army(_sent)
 	hud.show_end(won, stars)
 	Audio.play("star" if won else "collapse")
 

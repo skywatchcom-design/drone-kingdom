@@ -694,6 +694,9 @@ func show_modal(content: Control, size: Vector2, locked: bool = false, bare: boo
 ## handle and the close button in its top strip; "full" reaches up under the top bar, "half"
 ## is as tall as its content (at most about 60% of the screen). It slides up when it opens.
 func _open_sheet(content: Control, locked: bool) -> void:
+	# Already open (a Shop tab, say): keep the sheet, fade the new content in and let the height
+	# follow it, instead of sliding a new sheet up.
+	var swapping := _modal.visible and _grab.visible
 	var sb := UiTheme.box(UiTheme.SHEET, 0, UiTheme.SAND_LINE, 0)
 	sb.corner_radius_top_left = 22
 	sb.corner_radius_top_right = 22
@@ -714,30 +717,31 @@ func _open_sheet(content: Control, locked: bool) -> void:
 		child.queue_free()
 	_modal_body.add_child(content)
 	UiTheme.darken_tree(content)
-	var view := get_viewport().get_visible_rect().size
 	_modal.anchor_left = 0.0
 	_modal.anchor_right = 1.0
+	_modal.anchor_top = 1.0
 	_modal.anchor_bottom = 1.0
 	_modal.offset_left = 0.0
-	_modal.offset_right = 0.0
-	_modal.offset_bottom = 0.0
-	_modal.scale = Vector2.ONE
-	if _sheet_mode == "full":
-		_modal.anchor_top = 0.0
-		_modal.offset_top = 150.0
-	else:
-		_modal.anchor_top = 1.0
+	if not swapping:
+		var view := get_viewport().get_visible_rect().size
+		_modal.offset_right = 0.0
+		_modal.offset_bottom = 0.0
 		_modal.offset_top = -view.y * 0.5
+		_modal.scale = Vector2.ONE
+	else:
+		content.modulate.a = 0.0
 	_dim.color = Color(0, 0, 0, 0.45 if _sheet_mode == "full" else 0.22)
 	_dim.visible = true
 	_modal.visible = true
-	_fit_modal()
+	_fit_modal(swapping)
 
 
 ## Some windows need more room than they were given (fixed-width rows): once laid out, the
-## window is centred on its real size and shrunk to fit the screen. A half sheet takes its
-## content's height instead, and both slide up.
-func _fit_modal() -> void:
+## window is centred on its real size and shrunk to fit the screen. A sheet takes its content's
+## height (a "full" one up to under the top bar, a "half" one up to about 60%), shrinks to the
+## screen's width if its rows are wider, and slides up; when only its content changed it glides
+## to the new height and fades the content in.
+func _fit_modal(swapping: bool = false) -> void:
 	for i in 2:
 		await get_tree().process_frame
 	if not _modal.visible:
@@ -745,23 +749,29 @@ func _fit_modal() -> void:
 	if _sheet_mode != "":
 		var view := get_viewport().get_visible_rect().size
 		var need := _modal_sheet.get_combined_minimum_size()
-		if _sheet_mode == "half":
-			_modal.offset_top = -clampf(need.y, 320.0, view.y * 0.62)
-		if need.x > view.x:
-			# Too wide for the screen: shrink from the bottom-left corner so it fits the width
-			# and keeps its full height.
-			var k := view.x / need.x
-			_modal.offset_right = need.x - view.x
-			if _sheet_mode == "full":
-				_modal.offset_top = 150.0 - (_modal.size.y / k - _modal.size.y)
-			_modal.pivot_offset = Vector2(0.0, _modal.size.y)
+		var k := minf(1.0, view.x / maxf(need.x, 1.0))
+		var tallest := (view.y - 150.0) if _sheet_mode == "full" else view.y * 0.62
+		# A list sheet always stands tall (its rows scroll inside); a building sheet fits its content.
+		var shown := tallest if _sheet_mode == "full" else clampf(need.y * k, 320.0, tallest)
+		var right := maxf(0.0, need.x - view.x)
+		_modal.pivot_offset = Vector2(0.0, shown / k)
+		var top := -shown / k
+		var content: Control = _modal_body.get_child(_modal_body.get_child_count() - 1) if _modal_body.get_child_count() > 0 else null
+		var tw := _modal.create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		if swapping:
+			tw.tween_property(_modal, "offset_top", top, 0.2)
+			tw.tween_property(_modal, "offset_right", right, 0.2)
+			tw.tween_property(_modal, "scale", Vector2.ONE * k, 0.2)
+			if content != null:
+				content.position.x += 24.0
+				tw.tween_property(content, "modulate:a", 1.0, 0.18)
+		else:
+			_modal.offset_right = right
 			_modal.scale = Vector2.ONE * k
-		var top := _modal.offset_top
-		var drop := view.y - (_modal.offset_top if _sheet_mode == "half" else 0.0)
-		_modal.position.y += minf(drop, 400.0)
-		var tw := _modal.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(_modal, "offset_top", top, 0.22)
-		tw.parallel().tween_property(_modal, "offset_bottom", 0.0, 0.22)
+			_modal.offset_top = top + view.y * 0.4
+			_modal.offset_bottom = view.y * 0.4
+			tw.tween_property(_modal, "offset_top", top, 0.24)
+			tw.tween_property(_modal, "offset_bottom", 0.0, 0.24)
 		return
 	var screen := get_viewport().get_visible_rect().size
 	var real := _modal.size.max(_modal_sheet.get_combined_minimum_size())

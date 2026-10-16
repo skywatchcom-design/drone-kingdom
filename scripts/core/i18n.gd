@@ -8,6 +8,16 @@ static var lang := "en"
 
 const HE := {
 	# Base Wars prototype
+	"Reinforce": "תגבורת",
+	"Army x%d": "צבא x%d",
+	"Train in base": "אמן בבסיס",
+	"Tap a tower below, then a lit plot by the street": "בחר מגדל למטה, ואז משבצת מוארת ליד הכביש",
+	"Tap a lit plot to build": "גע במשבצת מוארת כדי לבנות",
+	"Drag a tower onto the same tower to merge it": "גרור מגדל על מגדל זהה כדי למזג",
+	"Paused": "עצירה",
+	"Restart": "התחל מחדש",
+	"+%d coins · +%d fuel to your base": "+%d מטבעות · +%d דלק לבסיס שלך",
+	"+%d coins to your base": "+%d מטבעות לבסיס שלך",
 	"Hide": "הסתר",
 	"Show": "הצג",
 	"Rapid fire": "אש מהירה",
