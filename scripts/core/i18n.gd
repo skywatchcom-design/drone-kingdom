@@ -8,6 +8,7 @@ static var lang := "en"
 
 const HE := {
 	# Base Wars prototype
+	"Tap to start": "גע כדי להתחיל",
 	"Reinforce": "תגבורת",
 	"Army x%d": "צבא x%d",
 	"Train in base": "אמן בבסיס",
