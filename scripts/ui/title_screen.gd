@@ -17,9 +17,13 @@ const GOLD := Color(0.95, 0.71, 0.24)
 const DROP := Color(0.17, 0.2, 0.1)
 const BG := Color(0.094, 0.118, 0.071)
 const FONT_SIZE := 150
-const HOLD := 4.2
+const HOLD := 7.0
+## Everything runs this much slower than the first sketch (owner: "a bit slower so the
+## animation is seen").
+const SLOW := 1.6
 
-var style := "a"
+## Approved 16.10.2026: "c" (the drone wakes the letters) then the running hop of "b", slower.
+var style := "c"
 var letters: Array[Control] = []
 var drone: Control
 var tap: Label
@@ -190,11 +194,14 @@ func _play_drone() -> void:
 	var low := _home(letters[0]).y - 150
 	drone.position = Vector2(-300, low)
 	var tw := create_tween()
-	tw.tween_interval(0.2)
-	tw.tween_property(drone, "position:x", view.x + 60, 1.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_interval(0.4)
+	tw.tween_property(drone, "position:x", view.x + 60, 1.3 * SLOW).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(drone, "position", Vector2(view.x + 60, dh.y - 200), 0.01)
-	tw.tween_property(drone, "position", dh, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_callback(_show_tap)
+	tw.tween_property(drone, "position", dh, 0.6 * SLOW).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.3)
+	tw.tween_callback(func() -> void:
+		_wave_from = _t
+		_show_tap())
 	_drone_pass = true
 
 
@@ -218,10 +225,10 @@ func _process(delta: float) -> void:
 				_hop(l, 70.0, true)
 	if style == "b" and _t >= _wave_from:
 		# A hop runs across the word every 1.8 s.
-		var k := fmod(_t - _wave_from, 1.8)
+		var k := fmod(_t - _wave_from, 1.8 * SLOW)
 		for i in letters.size():
-			var start := i * 0.08
-			var p := clampf((k - start) / 0.32, 0.0, 1.0)
+			var start := i * 0.08 * SLOW
+			var p := clampf((k - start) / (0.32 * SLOW), 0.0, 1.0)
 			var l := letters[i]
 			l.position.y = _home(l).y - sin(p * PI) * 46.0
 	if tap.modulate.a > 0.0:
@@ -237,11 +244,11 @@ func _hop(l: Control, height: float, appear: bool) -> void:
 	var tw := create_tween()
 	if appear:
 		l.position = home + Vector2(0, 40)
-		tw.tween_property(l, "modulate:a", 1.0, 0.1)
-	tw.tween_property(l, "position", home + Vector2(0, -height), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(l, "scale", s * Vector2(0.88, 1.14), 0.18)
-	tw.tween_property(l, "position", home, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(l, "scale", s, 0.16)
+		tw.tween_property(l, "modulate:a", 1.0, 0.1 * SLOW)
+	tw.tween_property(l, "position", home + Vector2(0, -height), 0.18 * SLOW).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(l, "scale", s * Vector2(0.88, 1.14), 0.18 * SLOW)
+	tw.tween_property(l, "position", home, 0.16 * SLOW).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(l, "scale", s, 0.16 * SLOW)
 	tw.tween_property(l, "scale", s * Vector2(1.18, 0.82), 0.05)
 	tw.tween_property(l, "scale", s, 0.1).set_trans(Tween.TRANS_BACK)
 	Audio.play("click", -14.0, 0.0)
