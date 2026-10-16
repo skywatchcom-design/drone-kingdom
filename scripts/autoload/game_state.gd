@@ -91,6 +91,7 @@ var big_text := false
 func _ready() -> void:
 	I18n.setup_font()
 	UiFeel.install(get_tree())
+	WebUpdate.install(get_tree())
 	load_settings()
 	# Dev: `-- --fresh` shows a brand-new player's base without touching the real save.
 	if OS.is_debug_build() and OS.get_cmdline_user_args().has("--fresh"):

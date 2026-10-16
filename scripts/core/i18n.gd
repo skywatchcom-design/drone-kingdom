@@ -7,6 +7,8 @@ static var lang := "he"
 
 const HE := {
 	# Base Wars prototype
+	"New version, tap to update": "יש גרסה חדשה · לחץ לעדכון",
+	"Refresh game": "רענון המשחק",
 	"Vibration on": "רטט: פועל",
 	"Vibration off": "רטט: כבוי",
 	"Calm mode on": "מצב רגוע: פועל",

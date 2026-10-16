@@ -25,6 +25,8 @@ function Stamp-Html($dir) {
     $html = $html.Replace('"executable":"index"', '"executable":"index","mainPack":"index.pck?v=' + $stamp + '"')
     $html = $html.Replace('<script src="index.js">', '<script src="index.js?v=' + $stamp + '">')
     Set-Content "$dir\index.html" $html -Encoding utf8 -NoNewline
+    # The game compares this with its own stamp and offers a refresh when a newer build is up.
+    Set-Content "$dir\version.json" ('{"v":"' + $stamp + '"}') -Encoding ascii -NoNewline
 }
 
 $pages = "$env:TEMP\skywatch-pages"

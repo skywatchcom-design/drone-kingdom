@@ -1248,6 +1248,8 @@ func _open_settings() -> void:
 	big.pressed.connect(func() -> void:
 		GameState.set_comfort(GameState.vibrate_on, GameState.calm, not GameState.big_text)
 		big.text = I18n.t("Large text on") if GameState.big_text else I18n.t("Large text off"))
+	if OS.has_feature("web"):
+		HomeHud.make_button(grid, I18n.t("Refresh game"), 24, 80).pressed.connect(func() -> void: WebUpdate.reload(get_tree()))
 	HomeHud.make_button(grid, I18n.t("Practice on my base"), 24, 80).pressed.connect(func() -> void: _go_raid("self"))
 	var account := I18n.t("Account: %s") % Cloud.commander if Cloud.signed_in() else I18n.t("Save my base")
 	HomeHud.make_button(grid, account, 24, 80).pressed.connect(_open_account_settings)
