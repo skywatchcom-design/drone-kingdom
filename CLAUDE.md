@@ -41,6 +41,11 @@ on SkyWatch's existing systems (save, economy, buildings, workers, gems, Supabas
 change. For the owner it is the same game: same name and brand, same Play app, same YouTube channel. Plan: 1 city screen
 in the new look (portrait), 2 merge-defense battles with a stage campaign, 3 attacks in the new look, 4 Noa, missions,
 store, account, then PvP.
+Approved 16.10.2026: attacks are "reverse Bloons" (sketch https://claude.ai/artifact/7nbqfinTw2uAC1eV2iE7h9):
+`StreetRaid` (`scenes/attack/street_raid.tscn`, opened by Attack and the campaign map) puts the target base on the
+street board, defenses along the street by their real stats, and the player sends the trained army card by card.
+Buildings in the leo look are `LeoModels`; the web export leaves out the photo textures (the flat look never loads
+them), which halved the download.
 
 ## Base Wars pivot history (15.10.2026, branch `diorama`)
 The owner decided to change the concept completely to **Base Wars**: tower defense + merge (owner's docs "Base Wars Game
