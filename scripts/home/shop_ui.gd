@@ -586,13 +586,16 @@ static func _card_rows(box: Control, separation: int) -> Container:
 	return row
 
 
-static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33)) -> Control:
+## `tower` adds a battle tower's upgrade path and step ({"path": "a", "tier": 2}).
+static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58, 0.33), tower := {}) -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
 	vp.msaa_3d = Viewport.MSAA_4X
+	# A clear background shows the panel behind it.
+	vp.transparent_bg = bg.a == 0.0
 	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	frame.add_child(vp)
 	# Draw once the frame has a real size (and again if it changes): a first render at zero
@@ -646,7 +649,9 @@ static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58,
 		# A defense-battle tower ("tower_mg"), as MergeGame builds it.
 		var t := BattleTower.new()
 		stage.add_child(t)
-		t.setup({"radius": 3.0, "level": level, "kind": type.trim_prefix("tower_")}, 0.12)
+		var stats := {"radius": 3.0, "level": level, "kind": type.trim_prefix("tower_")}
+		stats.merge(tower)
+		t.setup(stats, 0.12)
 		t.show_range(false)
 	elif type == "wall":
 		StructureModels.wall(stage, [0, 0, 1], level).position = Vector3.ZERO
@@ -669,5 +674,10 @@ static func live_picture(type: String, level: int, bg: Color = Color(0.45, 0.58,
 		look = Vector3(0, 3.4, 0)
 	elif (Catalog.is_defense(type) or type.begins_with("tower_")) and MeshKit.look == "leo":
 		far = 1.2
+		if not tower.is_empty():
+			# The upgrade panel's small picture: close in, with room for the pennant; higher
+			# levels build bigger emplacements.
+			far = 0.95 + 0.14 * (level - 1)
+			look.y = 1.5 + 0.3 * (level - 1)
 	cam.look_at_from_position(eye * far, look)
 	return frame

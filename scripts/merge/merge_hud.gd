@@ -333,6 +333,11 @@ func show_tower(t: Dictionary) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		col.add_child(row)
+		# The tower as this path's next step would make it (the last step once it is maxed).
+		var step := mini(tier + 1, 3) if taken == p else 1
+		var pic := ShopUI.live_picture("tower_" + t["type"], int(t["level"]), Color(0, 0, 0, 0), {"path": p, "tier": step})
+		pic.custom_minimum_size = Vector2(140, 112)
+		row.add_child(pic)
 		var info := VBoxContainer.new()
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		info.add_theme_constant_override("separation", 2)
@@ -347,6 +352,8 @@ func show_tower(t: Dictionary) -> void:
 		buy.custom_minimum_size = Vector2(170, 64)
 		buy.add_theme_font_size_override("font_size", 22)
 		var closed: bool = taken != "" and not mine
+		if closed:
+			pic.modulate = Color(1, 1, 1, 0.35)
 		var done: bool = mine and tier >= 3
 		var cost := game.path_cost(t)
 		buy.text = I18n.t("Closed") if closed else (I18n.t("Max") if done else "▲ %d" % cost)
